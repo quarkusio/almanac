@@ -2,7 +2,9 @@ package io.quarkiverse.almanac.dataset;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.JsonNode;
+import io.quarkiverse.almanac.model.ArtifactClasses;
 import io.quarkiverse.almanac.model.BomSnapshot;
+import io.quarkiverse.almanac.model.ClassesSnapshot;
 import io.quarkiverse.almanac.model.ConfigProperty;
 import io.quarkiverse.almanac.model.ConfigSnapshot;
 import io.quarkiverse.almanac.model.ExtensionInfo;
@@ -28,7 +30,7 @@ import java.util.SortedMap;
 import java.util.TreeMap;
 import java.util.TreeSet;
 
-/// Read access to the committed dataset: the known releases, and the BOM, config and extension
+/// Read access to the committed dataset: the known releases, and the BOM, config, extension and classes
 /// snapshot of any release that holds them, restored exactly from the change-point histories.
 ///
 /// `releases.jsonl` is read when the dataset is opened; the other files only when a snapshot of their kind is first
@@ -37,9 +39,10 @@ import java.util.TreeSet;
 ///
 /// Reading fails rather than restore data the files do not hold consistently: every line must be one JSON object
 /// (nothing after it, no field twice), change points must name releases of their kind in release order, every state
-/// must hash to its id and be referenced by its history file (which may refer to no other), and the `config-meta.jsonl`
-/// line of a release must agree with its `releases.jsonl` line. A folder that has [DatasetFormat#WRITE_MARKER] is
-/// refused: a write was interrupted there. `dataset verify` checks the rest (canonical form, order, encoding).
+/// must hash to its id and be referenced by its history file (which may refer to no other), the `config-meta.jsonl`
+/// line of a release must agree with its `releases.jsonl` line, and a class line must name an artifact and a class
+/// with the value [DatasetFormat#CLASS_PRESENT]. A folder that has [DatasetFormat#WRITE_MARKER] is refused: a write
+/// was interrupted there. `dataset verify` checks the rest (canonical form, order, encoding).
 public final class Dataset {
 
     /// One line of `releases.jsonl`.
@@ -49,7 +52,9 @@ public final class Dataset {
     /// @param bom        whether the dataset holds the release's BOM snapshot
     /// @param config     what `releases.jsonl` says about the config snapshot, null when the dataset has none
     /// @param extensions whether the dataset holds the release's extensions snapshot
-    public record Release(String version, String date, boolean bom, ConfigInfo config, boolean extensions) {
+    /// @param classes    whether the dataset holds the release's classes snapshot
+    public record Release(String version, String date, boolean bom, ConfigInfo config, boolean extensions,
+            boolean classes) {
 
         /// Whether the dataset holds this release's snapshot of the given kind.
         public boolean has(Kind kind) {
@@ -57,6 +62,7 @@ public final class Dataset {
                 case BOM -> bom;
                 case CONFIG -> config != null;
                 case EXTENSIONS -> extensions;
+                case CLASSES -> classes;
             };
         }
     }
@@ -140,12 +146,19 @@ public final class Dataset {
         }
     }
 
+    /// A classes file decoded: its histories, and the artifactId and class of each of its lines, in line (id) order.
+    /// Restored snapshots share these strings, so every release does not hold copies of its class names.
+    private record ClassTable(Table table, String[] artifacts, String[] classes) {
+    }
+
     private final FileSource files;
     private final List<Release> releases;
     private final Map<String, Release> byVersion;
     private final Lazy<Table> bomTable;
     private final Lazy<Table> configTable;
     private final Lazy<Table> extensionTable;
+    /// Major version line → its classes file, decoded on first use.
+    private final Map<Integer, Lazy<ClassTable>> classTables;
     private final Lazy<Map<String, ConfigProperty>> configStates;
     private final Lazy<Map<String, ExtensionInfo>> extensionStates;
     private final Lazy<Map<String, DatasetEncoder.ConfigMeta>> configMeta;
@@ -159,6 +172,11 @@ public final class Dataset {
         this.bomTable = new Lazy<>(() -> readTable(DatasetFormat.BOM, "id", Kind.BOM));
         this.configTable = new Lazy<>(() -> readTable(DatasetFormat.CONFIG, "key", Kind.CONFIG));
         this.extensionTable = new Lazy<>(() -> readTable(DatasetFormat.EXTENSIONS, "id", Kind.EXTENSIONS));
+        Map<Integer, Lazy<ClassTable>> tables = new HashMap<>();
+        for (String version : versionsWith(Kind.CLASSES)) {
+            tables.computeIfAbsent(DatasetFormat.majorOf(version), major -> new Lazy<>(() -> readClassTable(major)));
+        }
+        this.classTables = tables;
         this.configStates = new Lazy<>(() -> readStates(DatasetFormat.CONFIG_STATES, ConfigProperty.class,
                 DatasetFormat.CONFIG, configTable.get()));
         this.extensionStates = new Lazy<>(() -> readStates(DatasetFormat.EXTENSION_STATES, ExtensionInfo.class,
@@ -245,7 +263,8 @@ public final class Dataset {
         return releases.stream().filter(release -> release.has(kind)).map(Release::version).toList();
     }
 
-    /// Restores a snapshot of the given kind: a [BomSnapshot], [ConfigSnapshot] or [ExtensionsSnapshot].
+    /// Restores a snapshot of the given kind: a [BomSnapshot], [ConfigSnapshot], [ExtensionsSnapshot] or
+    /// [ClassesSnapshot].
     ///
     /// @throws IOException when the dataset does not hold it or is inconsistent
     public Object snapshot(String version, Kind kind) throws IOException {
@@ -253,6 +272,7 @@ public final class Dataset {
             case BOM -> bom(version);
             case CONFIG -> config(version);
             case EXTENSIONS -> extensions(version);
+            case CLASSES -> classes(version);
         };
     }
 
@@ -326,6 +346,36 @@ public final class Dataset {
         return new ExtensionsSnapshot(version, Collections.unmodifiableList(extensions));
     }
 
+    /// Restores the classes snapshot of a release from the classes file of its major line: per artifact, every class
+    /// present at the release, both sorted. The lines are sorted by `<artifactId> <class>`, which sorts by artifactId
+    /// first (no artifactId has a space), so the lines of an artifact follow each other.
+    public ClassesSnapshot classes(String version) throws IOException {
+        require(version, Kind.CLASSES);
+        ClassTable decoded = classTables.get(DatasetFormat.majorOf(version)).get();
+        int ordinal = decoded.table().ordinals().get(version);
+        List<ArtifactClasses> artifacts = new ArrayList<>();
+        String artifact = null;
+        List<String> classes = new ArrayList<>();
+        int i = 0;
+        for (Points points : decoded.table().rows().values()) {
+            if (points.at(ordinal) != null) {
+                if (!decoded.artifacts()[i].equals(artifact)) {
+                    if (artifact != null) {
+                        artifacts.add(new ArtifactClasses(artifact, List.copyOf(classes)));
+                    }
+                    artifact = decoded.artifacts()[i];
+                    classes.clear();
+                }
+                classes.add(decoded.classes()[i]);
+            }
+            i++;
+        }
+        if (artifact != null) {
+            artifacts.add(new ArtifactClasses(artifact, List.copyOf(classes)));
+        }
+        return new ClassesSnapshot(version, Collections.unmodifiableList(artifacts));
+    }
+
     /// Restores everything: every known release with its date and every snapshot.
     Contents contents() throws IOException {
         Contents contents = new Contents();
@@ -382,7 +432,7 @@ public final class Dataset {
                         config.path("roots").asInt());
             }
             Release release = new Release(version, optionalText(row, "date"), row.path("bom").asBoolean(false), info,
-                    row.path("extensions").asBoolean(false));
+                    row.path("extensions").asBoolean(false), row.path("classes").asBoolean(false));
             if (releases.put(version, release) != null) {
                 throw error(DatasetFormat.RELEASES, i + 1, version + " is listed twice");
             }
@@ -405,8 +455,16 @@ public final class Dataset {
     }
 
     private Table readTable(String file, String idField, Kind kind) throws IOException {
+        return readTable(file, idField, versionsWith(kind), kind.toString());
+    }
+
+    /// Reads a history file whose change points may name the given releases only.
+    ///
+    /// @param versions the releases, in release order
+    /// @param what     what they hold, for messages: `bom`, or `classes of the 3.x line`
+    private Table readTable(String file, String idField, List<String> versions, String what) throws IOException {
         Map<String, Integer> ordinals = new HashMap<>();
-        for (String version : versionsWith(kind)) {
+        for (String version : versions) {
             ordinals.put(version, ordinals.size());
         }
         SortedMap<String, Points> rows = new TreeMap<>();
@@ -414,7 +472,7 @@ public final class Dataset {
         List<String> lines = content == null ? List.of() : DatasetFormat.lines(content);
         if (content == null && !ordinals.isEmpty()) {
             throw new IOException(files.describe(file) + " is missing, but " + DatasetFormat.RELEASES + " lists "
-                    + ordinals.size() + " releases with " + kind);
+                    + ordinals.size() + " releases with " + what);
         }
         for (int i = 0; i < lines.size(); i++) {
             if (lines.get(i).isBlank()) {
@@ -438,7 +496,7 @@ public final class Dataset {
                 String version = point.get(0).textValue();
                 Integer ordinal = ordinals.get(version);
                 if (ordinal == null) {
-                    throw error(file, lineNumber, id + " has a change point at " + version + ", which has no " + kind
+                    throw error(file, lineNumber, id + " has a change point at " + version + ", which has no " + what
                             + " in " + DatasetFormat.RELEASES);
                 }
                 if (p > 0 && ordinal <= pointOrdinals[p - 1]) {
@@ -452,6 +510,36 @@ public final class Dataset {
             }
         }
         return new Table(ordinals, rows);
+    }
+
+    /// Reads the classes file of a major line: a history file over the releases of that line with classes, whose ids
+    /// are `<artifactId> <class>` and whose only value is [DatasetFormat#CLASS_PRESENT].
+    private ClassTable readClassTable(int major) throws IOException {
+        String file = DatasetFormat.classesFile(major);
+        List<String> versions = versionsWith(Kind.CLASSES).stream()
+                .filter(version -> DatasetFormat.majorOf(version) == major).toList();
+        Table table = readTable(file, "id", versions, "classes of the " + major + ".x line");
+        String[] artifacts = new String[table.rows().size()];
+        String[] classes = new String[artifacts.length];
+        Map<String, String> sharedArtifacts = new HashMap<>();
+        int i = 0;
+        for (Map.Entry<String, Points> row : table.rows().entrySet()) {
+            String id = row.getKey();
+            int space = id.indexOf(' ');
+            if (space <= 0 || space == id.length() - 1 || id.indexOf(' ', space + 1) >= 0) {
+                throw new IOException(files.describe(file) + ": " + id + " is not <artifactId> <class>");
+            }
+            for (String value : row.getValue().values()) {
+                if (value != null && !value.equals(DatasetFormat.CLASS_PRESENT)) {
+                    throw new IOException(files.describe(file) + ": " + id + " has the value " + value + ", not \""
+                            + DatasetFormat.CLASS_PRESENT + "\"");
+                }
+            }
+            artifacts[i] = sharedArtifacts.computeIfAbsent(id.substring(0, space), a -> a);
+            classes[i] = id.substring(space + 1);
+            i++;
+        }
+        return new ClassTable(table, artifacts, classes);
     }
 
     /// Reads a state file: each state must hash to its id, and the states must be exactly those `history` refers to

@@ -89,8 +89,7 @@ public final class VersionJars {
         List<JarSource> libraries = new ArrayList<>();
         for (ManagedDep dep : bom.deps()) {
             String[] parts = dep.id().split(":");
-            // ids with exactly two parts have type jar and no classifier
-            if (parts.length == 2 && parts[0].equals(GROUP_ID)) {
+            if (isQuarkusJar(dep)) {
                 jars.add(new RemoteJarSource(repo.jar(GROUP_ID, parts[1], dep.v())));
             } else if (parts.length == 2 && isUsableVersion(dep.v())) {
                 // lazy: no request until a reader opens it
@@ -105,6 +104,13 @@ public final class VersionJars {
             return pom.isEmpty() ? Optional.empty() : BomParser.relocation(pom.get().content());
         };
         return new VersionJars(bom.version(), jars, libraries, relocations, repo.http().concurrency());
+    }
+
+    /// Whether a BOM entry is one of the {@value #GROUP_ID} jars [#of] reads: groupId {@value #GROUP_ID}, type `jar`
+    /// and no classifier, which an id of exactly two parts has. Subgroups such as `io.quarkus.arc` are not part of it.
+    public static boolean isQuarkusJar(ManagedDep dep) {
+        String[] parts = dep.id().split(":");
+        return parts.length == 2 && parts[0].equals(GROUP_ID);
     }
 
     /// Whether a third-party version from a BOM can be part of a repository path: not empty and free of unresolved

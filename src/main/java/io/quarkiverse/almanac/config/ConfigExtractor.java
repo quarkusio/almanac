@@ -1,11 +1,13 @@
 package io.quarkiverse.almanac.config;
 
+import io.quarkiverse.almanac.classes.ClassesReader;
 import io.quarkiverse.almanac.config.bytecode.BytecodeConfigReader;
 import io.quarkiverse.almanac.config.sourcedoc.SourceDocAnnotations;
 import io.quarkiverse.almanac.extensions.ExtensionMetadataReader;
 import io.quarkiverse.almanac.maven.Http;
 import io.quarkiverse.almanac.maven.MavenRepo;
 import io.quarkiverse.almanac.model.BomSnapshot;
+import io.quarkiverse.almanac.model.ClassesSnapshot;
 import io.quarkiverse.almanac.model.ConfigSnapshot;
 import io.quarkiverse.almanac.model.ExtensionsSnapshot;
 import io.quarkiverse.almanac.util.Log;
@@ -17,7 +19,8 @@ import java.util.Map;
 import java.util.Optional;
 
 /// Writes the config and extension snapshots of a release: `config.json` from the selected reader,
-/// `config-model.json` / `config-bytecode.json` additionally for [Source#BOTH], and `extensions.json`. A snapshot
+/// `config-model.json` / `config-bytecode.json` additionally for [Source#BOTH], and `extensions.json`; and
+/// `classes.json` ([ClassesReader]), from the central directories that reading the jars fetches anyway. A snapshot
 /// without properties is never written (it would read as "everything removed"), and nothing is written for a release
 /// whose config or extension metadata cannot be read completely: every snapshot is computed before the first one is
 /// written. Nothing is written either while the repository's requests are stopped ([Http#stopped()]): a reader may
@@ -104,12 +107,15 @@ public final class ConfigExtractor {
         // read everything before writing anything: a release whose extension metadata cannot be read (e.g. offline
         // without the cached jar) must not leave a config.json without its extensions.json
         ExtensionsSnapshot extensions = extensionReader.read(jars);
+        // the central directories of every jar are read already (indexing fetched them): no further request
+        ClassesSnapshot classes = ClassesReader.read(version, jars.jars());
         failIfStopped(version);
         for (Map.Entry<String, ConfigSnapshot> sideFile : sideFiles.entrySet()) {
             writeIfNotEmpty(sideFile.getValue(), sideFile.getKey());
         }
         store.write(version, SnapshotStore.CONFIG, config);
         store.write(version, SnapshotStore.EXTENSIONS, extensions);
+        store.write(version, SnapshotStore.CLASSES, classes);
 
         int withConfig = 0;
         for (JarSource jar : jars.jars()) {
@@ -118,10 +124,12 @@ public final class ConfigExtractor {
             }
         }
         Log.info("config %s: %d jars indexed (%d of %d listed missing, %d relocated), %d with config, "
-                        + "%d properties from %s, %d config roots, %d extensions, %d warnings, %.1f s",
+                        + "%d properties from %s, %d config roots, %d extensions, %d classes in %d jars, %d warnings, "
+                        + "%.1f s",
                 version, jars.jars().size(), jars.candidateCount() - jars.jars().size(), jars.candidateCount(),
                 jars.relocations().size(), withConfig, config.properties().size(), config.source(), config.roots(),
-                extensions.extensions().size(), config.warnings().size(), (System.nanoTime() - start) / 1e9);
+                extensions.extensions().size(), ClassesReader.classCount(classes), classes.artifacts().size(),
+                config.warnings().size(), (System.nanoTime() - start) / 1e9);
         for (String warning : config.warnings()) {
             Log.debug("%s: %s", version, warning);
         }

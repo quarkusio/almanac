@@ -4,7 +4,9 @@ import com.fasterxml.jackson.databind.JsonNode;
 import io.quarkiverse.almanac.ScratchDir;
 import io.quarkiverse.almanac.maven.QuarkusVersion;
 import io.quarkiverse.almanac.maven.VersionSelector;
+import io.quarkiverse.almanac.model.ArtifactClasses;
 import io.quarkiverse.almanac.model.BomSnapshot;
+import io.quarkiverse.almanac.model.ClassesSnapshot;
 import io.quarkiverse.almanac.model.ConfigProperty;
 import io.quarkiverse.almanac.model.ConfigSnapshot;
 import io.quarkiverse.almanac.model.ExtensionInfo;
@@ -98,18 +100,18 @@ class HistoryBuilderTest {
         assertEquals(json("[\"3.2\",\"3.8\",\"3.15\",\"3.20\",\"3.27\",\"3.33\",\"3.40\"]"), data.versions().get("lts"));
         assertEquals(json("""
                 [{"v":"3.0.0.Final","date":"2023-04-26","stream":"3.0","pre":false,"lts":false,"config":false,
-                  "ext":false},
+                  "ext":false,"classes":false},
                  {"v":"3.2.0.Final","date":"2023-07-05","stream":"3.2","pre":false,"lts":true,"config":true,
-                  "configSource":"bytecode","ext":true},
+                  "configSource":"bytecode","ext":true,"classes":false},
                  {"v":"3.3.0","date":"2023-08-23","stream":"3.3","pre":false,"lts":false,"config":true,
-                  "configSource":"model","ext":true},
+                  "configSource":"model","ext":true,"classes":false},
                  {"v":"4.0.0.Beta1","date":"2026-10-19","stream":"4.0","pre":true,"lts":false,"config":true,
-                  "configSource":"model","ext":true}]
+                  "configSource":"model","ext":true,"classes":false}]
                 """), data.versions().get("versions"));
-        // the flags in a fixed order, ext last
+        // the flags in a fixed order, classes last
         assertEquals("{\"v\":\"3.2.0.Final\",\"date\":\"2023-07-05\",\"stream\":\"3.2\",\"pre\":false,\"lts\":true,"
-                + "\"config\":true,\"configSource\":\"bytecode\",\"ext\":true}", data.versions().get("versions").get(1)
-                .toString());
+                + "\"config\":true,\"configSource\":\"bytecode\",\"ext\":true,\"classes\":false}",
+                data.versions().get("versions").get(1).toString());
     }
 
     @Test
@@ -121,7 +123,7 @@ class HistoryBuilderTest {
 
         assertEquals(json("""
                 {"v":"2.16.12.Final","date":"2023-10-16","stream":"2.16","pre":false,"lts":false,"config":false,
-                 "ext":true}
+                 "ext":true,"classes":false}
                 """), data.versions().get("versions").get(0));
         assertEquals(json("[2,3,4]"), data.config().get("versions"), "no config version");
         assertEquals(json("""
@@ -207,7 +209,8 @@ class HistoryBuilderTest {
         HistoryBuilder.SiteData data = builder.build(NOW);
 
         assertEquals(json("""
-                {"v":"3.3.0.CR1","date":"2023-08-16","stream":"3.3","pre":true,"lts":false,"config":false,"ext":false}
+                {"v":"3.3.0.CR1","date":"2023-08-16","stream":"3.3","pre":true,"lts":false,"config":false,"ext":false,
+                 "classes":false}
                 """), data.versions().get("versions").get(2));
         assertEquals(5, data.versions().get("versions").size());
         assertEquals(json("""
@@ -239,6 +242,57 @@ class HistoryBuilderTest {
                 null, null);
         ConfigProperty url = prop("quarkus.datasource.jdbc.url", List.of(), "string", null, "RUN_TIME", null, null);
         assertEquals(List.of(url, otherType, level), HistoryBuilder.foldUnnamedKeys(List.of(url, otherType, level)));
+    }
+
+    @Test
+    void classHistoriesNameTheJarsOfEachClass() throws IOException {
+        HistoryBuilder builder = new HistoryBuilder();
+        builder.add(withClasses(RELEASES.get(0), classes("3.0.0.Final",
+                "quarkus-core", List.of("io.quarkus.runtime.Application"),
+                "quarkus-junit5-internal", List.of("io.quarkus.test.QuarkusUnitTest",
+                        "io.quarkus.test.QuarkusUnitTest$1"))));
+        builder.add(RELEASES.get(1));
+        // QuarkusUnitTest moves, its anonymous class goes, a class of the unnamed package and one in two jars come
+        builder.add(withClasses(RELEASES.get(2), classes("3.3.0",
+                "quarkus-amazon-lambda-http", List.of("io.quarkus.amazon.lambda.http.Handler"),
+                "quarkus-amazon-lambda-rest", List.of("io.quarkus.amazon.lambda.http.Handler"),
+                "quarkus-core", List.of("Main", "io.quarkus.runtime.Application"),
+                "quarkus-junit-internal", List.of("io.quarkus.test.QuarkusExtensionTest",
+                        "io.quarkus.test.QuarkusUnitTest"))));
+        HistoryBuilder.SiteData data = builder.build(NOW);
+        assertEquals(json("""
+                {"versions":[0,2],
+                 "artifacts":["quarkus-amazon-lambda-http","quarkus-amazon-lambda-rest","quarkus-core",
+                              "quarkus-junit-internal","quarkus-junit5-internal"],
+                 "packages":["","io.quarkus.amazon.lambda.http","io.quarkus.runtime","io.quarkus.test"],
+                 "classes":[[0,"Main",[[2,2]]],
+                            [1,"Handler",[[2,[0,1]]]],
+                            [2,"Application",[[0,2]]],
+                            [3,"QuarkusExtensionTest",[[2,3]]],
+                            [3,"QuarkusUnitTest",[[0,4],[2,3]]],
+                            [3,"QuarkusUnitTest$1",[[0,4],[2,null]]]]}
+                """), data.classes().get(3));
+        assertEquals(List.of(3), List.copyOf(data.classes().keySet()));
+        JsonNode versions = data.versions().get("versions");
+        assertTrue(versions.get(0).get("classes").asBoolean());
+        assertFalse(versions.get(1).get("classes").asBoolean());
+        assertTrue(build().classes().isEmpty(), "no classes file without classes");
+
+        // another major line: a file of its own, whose histories start afresh
+        builder.add(withClasses(RELEASES.get(3), classes("4.0.0.Beta1",
+                "quarkus-core", List.of("io.quarkus.runtime.Application"),
+                "quarkus-junit-internal", List.of("io.quarkus.test.QuarkusUnitTest"))));
+        HistoryBuilder.SiteData both = builder.build(NOW);
+        assertEquals(List.of("classes-3.json", "classes-4.json"),
+                both.files().keySet().stream().filter(name -> name.startsWith("classes")).toList());
+        assertEquals(data.classes().get(3), both.classes().get(3), "the 3.x file does not change");
+        assertEquals(json("""
+                {"versions":[3],
+                 "artifacts":["quarkus-core","quarkus-junit-internal"],
+                 "packages":["io.quarkus.runtime","io.quarkus.test"],
+                 "classes":[[0,"Application",[[3,0]]],
+                            [1,"QuarkusUnitTest",[[3,1]]]]}
+                """), both.classes().get(4));
     }
 
     @Test
@@ -318,7 +372,7 @@ class HistoryBuilderTest {
                 data, NOW);
 
         HistoryBuilder.SiteData expected = build();
-        for (String file : List.of("versions.json", "bom.json", "config.json", "extensions.json")) {
+        for (String file : expected.files().keySet()) {
             String text = Files.readString(data.resolve(file));
             assertFalse(text.strip().contains("\n"), file + " is compact");
             assertEquals(expected.files().get(file), json(text), file);
@@ -340,8 +394,25 @@ class HistoryBuilderTest {
             if (release.extensions() != null) {
                 store.write(version, SnapshotStore.EXTENSIONS, release.extensions());
             }
+            if (release.classes() != null) {
+                store.write(version, SnapshotStore.CLASSES, release.classes());
+            }
         }
         return store;
+    }
+
+    private static HistoryBuilder.Release withClasses(HistoryBuilder.Release release, ClassesSnapshot classes) {
+        return new HistoryBuilder.Release(release.bom(), release.config(), release.extensions(), classes);
+    }
+
+    /// A classes snapshot from artifactId, class list pairs (both given sorted).
+    @SuppressWarnings("unchecked")
+    private static ClassesSnapshot classes(String version, Object... idThenClasses) {
+        List<ArtifactClasses> artifacts = new ArrayList<>();
+        for (int i = 0; i < idThenClasses.length; i += 2) {
+            artifacts.add(new ArtifactClasses((String) idThenClasses[i], (List<String>) idThenClasses[i + 1]));
+        }
+        return new ClassesSnapshot(version, artifacts);
     }
 
     private static List<String> publishedVersions(Path data) throws IOException {

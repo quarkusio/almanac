@@ -15,10 +15,10 @@ import java.util.Locale;
 import java.util.Optional;
 import java.util.concurrent.Callable;
 
-/// `config`: writes `config.json` and `extensions.json` snapshots of the releases the committed dataset does not have
-/// yet.
+/// `config`: writes `config.json`, `extensions.json` and `classes.json` snapshots of the releases the committed dataset
+/// does not have yet.
 @Command(name = "config", description = "Write config.json and extensions.json snapshots of the releases the dataset "
-        + "does not have yet.")
+        + "does not have yet, and classes.json from the same reads of the jars.")
 public final class ConfigCommand implements Callable<Integer> {
 
     @Mixin

@@ -1,7 +1,8 @@
 # Quarkus Almanac
 
 Pick two Quarkus releases and see what changed between them: config properties (added, removed, new default, type,
-phase, deprecation), dependency versions managed by `quarkus-bom`, and extensions.
+phase, deprecation), dependency versions managed by `quarkus-bom`, extensions, and the classes of the Quarkus jars
+(added, removed, moved to another jar). Every config property, managed artifact and class has a page with its history.
 
 **Site:** https://quarkus.io/almanac/
 
@@ -12,9 +13,11 @@ and at the newest patch of the other streams.
 
 - `src/`: a Java 21 command-line tool that reads published Quarkus artifacts from Maven Central: the BOM of every
   release, and the config and extension metadata of the releases it covers (from the config model Quarkus ships from
-  3.25 on, reconstructed from bytecode before that).
+  3.25 on, reconstructed from bytecode before that), with the class list of each of their jars.
 - `dataset/`: every extracted release, kept losslessly as sorted JSON Lines (`dataset/README.md` describes the
-  format), so a published release never has to be downloaded again.
+  format), so a published release never has to be downloaded again. The classes have one file per major version line
+  (`dataset/classes/3.x.jsonl`), and so does the site (`site/data/classes-3.json`), which loads only the lines a page
+  shows.
 - `site/`: a static site without a build step. `site/data/` is assembled from the dataset, and every comparison is
   computed in the browser.
 
@@ -44,6 +47,15 @@ java -jar target/quarkus-almanac.jar assemble --offline --pre-releases all
 Then commit `dataset/` and `site/data/`. `all` runs the whole pipeline for the releases the dataset does not have yet,
 and `--help` lists every command and option.
 
+`config` writes each release's `classes.json` from the same reads of its jars. For releases extracted before it did,
+`classes --offline` writes it from what the cache holds; `--cache` adds the caches of other work folders, which it only
+reads:
+
+```sh
+java -jar target/quarkus-almanac.jar classes --offline --pre-releases all --cache ../other-work/cache
+java -jar target/quarkus-almanac.jar dataset import --versions all --kinds classes --offline
+```
+
 Downloads are polite: one request at a time, with a random 0.5–1.5 s pause between requests (`--pause`), shared by every
 command that uses the same `work/` folder, and they stop at the first HTTP 403. An uncached release costs about
 800 requests, roughly 20 minutes; a release already in the dataset costs nothing.
@@ -54,6 +66,11 @@ command that uses the same `work/` folder, and they stop at the first HTTP 403. 
 - Config before 3.25 is reconstructed from bytecode with the 3.25 documentation rules, so some display details differ
   from the documentation pages of older streams.
 - Descriptions are the first sentence of each property's documentation.
+- Classes are the class files of the `io.quarkus` jars that `quarkus-bom` manages (groupId `io.quarkus` only, not
+  subgroups such as `io.quarkus.arc`), top-level and nested, read from each jar's file list: classes a jar bundles from
+  its dependencies count as its own (`quarkus-grpc-cli`, `quarkus-bootstrap-gradle-resolver`), and nothing tells
+  whether a class is deprecated. That could come from the `-javadoc` jars, whose `deprecated-list.html` lists the
+  deprecated classes: one more read per jar, and a value other than `"+"` in the classes files of the dataset.
 - Release dates are the upload times of the BOMs on Maven Central.
 
 Data extracted from artifacts published on Maven Central. Problems and ideas go to

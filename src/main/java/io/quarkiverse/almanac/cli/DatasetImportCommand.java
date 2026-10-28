@@ -27,10 +27,10 @@ import java.util.concurrent.Callable;
 
 /// `dataset import`: merges work snapshots into the committed dataset.
 @Command(name = "import", description = "Merge work snapshots (work/snapshots/<version>/bom.json, config.json, "
-        + "extensions.json) into the dataset. Refuses inconsistent snapshots, unvalidated config (the bytecode/1 "
-        + "extractor, or bytecode config of a release before 3.14 without all its doc annotations), config without "
-        + "extensions, config or extensions without the BOM, and, without --force, snapshots that differ from the "
-        + "dataset's; the others are imported. Extensions need no config.")
+        + "extensions.json, classes.json) into the dataset. Refuses inconsistent snapshots, unvalidated config (the "
+        + "bytecode/1 extractor, or bytecode config of a release before 3.14 without all its doc annotations), config "
+        + "without extensions, config, extensions or classes without the BOM, and, without --force, snapshots that "
+        + "differ from the dataset's; the others are imported. Extensions need no config, classes need neither.")
 public final class DatasetImportCommand implements Callable<Integer> {
 
     @Mixin
@@ -43,8 +43,8 @@ public final class DatasetImportCommand implements Callable<Integer> {
             description = "all = every release with a work snapshot of the chosen kinds; or a comma-separated list.")
     String versions;
 
-    @Option(names = "--kinds", defaultValue = "bom,config,extensions", paramLabel = "KINDS",
-            description = "Comma-separated: bom, config, extensions, or all (default: ${DEFAULT-VALUE}).")
+    @Option(names = "--kinds", defaultValue = "all", paramLabel = "KINDS",
+            description = "Comma-separated: bom, config, extensions, classes, or all (default: ${DEFAULT-VALUE}).")
     String kinds;
 
     @Option(names = "--force", description = "Replace dataset snapshots that differ from the work snapshots.")
@@ -65,9 +65,9 @@ public final class DatasetImportCommand implements Callable<Integer> {
         }
     }
 
-    /// The import step of `all`: the BOMs of `boms` and the config and extensions of `configs` that the work folder
-    /// has (what the run extracted, or reused from the work folder), replacing different dataset snapshots only with
-    /// `force`; then the release list is refreshed from the cached `maven-metadata.xml`.
+    /// The import step of `all`: the BOMs of `boms` and the config, extensions and classes of `configs` that the work
+    /// folder has (what the run extracted, or reused from the work folder), replacing different dataset snapshots only
+    /// with `force`; then the release list is refreshed from the cached `maven-metadata.xml`.
     ///
     /// @return false when a snapshot was refused as inconsistent (refusals of unvalidated extractors are expected and
     ///         only logged)
@@ -86,6 +86,8 @@ public final class DatasetImportCommand implements Callable<Integer> {
                 candidates.add(new DatasetEditor.Candidate(version.text(), Kind.EXTENSIONS,
                         work.file(version.text(), Kind.EXTENSIONS.snapshotFile())));
             }
+            // config writes them from the same reads; a release extracted before it did has none
+            addIfPresent(candidates, work, version.text(), Kind.CLASSES);
         }
         DatasetEditor editor = DatasetEditor.open(workspace.datasetDir());
         boolean consistent = true;

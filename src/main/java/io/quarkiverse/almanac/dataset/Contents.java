@@ -1,6 +1,7 @@
 package io.quarkiverse.almanac.dataset;
 
 import io.quarkiverse.almanac.model.BomSnapshot;
+import io.quarkiverse.almanac.model.ClassesSnapshot;
 import io.quarkiverse.almanac.model.ConfigSnapshot;
 import io.quarkiverse.almanac.model.ExtensionsSnapshot;
 
@@ -20,6 +21,7 @@ final class Contents {
     private final SortedMap<String, BomSnapshot> boms = new TreeMap<>(ReleaseOrder.COMPARATOR);
     private final SortedMap<String, ConfigSnapshot> configs = new TreeMap<>(ReleaseOrder.COMPARATOR);
     private final SortedMap<String, ExtensionsSnapshot> extensions = new TreeMap<>(ReleaseOrder.COMPARATOR);
+    private final SortedMap<String, ClassesSnapshot> classes = new TreeMap<>(ReleaseOrder.COMPARATOR);
 
     /// Every known release, in release order.
     SortedSet<String> releases() {
@@ -28,6 +30,7 @@ final class Contents {
         all.addAll(boms.keySet());
         all.addAll(configs.keySet());
         all.addAll(extensions.keySet());
+        all.addAll(classes.keySet());
         return all;
     }
 
@@ -50,10 +53,20 @@ final class Contents {
 
     /// Forgets a release; it must hold no data.
     void forgetRelease(String version) {
-        if (has(version, Kind.BOM) || has(version, Kind.CONFIG) || has(version, Kind.EXTENSIONS)) {
+        if (holdsData(version)) {
             throw new IllegalStateException(version + " still holds data");
         }
         dates.remove(version);
+    }
+
+    /// Whether the release holds a snapshot of any kind.
+    boolean holdsData(String version) {
+        for (Kind kind : Kind.values()) {
+            if (has(version, kind)) {
+                return true;
+            }
+        }
+        return false;
     }
 
     SortedMap<String, BomSnapshot> boms() {
@@ -66,6 +79,10 @@ final class Contents {
 
     SortedMap<String, ExtensionsSnapshot> extensions() {
         return extensions;
+    }
+
+    SortedMap<String, ClassesSnapshot> classes() {
+        return classes;
     }
 
     SortedMap<String, String> dates() {
@@ -98,6 +115,10 @@ final class Contents {
                 extensions.put(version, (ExtensionsSnapshot) snapshot);
                 addRelease(version, null);
             }
+            case CLASSES -> {
+                classes.put(version, (ClassesSnapshot) snapshot);
+                addRelease(version, null);
+            }
         }
     }
 
@@ -111,6 +132,7 @@ final class Contents {
             case BOM -> boms;
             case CONFIG -> configs;
             case EXTENSIONS -> extensions;
+            case CLASSES -> classes;
         };
     }
 
@@ -127,11 +149,12 @@ final class Contents {
                 return false;
             }
         }
-        return boms.equals(that.boms) && configs.equals(that.configs) && extensions.equals(that.extensions);
+        return boms.equals(that.boms) && configs.equals(that.configs) && extensions.equals(that.extensions)
+                && classes.equals(that.classes);
     }
 
     @Override
     public int hashCode() {
-        return Objects.hash(releases(), boms, configs, extensions);
+        return Objects.hash(releases(), boms, configs, extensions, classes);
     }
 }

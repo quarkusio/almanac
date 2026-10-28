@@ -7,7 +7,9 @@ import io.quarkiverse.almanac.maven.Http;
 import io.quarkiverse.almanac.maven.MavenRepo;
 import io.quarkiverse.almanac.maven.Pacer;
 import io.quarkiverse.almanac.maven.RemoteJar;
+import io.quarkiverse.almanac.model.ArtifactClasses;
 import io.quarkiverse.almanac.model.BomSnapshot;
+import io.quarkiverse.almanac.model.ClassesSnapshot;
 import io.quarkiverse.almanac.model.ConfigProperty;
 import io.quarkiverse.almanac.model.ConfigSnapshot;
 import io.quarkiverse.almanac.model.ManagedDep;
@@ -243,12 +245,25 @@ class OfflineExtractionTest {
     @Test
     void writesConfigAndExtensionsTogether() throws IOException {
         cacheJar("quarkus-acme", "3.99.0", null, acmeJar());
-        assertTrue(extract(bom("3.99.0", "quarkus-acme"), ConfigExtractor.Source.BOTH,
-                ConfigExtractor.DocAnnotationMode.SOURCES));
+        // a jar without config, known by its central directory only, and one that does not exist
+        cacheCentralDirectoryOnly("quarkus-acme-spi", "3.99.0", Map.of("io/quarkus/acme/spi/AcmeBuildItem.class",
+                new byte[] {1}, "io/quarkus/acme/spi/package-info.class", new byte[] {1}));
+        cacheMissing("quarkus-acme-gone", "3.99.0", null);
+        // nor a pom: no relocation
+        Files.write(cacheFile("quarkus-acme-gone", "3.99.0", null).resolveSibling("quarkus-acme-gone-3.99.0.pom.404"),
+                new byte[0]);
+        assertTrue(extract(bom("3.99.0", "quarkus-acme", "quarkus-acme-gone", "quarkus-acme-spi"),
+                ConfigExtractor.Source.BOTH, ConfigExtractor.DocAnnotationMode.SOURCES));
         SnapshotStore store = store();
         assertTrue(store.exists("3.99.0", SnapshotStore.CONFIG));
         assertTrue(store.exists("3.99.0", SnapshotStore.CONFIG_BYTECODE));
         assertTrue(store.exists("3.99.0", SnapshotStore.EXTENSIONS));
+        // the classes of every jar, from the central directories read anyway
+        assertEquals(new ClassesSnapshot("3.99.0", List.of(
+                new ArtifactClasses("quarkus-acme", List.of("io.quarkus.acme.AcmeConfig",
+                        "io.quarkus.acme.AcmeConfig$Named")),
+                new ArtifactClasses("quarkus-acme-spi", List.of("io.quarkus.acme.spi.AcmeBuildItem")))),
+                store.read("3.99.0", SnapshotStore.CLASSES, ClassesSnapshot.class));
         // no model in the release: config.json is the bytecode snapshot
         assertFalse(store.exists("3.99.0", SnapshotStore.CONFIG_MODEL));
         assertEquals("bytecode", config("3.99.0").source());
@@ -267,7 +282,8 @@ class OfflineExtractionTest {
             IOException e = assertThrows(IOException.class,
                     () -> extract(bom, source, ConfigExtractor.DocAnnotationMode.SOURCES));
             assertTrue(e.getMessage().contains("offline"), e.getMessage());
-            for (String file : List.of(SnapshotStore.CONFIG, SnapshotStore.CONFIG_BYTECODE, SnapshotStore.EXTENSIONS)) {
+            for (String file : List.of(SnapshotStore.CONFIG, SnapshotStore.CONFIG_BYTECODE, SnapshotStore.EXTENSIONS,
+                    SnapshotStore.CLASSES)) {
                 assertFalse(store().exists("3.99.0", file), source + " wrote " + file);
             }
         }

@@ -3,7 +3,9 @@ package io.quarkiverse.almanac.dataset;
 import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.fasterxml.jackson.databind.node.JsonNodeFactory;
 import com.fasterxml.jackson.databind.node.ObjectNode;
+import io.quarkiverse.almanac.model.ArtifactClasses;
 import io.quarkiverse.almanac.model.BomSnapshot;
+import io.quarkiverse.almanac.model.ClassesSnapshot;
 import io.quarkiverse.almanac.model.ConfigProperty;
 import io.quarkiverse.almanac.model.ConfigSnapshot;
 import io.quarkiverse.almanac.model.ExtensionInfo;
@@ -13,6 +15,7 @@ import io.quarkiverse.almanac.model.ManagedDep;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.IdentityHashMap;
+import java.util.Iterator;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -24,7 +27,8 @@ import java.util.function.BiFunction;
 
 /// Writes [Contents] as the files of format 1. The output depends only on the contents, never on the
 /// order in which releases were added, so encoding the same contents always gives the same bytes and adding a release
-/// changes only the lines whose history changes, plus the lines of that release.
+/// changes only the lines whose history changes, plus the lines of that release. The classes go to one file per major
+/// version line, each over the releases of its line, so a release never changes the classes file of another line.
 final class DatasetEncoder {
 
     /// One line of `config-meta.jsonl`: a config snapshot without its properties.
@@ -36,7 +40,7 @@ final class DatasetEncoder {
     private DatasetEncoder() {
     }
 
-    /// File name → content, in [DatasetFormat#FILES] order.
+    /// File name → content, in [DatasetFormat#FILES] order with the classes files (by major line) before `README.md`.
     static Map<String, String> encode(Contents contents) {
         Map<String, String> files = new LinkedHashMap<>();
         files.put(DatasetFormat.RELEASES, releases(contents));
@@ -66,6 +70,11 @@ final class DatasetEncoder {
             return values;
         }));
         files.put(DatasetFormat.EXTENSION_STATES, extensionStates.lines());
+        SortedMap<Integer, SortedMap<String, ClassesSnapshot>> classesByLine = new TreeMap<>();
+        contents.classes().forEach((version, snapshot) -> classesByLine.computeIfAbsent(DatasetFormat.majorOf(version),
+                major -> new TreeMap<>(ReleaseOrder.COMPARATOR)).put(version, snapshot));
+        classesByLine.forEach((major, snapshots) -> files.put(DatasetFormat.classesFile(major),
+                histories("id", snapshots, DatasetEncoder::classValues)));
         files.put(DatasetFormat.README, DatasetFormat.readme());
         return files;
     }
@@ -95,6 +104,9 @@ final class DatasetEncoder {
             if (contents.has(version, Kind.EXTENSIONS)) {
                 row.put("extensions", true);
             }
+            if (contents.has(version, Kind.CLASSES)) {
+                row.put("classes", true);
+            }
             appendLine(out, row);
         }
         return out.toString();
@@ -112,34 +124,53 @@ final class DatasetEncoder {
         return values;
     }
 
+    /// Class history values of one release: [DatasetFormat#CLASS_PRESENT] for every `<artifactId> <class>`.
+    private static Map<String, String> classValues(String version, ClassesSnapshot snapshot) {
+        Map<String, String> values = new HashMap<>();
+        for (ArtifactClasses artifact : snapshot.artifacts()) {
+            for (String name : artifact.classes()) {
+                if (values.put(artifact.id() + " " + name, DatasetFormat.CLASS_PRESENT) != null) {
+                    throw new IllegalArgumentException("classes " + version + ": " + name + " twice in "
+                            + artifact.id());
+                }
+            }
+        }
+        return values;
+    }
+
     /// One line per id, sorted: `{"<idField>": id, "h": [[version, value], ...]}` with a point wherever the value
-    /// differs from the previous release's (absent = null; nothing before the first appearance).
+    /// differs from the previous release's (absent = null; nothing before the first appearance). The releases are
+    /// taken one at a time, so only the values of one release are in memory besides the points.
     private static <S> String histories(String idField, SortedMap<String, S> snapshots,
             BiFunction<String, S, Map<String, String>> valuesOf) {
-        List<String> releases = new ArrayList<>(snapshots.size());
-        List<Map<String, String>> values = new ArrayList<>(snapshots.size());
-        TreeSet<String> ids = new TreeSet<>();
+        Map<String, List<String[]>> points = new HashMap<>();
+        Map<String, String> current = new HashMap<>();
         snapshots.forEach((version, snapshot) -> {
             Map<String, String> released = valuesOf.apply(version, snapshot);
-            releases.add(version);
-            values.add(released);
-            ids.addAll(released.keySet());
+            for (Iterator<Map.Entry<String, String>> it = current.entrySet().iterator(); it.hasNext(); ) {
+                Map.Entry<String, String> entry = it.next();
+                if (!released.containsKey(entry.getKey())) {
+                    points.get(entry.getKey()).add(new String[] {version, null});
+                    it.remove();
+                }
+            }
+            released.forEach((id, value) -> {
+                if (!Objects.equals(value, current.get(id))) {
+                    points.computeIfAbsent(id, k -> new ArrayList<>()).add(new String[] {version, value});
+                    current.put(id, value);
+                }
+            });
         });
         StringBuilder out = new StringBuilder();
-        for (String id : ids) {
+        for (String id : new TreeSet<>(points.keySet())) {
             ObjectNode line = NODES.objectNode().put(idField, id);
-            ArrayNode points = line.putArray("h");
-            String previous = null;
-            for (int i = 0; i < releases.size(); i++) {
-                String value = values.get(i).get(id);
-                if (!Objects.equals(value, previous)) {
-                    ArrayNode point = points.addArray().add(releases.get(i));
-                    if (value == null) {
-                        point.addNull();
-                    } else {
-                        point.add(value);
-                    }
-                    previous = value;
+            ArrayNode history = line.putArray("h");
+            for (String[] point : points.get(id)) {
+                ArrayNode node = history.addArray().add(point[0]);
+                if (point[1] == null) {
+                    node.addNull();
+                } else {
+                    node.add(point[1]);
                 }
             }
             appendLine(out, line);

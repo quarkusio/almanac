@@ -23,8 +23,8 @@ import java.util.concurrent.Callable;
 
 /// `dataset export`: restores snapshots of the dataset as snapshot files, exactly as `bom` and `config` write them.
 @Command(name = "export", description = "Write snapshots of the dataset as snapshot files <out>/<version>/bom.json, "
-        + "config.json, extensions.json (pretty-printed, as bom and config write them). Existing files that differ "
-        + "are kept unless --force.")
+        + "config.json, extensions.json, classes.json (pretty-printed, as bom and config write them). Existing files "
+        + "that differ are kept unless --force.")
 public final class DatasetExportCommand implements Callable<Integer> {
 
     @Mixin
@@ -37,8 +37,8 @@ public final class DatasetExportCommand implements Callable<Integer> {
             description = "all = every release of the dataset, or a comma-separated list (default: ${DEFAULT-VALUE}).")
     String versions;
 
-    @Option(names = "--kinds", defaultValue = "bom,config,extensions", paramLabel = "KINDS",
-            description = "Comma-separated: bom, config, extensions, or all (default: ${DEFAULT-VALUE}).")
+    @Option(names = "--kinds", defaultValue = "all", paramLabel = "KINDS",
+            description = "Comma-separated: bom, config, extensions, classes, or all (default: ${DEFAULT-VALUE}).")
     String kinds;
 
     @Option(names = "--out", paramLabel = "DIR",

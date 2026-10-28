@@ -88,8 +88,8 @@ class ExtensionsCommandTest {
             Run assembled = run(concat(common, "assemble", "--since", "2.16", "--site", site.toString()));
             assertEquals(0, assembled.exitCode(), assembled.log());
             assertEquals("{\"v\":\"2.16.12.Final\",\"date\":\"2023-10-16\",\"stream\":\"2.16\",\"pre\":false,"
-                    + "\"lts\":false,\"config\":false,\"ext\":true}", Json.readTree(Files.readAllBytes(
-                    site.resolve("data/versions.json"))).at("/versions/0").toString());
+                    + "\"lts\":false,\"config\":false,\"ext\":true,\"classes\":false}",
+                    Json.readTree(Files.readAllBytes(site.resolve("data/versions.json"))).at("/versions/0").toString());
         }
     }
 

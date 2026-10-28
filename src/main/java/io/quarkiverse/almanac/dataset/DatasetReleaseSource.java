@@ -3,6 +3,7 @@ package io.quarkiverse.almanac.dataset;
 import io.quarkiverse.almanac.assemble.HistoryBuilder;
 import io.quarkiverse.almanac.assemble.ReleaseSource;
 import io.quarkiverse.almanac.model.BomSnapshot;
+import io.quarkiverse.almanac.model.ClassesSnapshot;
 import io.quarkiverse.almanac.model.ConfigSnapshot;
 import io.quarkiverse.almanac.model.ExtensionsSnapshot;
 import io.quarkiverse.almanac.util.Log;
@@ -24,6 +25,7 @@ public final class DatasetReleaseSource implements ReleaseSource {
     private final AtomicInteger workBoms = new AtomicInteger();
     private final AtomicInteger workConfigs = new AtomicInteger();
     private final AtomicInteger workExtensions = new AtomicInteger();
+    private final AtomicInteger workClasses = new AtomicInteger();
 
     /// @param dataset the committed dataset
     /// @param work    work snapshots to add where the dataset has none (a store without dataset fallback), or null
@@ -64,22 +66,29 @@ public final class DatasetReleaseSource implements ReleaseSource {
             extensions = work.read(version, SnapshotStore.EXTENSIONS, ExtensionsSnapshot.class);
             workExtensions.incrementAndGet();
         }
+        ClassesSnapshot classes = null;
+        if (dataset.has(version, Kind.CLASSES)) {
+            classes = dataset.classes(version);
+        } else if (work != null && work.inWork(version, SnapshotStore.CLASSES)) {
+            classes = work.read(version, SnapshotStore.CLASSES, ClassesSnapshot.class);
+            workClasses.incrementAndGet();
+        }
         boolean datasetConfig = dataset.has(version, Kind.CONFIG);
         boolean workConfig = !datasetConfig && work != null && work.inWork(version, SnapshotStore.CONFIG);
         if (!datasetConfig && !workConfig) {
-            return new HistoryBuilder.Release(bom, null, extensions);
+            return new HistoryBuilder.Release(bom, null, extensions, classes);
         }
         if (extensions == null) {
             Log.warn("assemble: %s has config but no extensions snapshot (%s); its config is ignored", version,
                     datasetConfig ? "dataset verify reports it" : "in " + work.root());
-            return new HistoryBuilder.Release(bom, null, null);
+            return new HistoryBuilder.Release(bom, null, null, classes);
         }
         if (datasetConfig) {
-            return new HistoryBuilder.Release(bom, dataset.config(version), extensions);
+            return new HistoryBuilder.Release(bom, dataset.config(version), extensions, classes);
         }
         workConfigs.incrementAndGet();
         return new HistoryBuilder.Release(bom, work.read(version, SnapshotStore.CONFIG, ConfigSnapshot.class),
-                extensions);
+                extensions, classes);
     }
 
     /// How many BOM snapshots came from the work folder.
@@ -95,5 +104,10 @@ public final class DatasetReleaseSource implements ReleaseSource {
     /// How many extensions snapshots came from the work folder.
     public int workExtensions() {
         return workExtensions.get();
+    }
+
+    /// How many classes snapshots came from the work folder.
+    public int workClasses() {
+        return workClasses.get();
     }
 }

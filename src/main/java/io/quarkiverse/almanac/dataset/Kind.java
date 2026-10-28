@@ -1,6 +1,7 @@
 package io.quarkiverse.almanac.dataset;
 
 import io.quarkiverse.almanac.model.BomSnapshot;
+import io.quarkiverse.almanac.model.ClassesSnapshot;
 import io.quarkiverse.almanac.model.ConfigSnapshot;
 import io.quarkiverse.almanac.model.ExtensionsSnapshot;
 import io.quarkiverse.almanac.util.SnapshotStore;
@@ -17,7 +18,9 @@ public enum Kind {
     /// Config properties: `config.json`, a [ConfigSnapshot].
     CONFIG("config", SnapshotStore.CONFIG, ConfigSnapshot.class),
     /// Extension metadata: `extensions.json`, an [ExtensionsSnapshot].
-    EXTENSIONS("extensions", SnapshotStore.EXTENSIONS, ExtensionsSnapshot.class);
+    EXTENSIONS("extensions", SnapshotStore.EXTENSIONS, ExtensionsSnapshot.class),
+    /// The classes of the `io.quarkus` jars: `classes.json`, a [ClassesSnapshot].
+    CLASSES("classes", SnapshotStore.CLASSES, ClassesSnapshot.class);
 
     private final String label;
     private final String snapshotFile;
@@ -29,7 +32,7 @@ public enum Kind {
         this.recordType = recordType;
     }
 
-    /// The name used on the command line and in `releases.jsonl`: `bom`, `config` or `extensions`.
+    /// The name used on the command line and in `releases.jsonl`: `bom`, `config`, `extensions` or `classes`.
     public String label() {
         return label;
     }
@@ -77,12 +80,12 @@ public enum Kind {
             }
             if (match == null) {
                 throw new IllegalArgumentException("unknown kind '" + part.strip() + "': expected bom, config, "
-                        + "extensions or all");
+                        + "extensions, classes or all");
             }
             kinds.add(match);
         }
         if (kinds.isEmpty()) {
-            throw new IllegalArgumentException("no kind given: expected bom, config, extensions or all");
+            throw new IllegalArgumentException("no kind given: expected bom, config, extensions, classes or all");
         }
         return kinds;
     }
