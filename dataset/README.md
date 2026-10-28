@@ -12,8 +12,9 @@ UTF-8 [JSON Lines](https://jsonlines.org/): one compact JSON object per line, li
 
 | File | One line per | Fields |
 |---|---|---|
-| `releases.jsonl` | known release (all versions of `io.quarkus:quarkus-bom`), in version order | `version`; `date` (UTC day of the BOM's `Last-Modified`, when known); `bom: true`, `config: {source, extractor, roots}`, `extensions: true` and `classes: true` for the kinds this dataset holds |
+| `releases.jsonl` | known release (all versions of `io.quarkus:quarkus-bom`), in version order | `version`; `date` (UTC day of the BOM's `Last-Modified`, when known); `bom: true`, `config: {source, extractor, roots}`, `extensions: true`, `classes: true` and `platform: {date}` (the UTC day of the platform BOM's `Last-Modified`, when known) for the kinds this dataset holds |
 | `bom.jsonl` | managed artifact (`groupId:artifactId[:type][:classifier]`), by id | `id`, `h` |
+| `platform-bom.jsonl` | artifact that the platform BOM `io.quarkus.platform:quarkus-bom` of the same version manages otherwise than the release's BOM, by id | `id`, `h` |
 | `config.jsonl` | canonical config key, by key | `key`, `h` (values are config state ids) |
 | `config-states.jsonl` | distinct config property, by id | `id`, `state` (every `ConfigProperty` field, as in `config.json`) |
 | `config-meta.jsonl` | release with config, in version order | `version`, `source`, `extractor`, `roots`, `warnings` |
@@ -26,6 +27,9 @@ UTF-8 [JSON Lines](https://jsonlines.org/): one compact JSON object per line, li
   next point, `null` means absent, nothing is recorded before the first point and only changes are. A line
   therefore changes only when its history does, and a release changes no file of another major line.
 - **BOM values**: the managed version, or `"="` for "the release's own version".
+- **Platform BOM values** say how the platform BOM differs from the release's BOM, over the releases
+  with `platform`: its managed version (`"="` for the release's own), `"-"` when only the release's
+  BOM manages the id, `null` when both manage it alike (or neither does).
 - **Class values**: `"+"` while the jar has the class. A class moved to another jar ends on one line and
   starts on another.
 - **State ids**: the first 16 hex digits of the SHA-256 of the state's compact JSON, exactly as the line
@@ -39,6 +43,9 @@ UTF-8 [JSON Lines](https://jsonlines.org/): one compact JSON object per line, li
 
 - `bom.json` = `{version: R, date: <date of R>, deps}`: every id whose value at R is not null, sorted by id,
   `"="` read as R.
+- `platform-bom.json` = `{version: R, date: <platform date of R>, deps}`: the deps of `bom.json` with
+  every value of `platform-bom.jsonl` at R that is not null applied (a version replaces or adds the id,
+  `"="` read as R, `"-"` removes it), sorted by id.
 - `config.json` = the `config-meta.jsonl` line of R plus `properties`: the state at R of every key, sorted by
   key.
 - `extensions.json` = `{version: R, extensions}`: the state at R of every id, sorted by id.
