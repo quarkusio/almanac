@@ -1087,6 +1087,27 @@ describe('pre-releases: visibility', () => {
     assert.deepEqual(releaseVisibility([]).indices, []);
   });
 
+  test('old releases: the streams before oldBefore are hidden unless showOld, pre-releases or not', () => {
+    const vs = V('3.2.0.CR1', '3.2.0', '3.2.12', '3.7.4', '3.8.0.CR1', '3.8.0', '3.10.0', '4.0.0.Alpha1');
+    const name = (vis) => vs.filter((x, i) => vis.visible[i]).map((x) => x.v);
+    const both = releaseVisibility(vs, { oldBefore: '3.8', showOld: false });
+    assert.deepEqual(both.old, [true, true, true, true, false, false, false, false]);
+    assert.deepEqual(name(both), ['3.8.0', '3.10.0', '4.0.0.Alpha1'], '3.10 is newer than 3.8, 3.8.0.CR1 is a hidden pre-release');
+    assert.equal(both.hidden, 5);
+    // each switch counts what it controls given the other one
+    assert.equal(both.preHideable, 1, 'only 3.8.0.CR1: 3.2.0.CR1 stays hidden as an old release');
+    assert.equal(both.oldHideable, 3, 'the old finals; their pre-release stays hidden as a pre-release');
+    const oldOn = releaseVisibility(vs, { oldBefore: '3.8', showOld: true });
+    assert.deepEqual(name(oldOn), ['3.2.0', '3.2.12', '3.7.4', '3.8.0', '3.10.0', '4.0.0.Alpha1']);
+    assert.equal(oldOn.preHideable, 2);
+    const preOn = releaseVisibility(vs, { oldBefore: '3.8', showOld: false, showPre: true });
+    assert.equal(preOn.oldHideable, 4);
+    assert.deepEqual(name(preOn), ['3.8.0.CR1', '3.8.0', '3.10.0', '4.0.0.Alpha1']);
+    // without oldBefore nothing is old, whatever showOld says
+    assert.ok(releaseVisibility(vs, { showOld: false }).old.every((o) => !o));
+    assert.equal(releaseVisibility(vs, { showOld: false }).oldHideable, 0);
+  });
+
   test('visibleOnly filters config versions', () => {
     const config = load('config');
     const off = releaseVisibility(list);
@@ -1195,6 +1216,34 @@ describe('pre-releases: timelines over the visible snapshots', () => {
     assert.deepEqual(ev(h), [['3.27.0.CR1', 'introduced'], ['3.27.4', 'removed']]);
     assert.equal(h.present, false);
     assert.equal(propertyHistory(config, k, { vis: on }).widened, false);
+  });
+
+  test('widening relaxes one switch at a time, so turning a switch on never hides what was shown', () => {
+    // quarkus.a exists only in 3.2.0 (old); 3.8.0.CR1 is a pre-release snapshot of a shown stream
+    const vs = V('3.2.0', '3.8.0.CR1', '3.8.0', '3.9.0');
+    const cfg = { versions: [0, 1, 2, 3], states: [{ n: 'quarkus.a', t: 'int', d: '1' }], props: [{ k: 'quarkus.a', h: [[0, 0], [1, null]] }] };
+    const vis = (showPre, showOld) => releaseVisibility(vs, { showPre, showOld, oldBefore: '3.8' });
+    const widen = [{ vis: vis(false, true), kind: 'old' }, { vis: vis(true, false), kind: 'pre' }];
+    const h = propertyHistory(cfg, 'quarkus.a', { vis: vis(false, false), widen });
+    assert.equal(h.widened, true);
+    assert.equal(h.widenedBy, 'old', 'old releases are relaxed first');
+    assert.deepEqual(h.cvs, [0, 2, 3], 'the hidden pre-release snapshot stays hidden');
+    assert.equal(h.hiddenSnapshots, 1);
+    // turning "Show old releases" on shows the same snapshots: nothing disappears
+    assert.deepEqual(propertyHistory(cfg, 'quarkus.a', { vis: vis(false, true) }).cvs, [0, 2, 3]);
+    // without widening steps, every snapshot is used, as before
+    assert.equal(propertyHistory(cfg, 'quarkus.a', { vis: vis(false, false) }).widenedBy, 'all');
+  });
+
+  test('neighbours skip hidden old releases, previous minor and LTS included', () => {
+    const vs = V('3.2.12', '3.7.4', '3.8.0', '3.8.1', '3.9.0');
+    const vj = { lts: ['3.2', '3.8'], versions: vs };
+    const at = (v) => vs.findIndex((x) => x.v === v);
+    const hidden = versionNeighbours(vj, at('3.8.0'), { vis: releaseVisibility(vs, { showOld: false, oldBefore: '3.8' }) });
+    assert.deepEqual([hidden.previousMinor, hidden.previousLts, hidden.older], [-1, -1, -1]);
+    const shown = versionNeighbours(vj, at('3.8.0'), { vis: releaseVisibility(vs, { showOld: true, oldBefore: '3.8' }) });
+    assert.deepEqual([shown.previousMinor, shown.previousLts, shown.older], [at('3.7.4'), at('3.2.12'), at('3.7.4')]);
+    assert.equal(versionNeighbours(vj, at('3.9.0'), { vis: releaseVisibility(vs, { showOld: false, oldBefore: '3.8' }) }).previousLts, at('3.8.1'));
   });
 
   test('the first visible snapshot is "present", even when hidden ones come before it', () => {

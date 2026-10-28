@@ -2089,6 +2089,10 @@ mark {
 
 .sec-tools {
   grid-column: 2;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 24px;
   margin-top: 10px;
 }
 
@@ -2153,6 +2157,10 @@ mark {
 }
 
 .page-tools {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 24px;
   margin-top: 16px;
 }
 

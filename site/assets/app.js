@@ -26,6 +26,11 @@ const QUARKUS_LOGO = 'https://quarkus.io/assets/images/quarkus_logo_horizontal_r
 /** The Commonhaus Foundation's logo for dark backgrounds, from the same place quarkus.io's footer takes it. */
 const COMMONHAUS_LOGO = 'https://raw.githubusercontent.com/commonhaus/artwork/main/foundation/brand/svg/CF_logo_horizontal_single_reverse.svg';
 const ALMANAC_REPO = 'https://github.com/quarkusio/almanac';
+/**
+ * The oldest stream the site lists by default. The releases of older streams are "old releases": they stay in the
+ * data and are listed with the "Show old releases" switch. Raise it as streams age out.
+ */
+const OLDEST_SHOWN_STREAM = '3.8';
 
 const KIND_LABEL = {
   added: 'added', removed: 'removed', changed: 'changed', default: 'default', type: 'type', phase: 'phase',
@@ -261,8 +266,11 @@ function prepareVersions(json) {
   const list = json.versions;
   const ltsStreams = new Set(json.lts ?? []);
   const byStream = new Map();
-  const visOff = core.releaseVisibility(list, { showPre: false });
-  const visOn = core.releaseVisibility(list, { showPre: true });
+  // the four states of the two switches, as visBy[showPre][showOld]; visOff and visOn list every stream
+  const visBy = [false, true].map((showPre) => [false, true].map((showOld) =>
+    core.releaseVisibility(list, { showPre, showOld, oldBefore: OLDEST_SHOWN_STREAM })));
+  const visOff = visBy[0][1];
+  const visOn = visBy[1][1];
   list.forEach((x, i) => {
     const s = streamOfEntry(x);
     if (!byStream.has(s)) byStream.set(s, { stream: s, lts: ltsStreams.has(s), upcoming: visOff.upcomingStreams.has(s), items: [] });
@@ -276,7 +284,6 @@ function prepareVersions(json) {
   const extVis = core.extensionVersionsOf(list);
   // streams with a final release (items are in version order), and how many have config at a final
   const finals = streams.map((g) => g.items.filter((i) => !core.isPreRelease(list[i]))).filter((f) => f.length);
-  const hideable = (snapshots) => snapshots.filter((c) => visOff.pre[c] && !visOff.upcoming[c]).length;
   return {
     json,
     list,
@@ -290,11 +297,9 @@ function prepareVersions(json) {
     // streams with more than one final, each of which has a config snapshot (newest first)
     configEveryPatch: finals.filter((f) => f.length > 1 && f.every((i) => list[i].config)).map((f) => streamOfEntry(list[f[0]])),
     ltsStreams: [...ltsStreams],
+    visBy,
     visOff,
     visOn,
-    // config (extension) snapshots of pre-releases that the toggle hides (not upcoming)
-    hideableSnapshots: hideable(configVis),
-    hideableExtSnapshots: hideable(extVis),
     generatedAt: json.generatedAt ?? null,
   };
 }
@@ -387,32 +392,41 @@ function getSearchIndex() {
 }
 
 /* ========================================================================== */
-/* "Show pre-releases" preference                                              */
+/* "Show pre-releases" and "Show old releases" preferences                     */
 /* ========================================================================== */
 
 const PRE_KEY = 'quarkus-almanac-prereleases';
-const prefs = { showPre: readShowPre() };
+const OLD_KEY = 'quarkus-almanac-old-releases';
+const prefs = { showPre: readPref(PRE_KEY), showOld: readPref(OLD_KEY) };
 let prefHooks = []; // {anchor, fn}: run while `anchor` is in the document
 
-function readShowPre() {
+function readPref(key) {
   try {
-    return window.localStorage.getItem(PRE_KEY) === '1';
+    return window.localStorage.getItem(key) === '1';
   } catch {
     return false; // storage may be blocked: off by default
   }
 }
 
-function setShowPre(on) {
+function setPref(name, key, on, said) {
   const next = !!on;
-  if (prefs.showPre === next) return;
-  prefs.showPre = next;
+  if (prefs[name] === next) return;
+  prefs[name] = next;
   try {
-    window.localStorage.setItem(PRE_KEY, next ? '1' : '0');
+    window.localStorage.setItem(key, next ? '1' : '0');
   } catch {
     /* storage may be blocked: the choice lasts until the page is reloaded */
   }
-  announce(next ? 'Pre-releases shown.' : 'Pre-releases hidden, except those of upcoming streams.');
+  announce(said(next));
   for (const hook of [...prefHooks]) if (hook.anchor.isConnected) hook.fn();
+}
+
+function setShowPre(on) {
+  setPref('showPre', PRE_KEY, on, (next) => (next ? 'Pre-releases shown.' : 'Pre-releases hidden, except those of upcoming streams.'));
+}
+
+function setShowOld(on) {
+  setPref('showOld', OLD_KEY, on, (next) => (next ? 'Old releases shown.' : `Old releases hidden: the streams from ${OLDEST_SHOWN_STREAM} on are listed.`));
 }
 
 /** Runs `fn` when the preference changes, as long as `anchor` (an element of the page) is on screen. */
@@ -420,9 +434,52 @@ function onPrefChange(anchor, fn) {
   prefHooks.push({ anchor, fn });
 }
 
-/** Release visibility for the current preference (see core.releaseVisibility). */
+/** Release visibility for the current preferences (see core.releaseVisibility). */
 function currentVis() {
-  return prefs.showPre ? store.V.visOn : store.V.visOff;
+  return store.V.visBy[prefs.showPre ? 1 : 0][prefs.showOld ? 1 : 0];
+}
+
+/** What the switches hide now, in words: "pre-releases", "releases before 3.8", or both joined with "or". */
+function hiddenKinds() {
+  const kinds = [prefs.showPre ? null : 'pre-releases', prefs.showOld ? null : `releases before ${OLDEST_SHOWN_STREAM}`];
+  return kinds.filter(Boolean).join(' or ');
+}
+
+/**
+ * "34 pre-releases, 49 old releases and 16 old pre-releases" among the hidden release indices `hidden` (`what`:
+ * releases or snapshots): hidden by one switch, by the other, or by both, so the parts add up to all of them.
+ */
+function hiddenCount(hidden, what = 'release') {
+  const vis = currentVis();
+  let pre = 0;
+  let old = 0;
+  let both = 0;
+  for (const i of hidden) {
+    const byPre = vis.pre[i] && !vis.upcoming[i] && !vis.showPre;
+    const byOld = vis.old[i] && !vis.showOld;
+    if (byPre && byOld) both++;
+    else if (byPre) pre++;
+    else old++;
+  }
+  const preNoun = what === 'release' ? 'pre-release' : `pre-release ${what}`;
+  return andList([
+    pre ? plural(pre, preNoun) : null,
+    old ? plural(old, `old ${what}`) : null,
+    both ? plural(both, `old ${preNoun}`) : null,
+  ].filter(Boolean));
+}
+
+/** The ways to widen a history whose item the switches hide (see core.propertyHistory): old releases first, then pre-releases. */
+function widenSteps() {
+  const V = store.V;
+  const p = prefs.showPre ? 1 : 0;
+  const o = prefs.showOld ? 1 : 0;
+  return [o ? null : { vis: V.visBy[p][1], kind: 'old' }, p ? null : { vis: V.visBy[1][o], kind: 'pre' }].filter(Boolean);
+}
+
+/** The releases a widened history shows although the switches hide them, by the step core took. */
+function widenedKinds(by) {
+  return by === 'old' ? `releases before ${OLDEST_SHOWN_STREAM}` : by === 'pre' ? 'pre-releases' : hiddenKinds();
 }
 
 /** Re-renders the page after a preference change, keeping the focused switch in place on screen. */
@@ -1078,39 +1135,96 @@ function jumpTo(id) {
 let uid = 0;
 const nextId = (prefix) => `${prefix}-${++uid}`;
 
-/* ---------- "Show pre-releases" switch ---------- */
+/* ---------- "Show pre-releases" and "Show old releases" switches ---------- */
+
+const SWITCHES = {
+  pre: {
+    label: 'Show pre-releases', on: () => prefs.showPre, set: setShowPre,
+    why: 'Alpha, Beta and CR releases of streams that already have a final release. Pre-releases of upcoming streams are always shown.',
+  },
+  old: {
+    label: 'Show old releases', on: () => prefs.showOld, set: setShowOld,
+    why: `Releases of the streams before ${OLDEST_SHOWN_STREAM}. They stay in the data; the switch only lists them.`,
+  },
+};
 
 /**
- * The "Show pre-releases" switch: a labelled checkbox with role="switch" (Space or Enter toggles it).
- * `count` = the pre-releases (or pre-release snapshots: `noun`) it controls here; with none, there is nothing
- * to switch and it is not rendered. `slot` names its place so a re-render gives focus back to it.
+ * A "Show pre-releases" (`kind` pre) or "Show old releases" (old) switch: a labelled checkbox with role="switch"
+ * (Space or Enter toggles it). `count()` = the releases (or snapshots: `noun`) it shows or hides now, given the
+ * other switch; `blocked()` = those of its kind that only the other switch can show; `max` = the most it controls
+ * here: with none there is nothing to switch, and it is not rendered. `slot` names its place so a re-render gives
+ * focus back to it.
  */
-function preToggle(slot, { count = store.V.visOff.hideable, noun = 'pre-release' } = {}) {
-  if (!count) return null;
-  const id = nextId('pre');
+function prefSwitch(kind, slot, { count, blocked = null, max, noun }) {
+  if (!max) return null;
+  const sw = SWITCHES[kind];
+  const id = nextId(kind);
   const input = h('input', {
     type: 'checkbox', id, class: 'switch-input', role: 'switch', 'data-pref-slot': slot, 'aria-describedby': `${id}-n ${id}-d`,
   });
   const note = h('span', { class: 'pre-toggle-n', id: `${id}-n` });
   const sync = () => {
-    input.checked = prefs.showPre;
-    note.textContent = `${plural(count, noun)} ${prefs.showPre ? 'shown' : 'hidden'}`;
+    input.checked = sw.on();
+    const n = count();
+    const waiting = blocked ? blocked() : 0;
+    // nothing to change here while the other switch hides them all: say so instead of "0 shown"
+    note.textContent = !n && waiting
+      ? `${plural(waiting, noun)} here, all ${kind === 'pre' ? `before ${OLDEST_SHOWN_STREAM}` : 'pre-releases'}`
+      : `${plural(n, noun)} ${sw.on() ? 'shown' : 'hidden'}`;
   };
-  input.addEventListener('change', () => setShowPre(input.checked));
+  input.addEventListener('change', () => sw.set(input.checked));
   input.addEventListener('keydown', (e) => {
     if (e.key !== 'Enter') return;
     e.preventDefault(); // also keeps Enter from submitting the picker form
     input.checked = !input.checked;
-    setShowPre(input.checked);
+    sw.set(input.checked);
   });
   sync();
   onPrefChange(input, sync);
-  const why = 'Alpha, Beta and CR releases of streams that already have a final release. Pre-releases of upcoming streams are always shown.';
   return h('div', { class: 'pre-toggle' },
     h('span', { class: 'switch' }, input, h('span', { class: 'switch-track', 'aria-hidden': 'true' }, h('span', { class: 'switch-knob' }))),
-    h('label', { for: id, class: 'switch-label', title: why }, 'Show pre-releases'),
+    h('label', { for: id, class: 'switch-label', title: sw.why }, sw.label),
     note,
-    h('span', { class: 'sr-only', id: `${id}-d` }, why));
+    h('span', { class: 'sr-only', id: `${id}-d` }, sw.why));
+}
+
+/**
+ * Both switches over the releases (those they control: none, one or two). Each counts what turning it alone on or
+ * off changes, given the other; the old pre-releases need both, and the page's hidden total says so.
+ */
+function releaseSwitches(slot) {
+  const V = store.V;
+  return [
+    prefSwitch('pre', slot, {
+      count: () => currentVis().preHideable, blocked: () => V.visOff.hideable - currentVis().preHideable, max: V.visOff.hideable, noun: 'pre-release',
+    }),
+    prefSwitch('old', `${slot}-old`, {
+      count: () => currentVis().oldHideable, blocked: () => V.visOn.oldHideable - currentVis().oldHideable, max: V.visOn.oldHideable, noun: 'old release',
+    }),
+  ].filter(Boolean);
+}
+
+/** Both switches over the snapshots `snaps` (release indices of config or extension snapshots), counted alike. */
+function snapshotSwitches(slot, snaps) {
+  const V = store.V;
+  const pre = (vis) => snaps.filter((c) => vis.pre[c] && !vis.upcoming[c] && (!vis.old[c] || vis.showOld)).length;
+  const old = (vis) => snaps.filter((c) => vis.old[c] && (!vis.pre[c] || vis.upcoming[c] || vis.showPre)).length;
+  return [
+    prefSwitch('pre', slot, {
+      count: () => pre(currentVis()), blocked: () => pre(V.visOn) - pre(currentVis()), max: pre(V.visOn), noun: 'pre-release snapshot',
+    }),
+    prefSwitch('old', `${slot}-old`, {
+      count: () => old(currentVis()), blocked: () => old(V.visOn) - old(currentVis()), max: old(V.visOn), noun: 'old snapshot',
+    }),
+  ].filter(Boolean);
+}
+
+/** The switches in a row, re-rendering the page when they change (`rerender`); null without any. */
+function switchRow(cls, switches, { rerender = false } = {}) {
+  if (!switches.length) return null;
+  const row = h('div', { class: cls }, switches);
+  if (rerender) onPrefChange(row, rerenderInPlace);
+  return row;
 }
 
 /* ---------- version picker ---------- */
@@ -1118,8 +1232,9 @@ function preToggle(slot, { count = store.V.visOff.hideable, noun = 'pre-release'
 const optgroupLabel = (g) => `${g.stream}${g.lts ? ' · LTS' : ''}${g.upcoming ? ' · upcoming' : ''}`;
 
 /**
- * A release select grouped by stream. Hidden pre-releases are left out except the selected one, so a
- * route that names a hidden pre-release keeps it selected; the options follow the "Show pre-releases" switch.
+ * A release select grouped by stream. The releases the switches hide are left out except the selected one, so a
+ * route that names a hidden release keeps it selected; the options follow the "Show pre-releases" and "Show old
+ * releases" switches.
  */
 function versionSelect(selected) {
   const V = store.V;
@@ -1142,7 +1257,7 @@ function versionSelect(selected) {
   };
   fill(selected);
   onPrefChange(sel, () => fill(Number(sel.value)));
-  /** Selects release `i`, adding it to the options when it is a hidden pre-release. */
+  /** Selects release `i`, adding it to the options when the switches hide it. */
   sel.selectRelease = (i) => {
     if ([...sel.options].some((o) => o.value === String(i))) sel.value = String(i);
     else fill(i);
@@ -1175,13 +1290,13 @@ function pickerForm({ from, to }) {
     fromSel.dispatchEvent(new Event('change'));
     toSel.dispatchEvent(new Event('change'));
   });
-  const toggle = preToggle('picker');
+  const switches = releaseSwitches('picker');
   const form = h('form', { class: 'picker', 'aria-label': 'Choose two releases to compare' },
     pickerField('From', fromSel),
     swap,
     pickerField('To', toSel),
     h('button', { type: 'submit', class: 'btn btn-primary picker-go' }, 'Compare', icon('arrow')),
-    toggle ? h('div', { class: 'picker-opts' }, toggle) : null);
+    switches.length ? h('div', { class: 'picker-opts' }, switches) : null);
   form.addEventListener('submit', (e) => {
     e.preventDefault();
     const a = store.V.list[Number(fromSel.value)];
@@ -1411,9 +1526,18 @@ async function renderHome() {
     searchBox({ id: 'qs-home' }));
 
   const picks = core.quickPicks(V.json);
+  const quickBody = h('div');
+  const fillQuick = () => {
+    const vis = currentVis();
+    const shown = picks.filter((p) => vis.visible[p.from] && vis.visible[p.to]);
+    quickBody.replaceChildren(shown.length ? h('ol', { class: 'quick-list' }, shown.map(quickPickItem))
+      : emptyNote(picks.length ? 'No quick comparison among the releases shown.' : 'Not enough releases for quick comparisons.'));
+  };
+  fillQuick();
+  onPrefChange(quickBody, fillQuick);
   const quick = h('section', { class: 'quick', 'aria-labelledby': 'quick-h' },
     h('h2', { class: 'label-h', id: 'quick-h' }, 'Quick comparisons'),
-    picks.length ? h('ol', { class: 'quick-list' }, picks.map(quickPickItem)) : emptyNote('Not enough releases for quick comparisons.'));
+    quickBody);
 
   return frag(
     hero,
@@ -2181,7 +2305,7 @@ async function renderProperty(r) {
       null, h('div', { class: 'nf-search' }, searchBox({ id: nextId('qs-nf') })));
   }
   if (prop.k !== r.key) canonicalize({ page: 'property', key: prop.k });
-  const hist = core.propertyHistory(cfg.raw, prop, { vis: currentVis() });
+  const hist = core.propertyHistory(cfg.raw, prop, { vis: currentVis(), widen: widenSteps() });
   const li = core.latestValue(prop.h);
   const s = hist.latest ?? (li == null ? {} : cfg.raw.states[li]);
   const cvs = hist.cvs;
@@ -2198,10 +2322,9 @@ async function renderProperty(r) {
       ? ` Not in the latest config snapshot; last seen in ${short(V.list[lastRange.to].v)}.`
       : ' Not in any config snapshot shown.');
   const widenedNote = hist.widened
-    ? h('p', { class: 'note' }, 'This property only appears in pre-release snapshots, so they are shown here although pre-releases are hidden.')
+    ? h('p', { class: 'note' }, `This property only appears in snapshots of ${widenedKinds(hist.widenedBy)}, so they are shown here although they are hidden elsewhere.`)
     : null;
-  const toggle = preToggle('timeline', { count: V.hideableSnapshots, noun: 'pre-release snapshot' });
-  if (toggle) onPrefChange(toggle, rerenderInPlace);
+  const tools = switchRow('sec-tools', snapshotSwitches('timeline', V.configVis), { rerender: true });
 
   const kv = h('dl', { class: 'kv' });
   const row = (k, ...v) => kv.append(h('dt', null, k), h('dd', null, v));
@@ -2232,18 +2355,21 @@ async function renderProperty(r) {
     statusLine,
     kv,
     h('section', { class: 'sec', 'aria-labelledby': 'presence-h' },
-      sectionHead(1, 'Presence', 'presence-h', h('p', { class: 'sec-note' }, 'One cell per config snapshot, oldest on the left.', hiddenSnapshotsNote(hist)),
-        toggle ? h('div', { class: 'sec-tools' }, toggle) : null),
+      sectionHead(1, 'Presence', 'presence-h', h('p', { class: 'sec-note' }, 'One cell per config snapshot, oldest on the left.', hiddenSnapshotsNote(hist, V.configVis)),
+        tools),
       widenedNote,
       presenceStrip(prop, hist, cvs, cfg.raw.states)),
     h('section', { class: 'sec', 'aria-labelledby': 'history-h' },
       sectionHead(2, 'History', 'history-h', h('p', { class: 'sec-note' }, 'Every change between consecutive config snapshots shown.')),
-      timeline(hist.events, propertyEventBody)));
+      timeline(hist.events, (ev) => propertyEventBody(ev, hist.cvs[0] === V.configVis[0]))));
 }
 
 /** " 2 pre-release snapshots are hidden." when the switch is off and the history skipped some. */
-function hiddenSnapshotsNote(hist) {
-  return hist.hiddenSnapshots ? ` ${plural(hist.hiddenSnapshots, 'pre-release snapshot')} ${hist.hiddenSnapshots === 1 ? 'is' : 'are'} hidden.` : null;
+function hiddenSnapshotsNote(hist, snaps) {
+  if (!hist.hiddenSnapshots) return null;
+  const shown = new Set(hist.cvs);
+  const hidden = snaps.filter((c) => !shown.has(c));
+  return ` ${hiddenCount(hidden, 'snapshot')} ${hidden.length === 1 ? 'is' : 'are'} hidden.`;
 }
 
 function presenceStrip(prop, hist, cvs, states) {
@@ -2284,10 +2410,13 @@ function presenceStrip(prop, hist, cvs, states) {
       anyPre ? h('span', null, h('i', { class: 'lg lg-pre' }), 'pre-release snapshot') : null));
 }
 
-function propertyEventBody(ev) {
+/** `first`: the history starts at the dataset's first config snapshot, not at the first one the switches show. */
+function propertyEventBody(ev, first = true) {
   switch (ev.type) {
     case 'present':
-      return frag(h('p', { class: 'tl-text' }, chip('neutral', 'present'), ' In the first config snapshot of this dataset; it may be older.'), stateLine(null, ev.state));
+      return frag(h('p', { class: 'tl-text' }, chip('neutral', 'present'), first
+        ? ' In the first config snapshot of this dataset; it may be older.'
+        : ' In the first config snapshot shown; earlier ones are hidden, so it may be older.'), stateLine(null, ev.state));
     case 'introduced':
       return frag(h('p', { class: 'tl-text' }, chip('added', 'introduced')), stateLine(null, ev.state));
     case 'reintroduced':
@@ -2333,12 +2462,11 @@ async function renderArtifact(r) {
       null, h('div', { class: 'nf-search' }, searchBox({ id: nextId('qs-nf') })));
   }
   const vis = currentVis();
-  const hist = art ? core.artifactHistory(bom.raw, id, V.list, { vis }) : null;
+  const hist = art ? core.artifactHistory(bom.raw, id, V.list, { vis, widen: widenSteps() }) : null;
   const last = V.list[hist ? hist.last : vis.indices[vis.indices.length - 1]];
   const idEl = h('span', { class: 'prop-name' }, id);
-  // With a BOM history the switch filters releases; on an extension-only page it filters extension snapshots.
-  const toggle = preToggle('timeline', hist ? {} : { count: V.hideableExtSnapshots, noun: 'pre-release snapshot' });
-  if (toggle) onPrefChange(toggle, rerenderInPlace);
+  // With a BOM history the switches filter releases; on an extension-only page they filter extension snapshots.
+  const tools = switchRow('sec-tools', hist ? releaseSwitches('timeline') : snapshotSwitches('timeline', V.extVis), { rerender: true });
   let status = null;
   if (hist) {
     if (hist.current.managed) {
@@ -2355,8 +2483,8 @@ async function renderArtifact(r) {
       h('p', { class: 'kicker' }, extEntry ? 'Quarkus extension · managed dependency' : 'Managed dependency', ' · ', group),
       h('h1', { class: 'page-title page-title--mono', tabindex: '-1' }, idEl, copyButton(id, { label: 'Copy coordinates', target: idEl }))),
     status,
-    hist ? artifactRanges(hist, toggle) : emptyNote(`${id} never appears in quarkus-bom in this dataset.`),
-    extEntry ? extensionPanel(extEntry, more, hist ? null : toggle) : null);
+    hist ? artifactRanges(hist, tools) : emptyNote(`${id} never appears in quarkus-bom in this dataset.`),
+    extEntry ? extensionPanel(extEntry, more, hist ? null : tools) : null);
 }
 
 function rangeLabel(from, to) {
@@ -2370,7 +2498,7 @@ function rangeCount(r) {
   return `${plural(r.count, 'release')}${r.pre ? `, ${plural(r.pre, 'pre-release')}` : ''}`;
 }
 
-function artifactRanges(hist, toggle) {
+function artifactRanges(hist, tools) {
   const V = store.V;
   const total = hist.indices.length;
   const first = V.list[hist.indices[0]];
@@ -2395,11 +2523,13 @@ function artifactRanges(hist, toggle) {
       h('td', null, r.kind ? chip(r.kind) : null)));
   }
   const hidden = hist.hiddenReleases;
+  const shown = new Set(hist.indices);
+  const hiddenText = hidden ? hiddenCount(V.list.map((_, i) => i).filter((i) => !shown.has(i))) : '';
   return h('section', { class: 'sec', 'aria-labelledby': 'ranges-h' },
     sectionHead(1, 'Managed versions', 'ranges-h',
-      h('p', { class: 'sec-note' }, `Across ${hidden ? '' : 'all '}${plural(total, 'release')}${hidden ? ` (${plural(hidden, 'pre-release')} hidden)` : ''}, oldest first. Each row is a run of releases that manage the same value.`),
-      toggle ? h('div', { class: 'sec-tools' }, toggle) : null),
-    hist.widened ? h('p', { class: 'note' }, 'Only pre-releases manage this artifact, so they are shown here although pre-releases are hidden.') : null,
+      h('p', { class: 'sec-note' }, `Across ${hidden ? '' : 'all '}${plural(total, 'release')}${hidden ? ` (${hiddenText} hidden)` : ''}, oldest first. Each row is a run of releases that manage the same value.`),
+      tools),
+    hist.widened ? h('p', { class: 'note' }, `Only ${widenedKinds(hist.widenedBy)} manage this artifact, so they are shown here although they are hidden elsewhere.`) : null,
     lane,
     h('div', { class: 'strip-axis', 'aria-hidden': 'true' }, h('span', null, short(first.v)), h('span', null, short(last.v))),
     h('div', { class: 'table-scroll' },
@@ -2408,10 +2538,13 @@ function artifactRanges(hist, toggle) {
         tbody)));
 }
 
-function extensionEventBody(ev) {
+/** `first` as for propertyEventBody, over the extension snapshots. */
+function extensionEventBody(ev, first = true) {
   switch (ev.type) {
     case 'present':
-      return h('p', { class: 'tl-text' }, chip('neutral', 'present'), ' In the first extension snapshot of this dataset.', ev.state.r ? ` Relocated to ${ev.state.r}.` : '');
+      return h('p', { class: 'tl-text' }, chip('neutral', 'present'),
+        first ? ' In the first extension snapshot of this dataset.' : ' In the first extension snapshot shown; earlier ones are hidden.',
+        ev.state.r ? ` Relocated to ${ev.state.r}.` : '');
     case 'introduced':
     case 'reintroduced':
       return h('p', { class: 'tl-text' }, chip('added', ev.type), ev.state.r ? ` As a relocation to ${ev.state.r}.` : statusChip(ev.state.s));
@@ -2428,11 +2561,11 @@ function extensionEventBody(ev) {
   }
 }
 
-function extensionPanel(x, data, toggle) {
+function extensionPanel(x, data, tools) {
   const V = store.V;
   const exts = data.extensions.raw;
   const vis = currentVis();
-  const hist = core.extensionHistory(exts, x.id, V.extVis, { vis });
+  const hist = core.extensionHistory(exts, x.id, V.extVis, { vis, widen: widenSteps() });
   const s = hist.latest ?? {};
   const kv = h('dl', { class: 'kv' });
   const row = (k, ...v) => kv.append(h('dt', null, k), h('dd', null, v));
@@ -2474,10 +2607,10 @@ function extensionPanel(x, data, toggle) {
       kv),
     h('section', { class: 'sec', 'aria-labelledby': 'ext-history-h' },
       sectionHead(3, 'Extension history', 'ext-history-h',
-        h('p', { class: 'sec-note' }, 'Status, name and relocation changes between the extension snapshots shown.', hiddenSnapshotsNote(hist)),
-        toggle ? h('div', { class: 'sec-tools' }, toggle) : null),
-      hist.widened ? h('p', { class: 'note' }, 'This extension only appears in pre-release snapshots, so they are shown here although pre-releases are hidden.') : null,
-      timeline(hist.events, extensionEventBody)),
+        h('p', { class: 'sec-note' }, 'Status, name and relocation changes between the extension snapshots shown.', hiddenSnapshotsNote(hist, V.extVis)),
+        tools),
+      hist.widened ? h('p', { class: 'note' }, `This extension only appears in snapshots of ${widenedKinds(hist.widenedBy)}, so they are shown here although they are hidden elsewhere.`) : null,
+      timeline(hist.events, (ev) => extensionEventBody(ev, hist.cvs[0] === V.extVis[0]))),
     propsBlock);
 }
 
@@ -2488,7 +2621,8 @@ function extensionPanel(x, data, toggle) {
 async function renderVersions() {
   const V = store.V;
   const vis = currentVis();
-  const ltsCount = V.streams.filter((g) => g.lts).length;
+  const shownStreams = V.streams.filter((g) => g.items.some((i) => vis.visible[i]));
+  const ltsCount = shownStreams.filter((g) => g.lts).length;
   const tbody = h('tbody');
   for (const g of V.streams) {
     const items = g.items.filter((i) => vis.visible[i]);
@@ -2505,20 +2639,20 @@ async function renderVersions() {
             : x.ext ? h('span', { class: 'cfg-mark', title: 'Extension snapshot, no config snapshot' }, 'extensions') : null));
       })))));
   }
-  const toggle = preToggle('releases');
-  if (toggle) onPrefChange(toggle, rerenderInPlace);
+  const tools = switchRow('page-tools', releaseSwitches('releases'), { rerender: true });
+  const hiddenNow = V.list.map((_, i) => i).filter((i) => !vis.visible[i]);
   const preSnapshots = V.configVis.some((c) => V.visOff.pre[c]);
   const extOnly = V.extVis.some((e) => !V.list[e].config);
   return frag(
     h('header', { class: 'page-head band' },
       h('p', { class: 'kicker' }, 'Releases'),
       h('h1', { class: 'page-title', tabindex: '-1' }, 'All releases'),
-      h('p', { class: 'lede' }, `${plural(vis.indices.length, 'release')} in ${plural(V.streams.length, 'stream')}, newest first`,
-        vis.hidden ? `, ${plural(vis.hidden, 'pre-release')} hidden` : null, `. ${plural(ltsCount, 'stream')} marked LTS. `,
+      h('p', { class: 'lede' }, `${plural(vis.indices.length, 'release')} in ${plural(shownStreams.length, 'stream')}, newest first`,
+        hiddenNow.length ? `, ${hiddenCount(hiddenNow)} hidden` : null, `. ${plural(ltsCount, 'stream')} marked LTS. `,
         'Releases tagged ', h('span', { class: 'cfg-mark' }, 'config'), ` are the config snapshots, taken ${V.configAtNewestFinals ? 'at' : 'for'} `,
         andList([...configCoverage(V), ...(preSnapshots ? ['some pre-releases, which are compared only at their own snapshot'] : [])]), '.',
         extOnly ? frag(' Releases tagged ', h('span', { class: 'cfg-mark' }, 'extensions'), ' have extension data but no config snapshot.') : null),
-      toggle ? h('div', { class: 'page-tools' }, toggle) : null),
+      tools),
     h('div', { class: 'table-scroll' },
       h('table', { class: 'tbl tbl-streams' },
         h('thead', null, h('tr', null, h('th', { scope: 'col' }, 'Stream'), h('th', { scope: 'col' }, 'Releases'))),
@@ -2532,7 +2666,8 @@ async function renderVersion(r) {
   const x = V.list[i];
   if (short(x.v) !== r.v) canonicalize({ page: 'version', v: short(x.v) });
   const isPre = core.isPreRelease(x);
-  const nb = core.versionNeighbours(V.json, i, { vis: currentVis() });
+  // the page of an old release, opened while old releases are hidden, still lists the old releases around it
+  const nb = core.versionNeighbours(V.json, i, { vis: V.visOn.old[i] ? V.visBy[prefs.showPre ? 1 : 0][1] : currentVis() });
   const cv = core.configVersionFor(i, V.list, V.configVis);
   const ev = core.extensionVersionFor(i, V.list, V.extVis);
   const newestFinal = core.newestFinalIndex(V.list);
@@ -2559,7 +2694,9 @@ async function renderVersion(r) {
         h('span', { class: 'quick-vers' }, short(A.v), h('span', { class: 'arrow', 'aria-hidden': 'true' }, ' → '), h('span', { class: 'sr-only' }, ' to '), short(x.v)),
         h('span', { class: 'quick-span' }, core.spanApart(A.date, x.date))));
     }))
-    : emptyNote('This is the oldest release in the dataset, so there is nothing earlier to compare with.');
+    : i === 0
+      ? emptyNote('This is the oldest release in the dataset, so there is nothing earlier to compare with.')
+      : emptyNote(frag('The earlier releases are hidden. Show them with the switches on ', h('a', { href: '#/versions' }, 'All releases'), '.'));
   const forward = newestFinal >= 0 && newestFinal !== i && core.compareVersions(V.list[newestFinal].v, x.v) > 0
     ? h('p', { class: 'forward' }, h('a', { href: link.compare(x.v, V.list[newestFinal].v) }, `Compare ${short(x.v)} with the newest release, ${short(V.list[newestFinal].v)}`))
     : null;

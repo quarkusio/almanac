@@ -321,13 +321,16 @@ export function preQualifier(entry) {
 
 /**
  * Which releases the site lists. Finals always; a pre-release when `showPre` is on, or when it is
- * *upcoming* (its stream has no final release yet).
+ * *upcoming* (its stream has no final release yet). With `oldBefore` (a stream, e.g. `3.8`), the releases of the
+ * older streams are *old*, and listed only when `showOld` is on.
  * @param {Array<{v:string, stream?:string, pre?:boolean}>} versions ascending, as in versions.json
- * @returns {{showPre:boolean, pre:boolean[], upcoming:boolean[], visible:boolean[], indices:number[],
- *   hideable:number, hidden:number, upcomingStreams:Set<string>}} `indices` = the visible indices, ascending;
- *   `hideable` = pre-releases the toggle controls (not upcoming); `hidden` = how many of them are hidden now
+ * @returns {{showPre:boolean, showOld:boolean, oldBefore:string|null, pre:boolean[], old:boolean[],
+ *   upcoming:boolean[], visible:boolean[], indices:number[], hideable:number, hidden:number, preHideable:number,
+ *   oldHideable:number, upcomingStreams:Set<string>}} `indices` = the visible indices, ascending; `hideable` =
+ *   pre-releases the pre-release toggle controls (not upcoming); `hidden` = how many releases are hidden now, for
+ *   either reason; `preHideable` / `oldHideable` = the releases each toggle shows or hides, given the other's setting
  */
-export function releaseVisibility(versions, { showPre = false } = {}) {
+export function releaseVisibility(versions, { showPre = false, showOld = true, oldBefore = null } = {}) {
   const list = Array.isArray(versions) ? versions : [];
   const pre = list.map(isPreRelease);
   const withFinal = new Set();
@@ -335,18 +338,30 @@ export function releaseVisibility(versions, { showPre = false } = {}) {
     if (!pre[i]) withFinal.add(streamOf(x));
   });
   const upcoming = list.map((x, i) => pre[i] && !withFinal.has(streamOf(x)));
-  const visible = list.map((x, i) => !pre[i] || upcoming[i] || !!showPre);
+  const old = list.map((x) => !!oldBefore && compareVersions(streamOf(x), oldBefore) < 0);
+  const preShown = (i) => !pre[i] || upcoming[i] || !!showPre;
+  const oldShown = (i) => !old[i] || !!showOld;
+  const visible = list.map((x, i) => preShown(i) && oldShown(i));
   const indices = [];
   let hideable = 0;
   let hidden = 0;
+  let preHideable = 0;
+  let oldHideable = 0;
   const upcomingStreams = new Set();
   list.forEach((x, i) => {
     if (visible[i]) indices.push(i);
     else hidden++;
-    if (pre[i] && !upcoming[i]) hideable++;
+    if (pre[i] && !upcoming[i]) {
+      hideable++;
+      if (oldShown(i)) preHideable++;
+    }
+    if (old[i] && preShown(i)) oldHideable++;
     if (upcoming[i]) upcomingStreams.add(streamOf(x));
   });
-  return { showPre: !!showPre, pre, upcoming, visible, indices, hideable, hidden, upcomingStreams };
+  return {
+    showPre: !!showPre, showOld: !!showOld, oldBefore: oldBefore ?? null, pre, old, upcoming, visible, indices, hideable,
+    hidden, preHideable, oldHideable, upcomingStreams,
+  };
 }
 
 /** The entries of `indices` (release or config version indices) that `vis` shows, in order; all of them without `vis`. */
@@ -1057,41 +1072,50 @@ function presenceTimeline(h, cvs, states, kindsFn) {
 }
 
 /**
- * Runs a presence timeline over the snapshots that `vis` shows; when the item is absent from all of them but
- * present in a hidden one, falls back to every snapshot (`widened: true`) so the page is never empty.
+ * Runs a presence timeline over the snapshots that `vis` shows. When the item is absent from all of them but
+ * present in a hidden one, widens one step at a time: each `widen` entry ({vis, kind}) in order, then every
+ * snapshot, so the page is never empty and turning a "Show" switch on never hides what the page showed
+ * (`widened`, and `widenedBy` = the kind of the step used, or 'all').
  */
-function visibleTimeline(h, allCvs, states, kindsFn, vis) {
-  const cvs = visibleOnly(allCvs, vis);
-  const t = presenceTimeline(h, cvs, states, kindsFn);
-  if (!vis || t.ranges.length || cvs.length === allCvs.length) return { ...t, cvs, widened: false, hiddenSnapshots: allCvs.length - cvs.length };
-  const all = presenceTimeline(h, allCvs, states, kindsFn);
-  if (!all.ranges.length) return { ...t, cvs, widened: false, hiddenSnapshots: allCvs.length - cvs.length };
-  return { ...all, cvs: [...allCvs], widened: true, hiddenSnapshots: 0 };
+function visibleTimeline(h, allCvs, states, kindsFn, vis, widen = []) {
+  const over = (v) => {
+    const cvs = visibleOnly(allCvs, v);
+    return { ...presenceTimeline(h, cvs, states, kindsFn), cvs };
+  };
+  const done = (t, by) => ({ ...t, widened: by != null, widenedBy: by, hiddenSnapshots: allCvs.length - t.cvs.length });
+  const t = over(vis);
+  if (!vis || t.ranges.length || t.cvs.length === allCvs.length) return done(t, null);
+  for (const step of [...widen, { vis: null, kind: 'all' }]) {
+    const w = over(step.vis);
+    if (w.ranges.length) return done(w, step.kind);
+  }
+  return done(t, null);
 }
 
 /**
  * History of one config property over the config snapshots: events (present in first snapshot,
  * introduced, changed with kinds, removed, reintroduced), presence ranges and the latest state.
  * With `vis` (see releaseVisibility), only the snapshots it shows are used; `cvs` lists the snapshots
- * used, `hiddenSnapshots` how many were left out, `widened` that the property only exists in hidden ones.
+ * used, `hiddenSnapshots` how many were left out, `widened` that the property only exists in hidden ones (then
+ * the `widen` visibilities are tried in order before every snapshot; see visibleTimeline).
  * @param {object} config config.json
  * @param {string|object} keyOrProp canonical key or the `props` entry
  */
-export function propertyHistory(config, keyOrProp, { vis } = {}) {
+export function propertyHistory(config, keyOrProp, { vis, widen } = {}) {
   const prop = typeof keyOrProp === 'object' ? keyOrProp : config.props.find((p) => p.k === keyOrProp);
   if (!prop) return null;
-  const t = visibleTimeline(prop.h, config.versions, config.states, configChangeKinds, vis);
+  const t = visibleTimeline(prop.h, config.versions, config.states, configChangeKinds, vis, widen);
   return { key: prop.k, prop, ...t };
 }
 
 /**
  * History of one extension over the extension snapshots `extVis` (see extensionVersionsOf; same event model as
- * properties, change kinds relocated / unrelocated / status / renamed). `vis` as for propertyHistory.
+ * properties, change kinds relocated / unrelocated / status / renamed). `vis` and `widen` as for propertyHistory.
  */
-export function extensionHistory(extensions, id, extVis, { vis } = {}) {
+export function extensionHistory(extensions, id, extVis, { vis, widen } = {}) {
   const x = extensions.exts.find((e) => e.id === id);
   if (!x) return null;
-  const t = visibleTimeline(x.h, extVis, extensions.states, extensionChangeKinds, vis);
+  const t = visibleTimeline(x.h, extVis, extensions.states, extensionChangeKinds, vis, widen);
   return { id, ext: x, ...t };
 }
 
@@ -1136,23 +1160,29 @@ function artifactRangesOver(art, versions, indices) {
  * `follows` marks `"="` (same as the Quarkus release), `kind` is the change from the previous managed range
  * (major/minor/patch/other/downgrade/added/removed).
  * With `vis` (see releaseVisibility), only the releases it shows are used, so a hidden pre-release never splits
- * a range; when the artifact is managed only in hidden releases, every release is used (`widened`).
+ * a range; when the artifact is managed only in hidden releases, the `widen` visibilities are tried in order, then
+ * every release (`widened`, `widenedBy` as for propertyHistory).
  */
-export function artifactHistory(bom, id, versions, { vis } = {}) {
+export function artifactHistory(bom, id, versions, { vis, widen = [] } = {}) {
   const art = bom.artifacts.find((x) => x.id === id);
   if (!art) return null;
   const everything = versions.map((_, i) => i);
   let indices = vis ? vis.indices : everything;
   let ranges = artifactRangesOver(art, versions, indices);
-  let widened = false;
+  let widenedBy = null;
   if (vis && indices.length < everything.length && !ranges.some((r) => r.managed)) {
-    const all = artifactRangesOver(art, versions, everything);
-    if (all.some((r) => r.managed)) {
-      indices = everything;
-      ranges = all;
-      widened = true;
+    for (const step of [...widen, { vis: null, kind: 'all' }]) {
+      const idx = step.vis ? step.vis.indices : everything;
+      const rs = artifactRangesOver(art, versions, idx);
+      if (rs.some((r) => r.managed)) {
+        indices = idx;
+        ranges = rs;
+        widenedBy = step.kind;
+        break;
+      }
     }
   }
+  const widened = widenedBy != null;
   const last = indices.length ? indices[indices.length - 1] : versions.length - 1;
   const raw = stateAt(art.h, last);
   const managedRanges = ranges.filter((r) => r.managed);
@@ -1162,6 +1192,7 @@ export function artifactHistory(bom, id, versions, { vis } = {}) {
     ranges,
     indices,
     widened,
+    widenedBy,
     hiddenReleases: versions.length - indices.length,
     last,
     current: { raw, managed: raw != null, follows: raw === '=', value: raw === '=' ? versions[last].v : raw ?? null },
@@ -1284,7 +1315,8 @@ export function quickPicks(versionsJson) {
  * - previousMinor: the newest final of the nearest older stream;
  * - previousLts: the newest final of the newest LTS stream older than this release's stream;
  * - older / newer: the neighbouring releases.
- * With `vis` (see releaseVisibility), pre-releases it hides are skipped by previousPre, older and newer.
+ * With `vis` (see releaseVisibility), the releases it hides are skipped: previousPre, previousMinor, previousLts,
+ * older and newer only name releases it shows (-1 otherwise).
  */
 export function versionNeighbours(versionsJson, vi, { vis } = {}) {
   const list = versionsJson.versions ?? [];
@@ -1302,9 +1334,11 @@ export function versionNeighbours(versionsJson, vi, { vis } = {}) {
   }
   if (!isPreRelease(list[vi]) && previousPatch >= 0) previousPre = -1;
   const olderStream = streamsAscending(list).filter((x) => compareVersions(x, s) < 0).pop();
-  const previousMinor = olderStream ? newestInStream(list, olderStream) : -1;
+  const minor = olderStream ? newestInStream(list, olderStream) : -1;
+  const previousMinor = minor >= 0 && shown(minor) ? minor : -1;
   const olderLts = ltsStreamsPresent(versionsJson).filter((x) => compareVersions(x, s) < 0).pop();
-  const previousLts = olderLts ? newestInStream(list, olderLts) : -1;
+  const lts = olderLts ? newestInStream(list, olderLts) : -1;
+  const previousLts = lts >= 0 && shown(lts) ? lts : -1;
   let older = -1;
   for (let i = vi - 1; i >= 0; i--) {
     if (shown(i)) {
