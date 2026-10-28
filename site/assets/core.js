@@ -930,12 +930,7 @@ export function platformDifferences(bom, platform, versions, vi) {
     if (core == null) onlyPlatform.push({ id: art.id, platform: platformValue });
     else if (core !== platformValue) changed.push({ id: art.id, core, platform: platformValue });
   }
-  const coreByKey = new Map();
-  for (const r of onlyCore) {
-    const key = platformArtifactKey(r.id);
-    if (!coreByKey.has(key)) coreByKey.set(key, []);
-    coreByKey.get(key).push(r);
-  }
+  const coreByKey = groupBy(onlyCore, (r) => platformArtifactKey(r.id));
   const paired = new Set();
   const added = [];
   let structural = 0;
@@ -965,12 +960,6 @@ export function platformDifferences(bom, platform, versions, vi) {
  * how many others.
  */
 export function platformChangeSummary(changed) {
-  const byPair = new Map();
-  for (const r of changed) {
-    const key = `${r.core}\u0000${r.platform}`;
-    if (!byPair.has(key)) byPair.set(key, { core: r.core, platform: r.platform, rows: [] });
-    byPair.get(key).rows.push(r);
-  }
   const label = (groups) => {
     if (groups.length === 1) return groups[0];
     const parts = groups.map((g) => g.split('.'));
@@ -978,42 +967,99 @@ export function platformChangeSummary(changed) {
     while (parts.every((p) => n < p.length && p[n] === parts[0][n])) n++;
     return n >= 2 ? `${parts[0].slice(0, n).join('.')}…` : `${groups[0]} and ${groups.length - 1} other group${groups.length > 2 ? 's' : ''}`;
   };
-  return [...byPair.values()]
-    .map((p) => {
-      const groups = [...new Set(p.rows.map((r) => splitId(r.id).group))].sort();
-      return { core: p.core, platform: p.platform, count: p.rows.length, groups, label: label(groups), rows: p.rows };
+  return [...groupBy(changed, (r) => `${r.core}\u0000${r.platform}`).values()]
+    .map((rows) => {
+      const groups = [...new Set(rows.map((r) => splitId(r.id).group))].sort();
+      return { core: rows[0].core, platform: rows[0].platform, count: rows.length, groups, label: label(groups), rows };
     })
     .sort((x, y) => y.count - x.count || (x.label < y.label ? -1 : x.label > y.label ? 1 : 0));
 }
 
 /**
- * The runs of releases among `indices` (ascending, e.g. those the switches show) in which the platform BOM manages the
- * artifact `id` otherwise than the core BOM: `{from, to, count, platform, core}` with raw values as bom.json writes
- * them ("=" for the release's own version, null when not managed). Consecutive releases of `indices` with the same
- * two values make one run; a release without a platform BOM, or where it manages the artifact as the core BOM does,
- * ends it.
+ * What comparing the platform BOMs changes in a comparison: the dependency changes (diffBom rows) of the core BOMs,
+ * `coreDiff`, against those of the platform BOMs of the same two releases, `platformDiff`, a change being its artifact
+ * (platformArtifactKey, so that ids that only write one artifact otherwise are one) and its two versions. `count` is
+ * the artifacts with a change that only one of them has; `spelling` says, when there is none, whether the rows still
+ * differ in such ids.
  */
-export function platformArtifactRuns(bom, platform, id, indices) {
-  const p = platform.artifacts.find((a) => a.id === id);
-  if (!p) return [];
-  const c = bom.artifacts.find((a) => a.id === id);
+export function platformDiffEffect(coreDiff, platformDiff) {
+  const changes = (d, key) => new Set(d.rows.map((r) => `${key(r.id)}\u0000${r.from ?? ''}\u0000${r.to ?? ''}`));
+  const c = changes(coreDiff, platformArtifactKey);
+  const p = changes(platformDiff, platformArtifactKey);
+  const differing = [...c].filter((k) => !p.has(k)).concat([...p].filter((k) => !c.has(k)));
+  const artifacts = new Set(differing.map((k) => k.split('\u0000')[0]));
+  const rc = changes(coreDiff, (id) => id);
+  const rp = changes(platformDiff, (id) => id);
+  return { count: artifacts.size, spelling: !artifacts.size && (rc.size !== rp.size || [...rc].some((k) => !rp.has(k))) };
+}
+
+/**
+ * The other ids of the artifact that `id` names (platformArtifactKey), sorted: `core`, those the core BOM manages at
+ * some release (bom.json), and `platform`, those only the platform BOM manages (platform.json).
+ */
+export function artifactSpellings(bom, platform, id) {
+  const key = platformArtifactKey(id);
+  const inCore = new Set(bom.artifacts.map((a) => a.id));
+  const same = (x) => x !== id && platformArtifactKey(x) === key;
+  const byText = (x, y) => (x < y ? -1 : x > y ? 1 : 0);
+  return {
+    core: [...inCore].filter(same).sort(byText),
+    platform: platform.artifacts.map((a) => a.id).filter((x) => !inCore.has(x) && same(x)).sort(byText),
+  };
+}
+
+/**
+ * The runs of releases among `indices` (ascending, e.g. those the switches show) in which the platform BOM manages the
+ * artifact `id` otherwise than the core BOM: `{from, to, count, platform, core, platformId, coreId, without}`, values
+ * raw as bom.json writes them ("=" for the release's own version, null when not managed). Where only one BOM manages
+ * `id`, the other BOM's entries of the same artifact (artifactSpellings) that only that BOM manages stand for it, as
+ * in platformDifferences: one at the same version is no difference, else the first one's value is the other BOM's and
+ * its id is `platformId` or `coreId` (null when the value is the id's own). A run is consecutive releases of `indices`
+ * with the same values; the releases without a platform BOM inside it are `without`, and `count` is the others.
+ */
+export function platformArtifactRuns(bom, platform, versions, id, indices) {
+  const coreById = new Map(bom.artifacts.map((a) => [a.id, a.h]));
+  const platformById = new Map(platform.artifacts.map((a) => [a.id, a.h]));
+  if (!coreById.has(id) && !platformById.has(id)) return [];
+  const spellings = artifactSpellings(bom, platform, id);
+  const others = [...spellings.core, ...spellings.platform].sort((x, y) => (x < y ? -1 : x > y ? 1 : 0));
+  const raw = (x, i) => ({ core: stateAt(coreById.get(x), i) ?? null, platform: platformRawAt(coreById.get(x), platformById.get(x), i) });
+  const differenceAt = (i) => {
+    const res = (r) => (r == null ? null : resolveBomValue(r, versions[i].v));
+    const own = raw(id, i);
+    if (own.core != null && own.platform != null) {
+      return res(own.core) === res(own.platform) ? null : { platform: own.platform, core: own.core, platformId: null, coreId: null };
+    }
+    if (own.core == null && own.platform == null) return null;
+    const lacking = own.core == null ? 'core' : 'platform';
+    const having = lacking === 'core' ? 'platform' : 'core';
+    // the lacking BOM's entries of this artifact that only it manages here
+    const partners = others.map((x) => ({ id: x, ...raw(x, i) })).filter((r) => r[lacking] != null && r[having] == null);
+    if (partners.some((r) => res(r[lacking]) === res(own[having]))) return null;
+    const partner = partners[0] ?? null;
+    return lacking === 'core'
+      ? { platform: own.platform, core: partner ? partner.core : null, platformId: null, coreId: partner ? partner.id : null }
+      : { platform: partner ? partner.platform : null, core: own.core, platformId: partner ? partner.id : null, coreId: null };
+  };
   const runs = [];
   let cur = null;
+  let gap = []; // releases without a platform BOM since the end of `cur`
   for (const i of indices) {
-    const d = hasPlatformBom(platform, i) ? stateAt(p.h, i) : null;
-    if (d == null) {
-      cur = null;
+    if (!hasPlatformBom(platform, i)) {
+      if (cur) gap.push(i);
       continue;
     }
-    const platformValue = d === NOT_IN_PLATFORM ? null : d;
-    const coreValue = (c ? stateAt(c.h, i) : undefined) ?? null;
-    if (cur && cur.platform === platformValue && cur.core === coreValue) {
+    const d = differenceAt(i);
+    if (cur && d && cur.platform === d.platform && cur.core === d.core && cur.platformId === d.platformId && cur.coreId === d.coreId) {
       cur.to = i;
       cur.count++;
+      cur.without.push(...gap);
+      gap = [];
       continue;
     }
-    cur = { from: i, to: i, count: 1, platform: platformValue, core: coreValue };
-    runs.push(cur);
+    gap = [];
+    cur = d ? { from: i, to: i, count: 1, ...d, without: [] } : null;
+    if (cur) runs.push(cur);
   }
   return runs;
 }

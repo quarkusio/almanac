@@ -2648,6 +2648,12 @@ p.cmp-tools {
   margin-top: 10px;
 }
 
+/* the releases without a platform BOM inside a run: a list that wraps in the release column */
+.tbl-pbom .pbom-without {
+  max-width: 34ch;
+  white-space: normal;
+}
+
 /* extensions */
 
 .eblocks {

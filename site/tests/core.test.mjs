@@ -569,7 +569,10 @@ describe('headline libraries', () => {
 
 /* -------------------------------------------------------------------------- */
 describe('platform BOM', () => {
-  const { hasPlatformBom, platformBomAt, platformArtifactKey, platformDifferences, platformChangeSummary, platformArtifactRuns } = core;
+  const {
+    hasPlatformBom, platformBomAt, platformArtifactKey, platformDifferences, platformChangeSummary, platformArtifactRuns, platformDiffEffect,
+    artifactSpellings,
+  } = core;
   // 3.33.3.1 has no platform BOM; 3.33.4 overrides Jackson, as the real one does
   const versions = V('3.33.3', '3.33.3.1', '3.33.4', '3.33.4.1');
   const bom = {
@@ -694,17 +697,64 @@ describe('platform BOM', () => {
 
   test('platformArtifactRuns: runs over the shown releases with a platform BOM', () => {
     const all = [0, 1, 2, 3];
-    assert.deepEqual(platformArtifactRuns(bom, platform, 'com.fasterxml.jackson.core:jackson-databind', all),
-      [{ from: 2, to: 2, count: 1, platform: '2.21.7', core: '2.21.6' }]);
-    // a release without a platform BOM ends a run; a hidden one does not
-    assert.deepEqual(platformArtifactRuns(bom, platform, 'io.quarkus:quarkus-pinned', all).map((r) => [r.from, r.to, r.count]),
-      [[0, 0, 1], [2, 3, 2]]);
-    assert.deepEqual(platformArtifactRuns(bom, platform, 'io.quarkus:quarkus-pinned', [0, 2, 3]).map((r) => [r.from, r.to, r.count, r.platform, r.core]),
-      [[0, 3, 3, '=', '3.33.2']]);
-    // only one of the BOMs manages it: the other value is null
-    assert.deepEqual(platformArtifactRuns(bom, platform, 'org.graalvm.polyglot:js', all).map((r) => [r.from, r.to, r.platform, r.core]),
-      [[0, 0, null, '23.1.2'], [2, 3, null, '23.1.2']]);
-    assert.deepEqual(platformArtifactRuns(bom, platform, 'io.quarkus:quarkus-core', all), []);
+    assert.deepEqual(platformArtifactRuns(bom, platform, versions, 'com.fasterxml.jackson.core:jackson-databind', all),
+      [{ from: 2, to: 2, count: 1, platform: '2.21.7', core: '2.21.6', platformId: null, coreId: null, without: [] }]);
+    // a release without a platform BOM inside a run keeps it going and is named; a hidden one is not
+    assert.deepEqual(platformArtifactRuns(bom, platform, versions, 'io.quarkus:quarkus-pinned', all).map((r) => [r.from, r.to, r.count, r.platform, r.core, r.without]),
+      [[0, 3, 3, '=', '3.33.2', [1]]]);
+    assert.deepEqual(platformArtifactRuns(bom, platform, versions, 'io.quarkus:quarkus-pinned', [0, 2, 3]).map((r) => [r.from, r.to, r.count, r.without]),
+      [[0, 3, 3, []]]);
+    // a release without a platform BOM after which the difference ends belongs to no run
+    assert.deepEqual(platformArtifactRuns(bom, platform, versions, 'io.agroal:agroal-api', all).map((r) => [r.from, r.to, r.count, r.without]),
+      [[0, 0, 1, []]]);
+    // only one of the BOMs manages it, and the other has no other id of it: the other value is null
+    assert.deepEqual(platformArtifactRuns(bom, platform, versions, 'org.graalvm.polyglot:js', all).map((r) => [r.from, r.to, r.platform, r.core, r.without]),
+      [[0, 3, null, '23.1.2', [1]]]);
+    assert.deepEqual(platformArtifactRuns(bom, platform, versions, 'io.quarkiverse.vault:quarkus-vault', all).map((r) => [r.from, r.to, r.platform, r.core]),
+      [[0, 3, '4.7.0', null]]);
+    assert.deepEqual(platformArtifactRuns(bom, platform, versions, 'io.quarkus:quarkus-core', all), []);
+    assert.deepEqual(platformArtifactRuns(bom, platform, versions, 'org.unknown:unknown', all), []);
+  });
+
+  test('platformArtifactRuns: another id of the same artifact stands for it, as in platformDifferences', () => {
+    const all = [0, 1, 2, 3];
+    // the platform BOM manages io.vertx:vertx-core:tests at the same version: no difference, from either id
+    assert.deepEqual(platformArtifactRuns(bom, platform, versions, 'io.vertx:vertx-core:test-jar', all), []);
+    assert.deepEqual(platformArtifactRuns(bom, platform, versions, 'io.vertx:vertx-core:test-jar:tests', all), []);
+    assert.deepEqual(platformArtifactRuns(bom, platform, versions, 'io.vertx:vertx-core:tests', all), []);
+    assert.deepEqual(platformArtifactRuns(bom, platform, versions, 'io.fabric8:crd-generator-maven-plugin:maven-plugin', all), []);
+    assert.deepEqual(platformArtifactRuns(bom, platform, versions, 'io.quarkus.platform:quarkus-bom-quarkus-platform-descriptor:json:${quarkus.version}', all), []);
+    // at another version, the other id gives the other BOM's value, as the release page's change does
+    const atRelease = platformDifferences(bom, platform, versions, 2).changed.find((r) => r.coreId === 'io.quarkus.gizmo:gizmo:test-jar');
+    assert.deepEqual([atRelease.id, atRelease.core, atRelease.platform], ['io.quarkus.gizmo:gizmo:tests', '1.10.1', '1.11.0']);
+    assert.deepEqual(platformArtifactRuns(bom, platform, versions, 'io.quarkus.gizmo:gizmo:test-jar', all),
+      [{ from: 0, to: 3, count: 3, platform: '1.11.0', core: '1.10.1', platformId: 'io.quarkus.gizmo:gizmo:tests', coreId: null, without: [1] }]);
+    assert.deepEqual(platformArtifactRuns(bom, platform, versions, 'io.quarkus.gizmo:gizmo:tests', all),
+      [{ from: 0, to: 3, count: 3, platform: '1.11.0', core: '1.10.1', platformId: null, coreId: 'io.quarkus.gizmo:gizmo:test-jar', without: [1] }]);
+  });
+
+  test('artifactSpellings: the other ids of one artifact, by BOM', () => {
+    assert.deepEqual(artifactSpellings(bom, platform, 'io.vertx:vertx-core:tests'),
+      { core: ['io.vertx:vertx-core:test-jar', 'io.vertx:vertx-core:test-jar:tests'], platform: [] });
+    assert.deepEqual(artifactSpellings(bom, platform, 'io.vertx:vertx-core:test-jar'),
+      { core: ['io.vertx:vertx-core:test-jar:tests'], platform: ['io.vertx:vertx-core:tests'] });
+    assert.deepEqual(artifactSpellings(bom, platform, 'io.quarkiverse.vault:quarkus-vault'), { core: [], platform: [] });
+  });
+
+  test('platformDiffEffect: what comparing the platform BOMs changes', () => {
+    // 3.33.3 to 3.33.4: three Jackson upgrades and the end of the agroal override exist in the platform BOMs only
+    const pb = platformBomAt(bom, platform, [0, 2]);
+    assert.deepEqual(platformDiffEffect(diffBom(bom, versions, 0, 2), diffBom(pb, versions, 0, 2)), { count: 4, spelling: false });
+    const row = (id, from, to) => ({ id, from, to });
+    // one artifact written otherwise is one change; a change to another version is one artifact, not two
+    assert.deepEqual(platformDiffEffect(
+      { rows: [row('g:a:test-jar', '1', '2'), row('g:a:test-jar:tests', '1', '2'), row('g:b', '1', '2')] },
+      { rows: [row('g:a:tests', '1', '2'), row('g:b', '1', '3')] }), { count: 1, spelling: false });
+    assert.deepEqual(platformDiffEffect({ rows: [row('g:a:test-jar', '1', '2')] }, { rows: [row('g:a:tests', '1', '2')] }),
+      { count: 0, spelling: true });
+    assert.deepEqual(platformDiffEffect({ rows: [row('g:b', '1', '2')] }, { rows: [row('g:b', '1', '2')] }), { count: 0, spelling: false });
+    // only in one of them: an artifact added by the platform BOM, or one it does not manage
+    assert.deepEqual(platformDiffEffect({ rows: [] }, { rows: [row('g:c', null, '1'), row('g:d', '1', null)] }), { count: 2, spelling: false });
   });
 });
 
