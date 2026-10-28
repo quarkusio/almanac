@@ -71,7 +71,6 @@ jobs:
   extract:
     needs: check
     if: needs.check.outputs.count != '0'
-    name: Extract ${{ matrix.version }}
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
