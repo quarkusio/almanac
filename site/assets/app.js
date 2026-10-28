@@ -291,8 +291,6 @@ function prepareVersions(json) {
   // releases with classes snapshots; their classes are in one file per major line (classes-3.json, ...), which only
   // the pages that show classes load, for the lines they show
   const clsVis = core.classVersionsOf(list);
-  // streams with a final release (items are in version order), and how many have config at a final
-  const finals = streams.map((g) => g.items.filter((i) => !core.isPreRelease(list[i]))).filter((f) => f.length);
   return {
     json,
     list,
@@ -301,12 +299,6 @@ function prepareVersions(json) {
     extVis,
     clsVis,
     clsLines: core.classLinesOf(list, clsVis),
-    finalStreamCount: finals.length,
-    configStreamCount: finals.filter((f) => f.some((i) => list[i].config)).length,
-    configAtNewestFinals: finals.every((f) => list[f[f.length - 1]].config),
-    configAtEveryFinal: finals.every((f) => f.every((i) => list[i].config)),
-    // streams with more than one final, each of which has a config snapshot (newest first)
-    configEveryPatch: finals.filter((f) => f.length > 1 && f.every((i) => list[i].config)).map((f) => streamOfEntry(list[f[0]])),
     ltsStreams: [...ltsStreams],
     visBy,
     visOff,
@@ -545,6 +537,21 @@ function hiddenCount(hidden, what = 'release') {
     old ? plural(old, `old ${what}`) : null,
     both ? plural(both, `old ${preNoun}`) : null,
   ].filter(Boolean));
+}
+
+/**
+ * "3.40.1.1, the newest release": the newest release that has data of one kind (`vi`, e.g. the last of a history's),
+ * named; while releases the switches show after it lack that data (`what`: "config data"), "3.33.4, the newest
+ * release with config data".
+ */
+function newestRelease(vi, what) {
+  const shown = currentVis().indices;
+  return `${short(store.V.list[vi].v)}, the newest release${vi === shown[shown.length - 1] ? '' : ` with ${what}`}`;
+}
+
+/** "the first release of this dataset", or, while releases before the first that has data of one kind (`snaps`) lack it, "the first release with config data" (`what`). */
+function firstRelease(snaps, what) {
+  return snaps[0] === 0 ? 'the first release of this dataset' : `the first release with ${what}`;
 }
 
 /** The ways to widen a history whose item the switches hide (see core.propertyHistory): old releases first, then pre-releases. */
@@ -1300,17 +1307,17 @@ function releaseSwitches(slot) {
   ].filter(Boolean);
 }
 
-/** Both switches over the snapshots `snaps` (release indices of config or extension snapshots), counted alike. */
+/** Both switches over the releases `snaps` that have data of one kind (config, extensions or classes), counted alike. */
 function snapshotSwitches(slot, snaps) {
   const V = store.V;
   const pre = (vis) => snaps.filter((c) => vis.pre[c] && !vis.upcoming[c] && (!vis.old[c] || vis.showOld)).length;
   const old = (vis) => snaps.filter((c) => vis.old[c] && (!vis.pre[c] || vis.upcoming[c] || vis.showPre)).length;
   return [
     prefSwitch('pre', slot, {
-      count: () => pre(currentVis()), blocked: () => pre(V.visOn) - pre(currentVis()), max: pre(V.visOn), noun: 'pre-release snapshot',
+      count: () => pre(currentVis()), blocked: () => pre(V.visOn) - pre(currentVis()), max: pre(V.visOn), noun: 'pre-release',
     }),
     prefSwitch('old', `${slot}-old`, {
-      count: () => old(currentVis()), blocked: () => old(V.visOn) - old(currentVis()), max: old(V.visOn), noun: 'old snapshot',
+      count: () => old(currentVis()), blocked: () => old(V.visOn) - old(currentVis()), max: old(V.visOn), noun: 'old release',
     }),
   ].filter(Boolean);
 }
@@ -1418,7 +1425,7 @@ function resultSub(it) {
   const V = store.V;
   if (it.type === 'property') {
     const parts = [it.ext];
-    if (!it.current && it.lastSeen != null) parts.push(`not in the latest snapshot; last seen in ${short(V.list[it.lastSeen].v)}`);
+    if (!it.current && it.lastSeen != null) parts.push(`no longer present; last seen in ${short(V.list[it.lastSeen].v)}`);
     return parts.filter(Boolean).join(' · ');
   }
   if (it.type === 'artifact') {
@@ -1428,7 +1435,7 @@ function resultSub(it) {
   if (it.type === 'class') {
     const jars = it.jars.join(', ');
     if (it.current) return `in ${jars}`;
-    return it.lastSeen != null ? `not in the latest classes snapshot; last in ${jars} (${short(V.list[it.lastSeen].v)})` : jars;
+    return it.lastSeen != null ? `no longer present; last in ${jars} (${short(V.list[it.lastSeen].v)})` : jars;
   }
   const parts = [it.name, it.status];
   if (it.relocatedTo) parts.push(`relocated to ${it.relocatedTo}`);
@@ -1691,7 +1698,6 @@ function coverageFacts() {
   const propsSub = h('span', null, 'loading config.json');
   const artsN = h('span', null, '…');
   const artsSub = h('span', null, 'loading bom.json');
-  const lastCv = V.configVis.length ? V.list[V.configVis[V.configVis.length - 1]] : null;
   loadFile('config').then((c) => {
     const cvs = c.raw.versions;
     const latest = cvs[cvs.length - 1];
@@ -1718,32 +1724,13 @@ function coverageFacts() {
     artsSub.textContent = 'bom.json unavailable';
   });
   const preCount = V.visOff.pre.filter(Boolean).length;
-  const preSnapshots = V.configVis.filter((c) => V.visOff.pre[c]).length;
   return h('section', { class: 'facts', 'aria-labelledby': 'facts-h' },
     h('h2', { class: 'label-h', id: 'facts-h' }, 'Coverage'),
     h('dl', { class: 'facts-grid' },
       fact(fmt(V.list.length), 'releases', `${short(first.v)} to ${short(last.v)}${preCount ? `, ${plural(preCount, 'pre-release')} among them` : ''}`),
-      fact(fmt(V.configVis.length), 'config snapshots', lastCv
-        ? `${andList([...configCoverage(V), ...(preSnapshots ? [plural(preSnapshots, 'pre-release')] : [])])}, up to ${short(lastCv.v)}`
-        : 'none'),
       fact(propsN, 'config properties tracked', propsSub),
       fact(artsN, 'managed artifacts tracked', artsSub),
       fact(V.generatedAt ? core.formatDate(V.generatedAt) : '—', 'data generated', null, 'fact--date')));
-}
-
-/** Where the config snapshots are: at the newest patch of each stream, or in how many streams while some lack one. */
-function configCoverage(V) {
-  if (V.configAtEveryFinal) return ['every final release'];
-  const parts = [V.configAtNewestFinals ? 'the newest patch of each stream' : `${fmt(V.configStreamCount)} of ${plural(V.finalStreamCount, 'stream')}`];
-  const every = V.configEveryPatch;
-  if (every.length) {
-    // the LTS streams by that name when all of them are covered, the others by name while few, else by number
-    const allLts = V.ltsStreams.length > 0 && V.ltsStreams.every((s) => every.includes(s));
-    const others = allLts ? every.filter((s) => !V.ltsStreams.includes(s)) : every;
-    const named = others.length <= 3 ? others.slice().reverse() : [plural(others.length, allLts ? 'other stream' : 'stream')];
-    parts.push(`every patch of ${andList(allLts ? [...named, 'the LTS streams'] : named, false)}`);
-  }
-  return parts;
 }
 
 /** "a", "a and b", "a, b, and c" (`serial` false: "a, b and c", for a list inside another list item). */
@@ -1762,14 +1749,13 @@ function comparison(ia, ib, data) {
   const hit = store.diffs.get(key);
   if (hit) return hit;
   const V = store.V;
-  const out = { ia, ib, A: V.list[ia], B: V.list[ib], errors: data.errors, bom: null, libs: [], config: null, configRows: [], configTags: {}, ext: null, platform };
+  const out = { ia, ib, A: V.list[ia], B: V.list[ib], errors: data.errors, bom: null, config: null, configRows: [], configTags: {}, ext: null, platform };
   if (data.bom) {
     // the platform BOMs when the reader chose them and both releases have one, else the core BOMs; when both have one,
     // the other BOMs are compared too, for what the "Platform BOM" switch changes (core.platformDiffEffect)
     const platformBom = platform?.a && platform.b ? core.platformBomAt(data.bom.raw, data.platform.raw, [ia, ib]) : null;
     const bom = platform?.used ? platformBom : data.bom.raw;
     out.bom = core.diffBom(bom, V.list, ia, ib);
-    out.libs = core.headlineLibraries(bom, V.list, ia, ib);
     if (platformBom) {
       const other = core.diffBom(platform.used ? data.bom.raw : platformBom, V.list, ia, ib);
       platform.effect = platform.used ? core.platformDiffEffect(other, out.bom) : core.platformDiffEffect(out.bom, other);
@@ -1816,7 +1802,7 @@ async function renderCompare(r) {
   if (ia === ib) return frag(head, emptyNote('From and To are the same release, so there is nothing to compare. Change one of them above.'));
   // the sections start collapsed (the summary above says what each holds), except those the reader left open in
   // this pair earlier in the visit, so that Back from a property or an artifact finds them as they were
-  const sections = [libsSection(cmp, data), configSection(cmp, data), depsSection(cmp, data), extSection(cmp, data), classesSection(cmp)]
+  const sections = [configSection(cmp, data), depsSection(cmp, data), extSection(cmp, data), classesSection(cmp)]
     .map(collapsible);
   const pair = `${ia}:${ib}`;
   const all = h('button', { type: 'button', class: 'btn jump-all', 'aria-controls': sections.map((s) => `${s.id}-body`).join(' ') });
@@ -1841,7 +1827,7 @@ async function renderCompare(r) {
     platformRow(cmp),
     h('nav', { class: 'jump', 'aria-label': 'Sections of this comparison' },
       h('span', { class: 'jump-k' }, 'On this page'),
-      [['sec-libs', 'Key libraries'], ['sec-config', 'Configuration'], ['sec-deps', 'Dependencies'], ['sec-ext', 'Extensions'],
+      [['sec-config', 'Configuration'], ['sec-deps', 'Dependencies'], ['sec-ext', 'Extensions'],
         ['sec-classes', 'Classes']].map(([id, label]) =>
         h('button', { type: 'button', class: 'jump-link', onclick: () => jumpTo(id) }, label)),
       all),
@@ -1953,21 +1939,23 @@ function compareHeader(cmp) {
 }
 
 /**
- * The snapshots a comparison uses for one kind of data: config, extensions (which also exist for releases without
- * config) or classes. `a` and `b` are the snapshot indices for From and To, null when a release has none.
+ * The releases whose data of one kind a comparison uses: config, extensions (which also exist for releases without
+ * config) or classes. `a` and `b` are those of From and To: themselves, or, in a data set where a release has no data
+ * of that kind, the release whose data stands in for it (core.snapshotVersionFor); null when there is none. `what`
+ * names the data.
  */
 function snapshotsOf(cmp, kind) {
-  if (kind === 'classes') return { a: cmp.la, b: cmp.lb, all: store.V.clsVis, noun: 'classes', title: 'Classes' };
+  if (kind === 'classes') return { a: cmp.la, b: cmp.lb, all: store.V.clsVis, what: 'class data', title: 'Classes' };
   return kind === 'config'
-    ? { a: cmp.ca, b: cmp.cb, all: store.V.configVis, noun: 'config', title: 'Config' }
-    : { a: cmp.ea, b: cmp.eb, all: store.V.extVis, noun: 'extension', title: 'Extensions' };
+    ? { a: cmp.ca, b: cmp.cb, all: store.V.configVis, what: 'config data', title: 'Config' }
+    : { a: cmp.ea, b: cmp.eb, all: store.V.extVis, what: 'extension data', title: 'Extensions' };
 }
 
 /**
  * Why a comparison has no diff of one kind ('config', 'extension' or 'classes'), or null when both releases have such
- * data. A pre-release only uses its own snapshot, so one without a snapshot says so plainly:
- * "No config snapshot for 3.33.0.CR1: dependency changes only." The end names what the comparison still shows (for
- * config and extensions, which the rest of the page depends on).
+ * data. A pre-release only uses its own data, so one without says so plainly: "No config data for 3.33.0.CR1:
+ * dependency changes only." The end names what the comparison still shows (for config and extensions, which the rest
+ * of the page depends on).
  */
 function gapText(cmp, kind) {
   const V = store.V;
@@ -1980,10 +1968,10 @@ function gapText(cmp, kind) {
   const pre = missing.filter((i) => core.isPreRelease(V.list[i]));
   const fin = missing.filter((i) => !core.isPreRelease(V.list[i]));
   const parts = [];
-  if (pre.length) parts.push(`No ${s.noun} snapshot for ${names(pre)}`);
+  if (pre.length) parts.push(`No ${s.what} for ${names(pre)}`);
   if (fin.length) {
     const first = s.all.length ? short(V.list[s.all[0]].v) : null;
-    parts.push(`${pre.length ? 'no' : 'No'} ${s.noun} data for ${names(fin)}${first ? ` (${s.noun} snapshots start at ${first})` : ''}`);
+    parts.push(`${pre.length ? 'no' : 'No'} ${s.what} for ${names(fin)}${first ? ` (the ${s.what} starts at ${first})` : ''}`);
   }
   if (kind === 'classes') return `${parts.join(', and ')}.`;
   // config needs extensions, so only a config gap can leave an extension diff to show
@@ -1991,13 +1979,13 @@ function gapText(cmp, kind) {
   return `${parts.join(', and ')}: ${shown}.`;
 }
 
-/** Both releases use one snapshot of a kind ('config', 'extension' or 'classes'), so there is no diff of it to show. */
+/** Both releases use the data of one release for a kind ('config', 'extension' or 'classes'), so there is no diff of it to show. */
 function sameSnapshotText(cmp, kind) {
   const V = store.V;
   const { A, B } = cmp;
   const s = snapshotsOf(cmp, kind);
   const finalsOfOneStream = !core.isPreRelease(A) && !core.isPreRelease(B) && streamOfEntry(A) === streamOfEntry(B);
-  return `Both releases map to the same ${s.noun} snapshot (${short(V.list[s.a].v)}). ${finalsOfOneStream
+  return `Both releases use the ${s.what} of ${short(V.list[s.a].v)}. ${finalsOfOneStream
     ? `${s.title} ${kind === 'config' ? 'is' : 'are'} captured once per stream, so changes between patches of one stream are not tracked.`
     : 'Changes between them are not tracked.'}`;
 }
@@ -2011,7 +1999,7 @@ function summaryLedger(cmp, data) {
       : null,
     note ? h('p', { class: 'ledger-note' }, note) : null);
   const cells = [];
-  // one snapshot for both releases: say so here, since its section starts collapsed and zeros would mislead
+  // the data of one release for both: say so here, since its section starts collapsed and zeros would mislead
   if (cmp.config && cmp.ca === cmp.cb) {
     cells.push(cell('Configuration', 'sec-config', [], sameSnapshotText(cmp, 'config')));
   } else if (cmp.config) {
@@ -2061,37 +2049,7 @@ function summaryLedger(cmp, data) {
   return h('section', { class: 'ledger', 'aria-label': 'Summary of changes' }, cells);
 }
 
-/* ---------- §1 key libraries ---------- */
-
-function libsSection(cmp, data) {
-  const sec = h('section', { class: 'sec', id: 'sec-libs', 'aria-labelledby': 'sec-libs-h' },
-    sectionHead(1, 'Key libraries', 'sec-libs-h', h('p', { class: 'sec-note' }, 'Headline dependencies managed by ',
-      cmp.platform?.used ? frag('the platform BOM, ', h('code', null, 'io.quarkus.platform:quarkus-bom')) : 'quarkus-bom', ', listed when either release manages them.')));
-  if (!cmp.bom) return add(sec, [missingData('bom.json', data.errors.bom)]);
-  if (!cmp.libs.length) return add(sec, [emptyNote('Neither release manages any of the headline libraries.')]);
-  const tbody = h('tbody');
-  for (const r of cmp.libs) {
-    const ids = r.fromId && r.toId && r.fromId !== r.toId
-      ? frag(h('a', { href: link.artifact(r.fromId) }, r.fromId), h('span', { 'aria-hidden': 'true' }, ' → '), h('span', { class: 'sr-only' }, ' then '), r.toId)
-      : r.id;
-    tbody.append(h('tr', { class: r.kind === 'same' ? 'is-same' : null },
-      h('th', { scope: 'row' }, h('a', { href: link.artifact(r.id) }, r.label), h('span', { class: 'cell-sub' }, ids)),
-      h('td', { class: 'mono num' }, r.from ?? h('span', { class: 'none' }, 'not managed')),
-      h('td', { class: 'mono num' }, r.to ?? h('span', { class: 'none' }, 'not managed')),
-      h('td', null, r.kind === 'same' ? h('span', { class: 'muted' }, 'unchanged') : chip(r.kind))));
-  }
-  sec.append(h('div', { class: 'table-scroll' },
-    h('table', { class: 'tbl tbl-libs' },
-      h('thead', null, h('tr', null,
-        h('th', { scope: 'col' }, 'Library'),
-        h('th', { scope: 'col' }, h('span', { class: 'ver' }, short(cmp.A.v))),
-        h('th', { scope: 'col' }, h('span', { class: 'ver' }, short(cmp.B.v))),
-        h('th', { scope: 'col' }, 'Change'))),
-      tbody)));
-  return sec;
-}
-
-/* ---------- §2 configuration ---------- */
+/* ---------- §1 configuration ---------- */
 
 const CONFIG_CHIPS = [
   ['added', 'added'], ['removed', 'removed'], ['default', 'default'], ['type', 'type'], ['phase', 'phase'],
@@ -2099,9 +2057,9 @@ const CONFIG_CHIPS = [
 ];
 
 /**
- * Why the snapshots of a kind ('config' or 'extension') differ from the releases, for the note under the
- * Configuration or Extensions heading. Finals without a snapshot of their own use their stream's; pre-releases
- * always use their own.
+ * Why a comparison uses the data of other releases for a kind ('config', 'extension' or 'classes'), for the note
+ * under its heading, in a data set where a release has none of its own: a final without uses its stream's newest
+ * patch, a pre-release only its own. Null when both releases have their own.
  */
 function snapshotReason(cmp, kind) {
   const V = store.V;
@@ -2109,34 +2067,44 @@ function snapshotReason(cmp, kind) {
   const borrowed = [[cmp.ia, s.a], [cmp.ib, s.b]].filter(([i, c]) => i !== c);
   if (!borrowed.length) return null;
   const inStream = borrowed.every(([i, c]) => !core.isPreRelease(V.list[c]) && streamOfEntry(V.list[c]) === streamOfEntry(V.list[i]));
-  if (inStream) return ' (one snapshot per stream, at its newest patch)';
   const names = [...new Set(borrowed.map(([i]) => short(V.list[i].v)))];
-  return ` (${names.join(' and ')} ${names.length === 1 ? 'has no snapshot of its own' : 'have no snapshots of their own'}; the nearest one is used)`;
+  const own = `${names.join(' and ')} ${names.length === 1 ? 'has' : 'have'} no ${s.what} of ${names.length === 1 ? 'its' : 'their'} own`;
+  return inStream ? ` (${own}: the newest patch of the stream stands in)` : ` (${own}; the nearest release with it is used)`;
+}
+
+/**
+ * " compared at 3.20.6 → 3.27.4 (…)" when a release of the comparison has no data of a kind of its own and another
+ * release's stands in (snapshotReason); null when both have their own, since the releases compared are then the
+ * page's, and when both use the same release's, which the section itself says (sameSnapshotText).
+ */
+function comparedAt(cmp, kind) {
+  const V = store.V;
+  const s = snapshotsOf(cmp, kind);
+  if (s.a == null || s.b == null || s.a === s.b || (s.a === cmp.ia && s.b === cmp.ib)) return null;
+  return frag(' compared at ', h('span', { class: 'ver' }, short(V.list[s.a].v)), ' → ', h('span', { class: 'ver' }, short(V.list[s.b].v)), snapshotReason(cmp, kind));
 }
 
 function configSection(cmp, data) {
   const V = store.V;
   const { ca, cb } = cmp;
   let note = null;
-  if (ca != null && cb != null) {
+  if (ca != null && cb != null && ca !== cb) {
     const xa = V.list[ca];
     const xb = V.list[cb];
     const mixed = xa.configSource && xb.configSource && xa.configSource !== xb.configSource;
-    note = h('p', { class: 'sec-note' },
-      'Config compared at ', h('span', { class: 'ver' }, short(xa.v)), ' → ', h('span', { class: 'ver' }, short(xb.v)),
-      snapshotReason(cmp, 'config'),
-      xa.configSource && xb.configSource
-        ? frag('; extracted from ', h('abbr', { title: SOURCE_TITLE[xa.configSource] ?? '' }, xa.configSource), ' → ', h('abbr', { title: SOURCE_TITLE[xb.configSource] ?? '' }, xb.configSource),
-          mixed ? ', so a few differences may come from the extraction method rather than Quarkus' : '')
-        : null,
-      '.');
+    const at = comparedAt(cmp, 'config');
+    const sources = xa.configSource && xb.configSource
+      ? frag(at ? ';' : '', ' extracted from ', h('abbr', { title: SOURCE_TITLE[xa.configSource] ?? '' }, xa.configSource), ' → ', h('abbr', { title: SOURCE_TITLE[xb.configSource] ?? '' }, xb.configSource),
+        mixed ? ', so a few differences may come from the extraction method rather than Quarkus' : '')
+      : null;
+    note = at || sources ? h('p', { class: 'sec-note' }, 'Config', at, sources, '.') : null;
   }
-  const sec = h('section', { class: 'sec', id: 'sec-config', 'aria-labelledby': 'sec-config-h' }, sectionHead(2, 'Configuration', 'sec-config-h', note));
+  const sec = h('section', { class: 'sec', id: 'sec-config', 'aria-labelledby': 'sec-config-h' }, sectionHead(1, 'Configuration', 'sec-config-h', note));
   if (!data.config) return add(sec, [missingData('config.json', data.errors.config)]);
   if (ca == null || cb == null) return add(sec, [emptyNote(gapText(cmp, 'config'))]);
   if (ca === cb) return add(sec, [emptyNote(sameSnapshotText(cmp, 'config'))]);
   const rows = cmp.configRows;
-  if (!rows.length) return add(sec, [emptyNote('No config property was added, removed or changed between these snapshots.')]);
+  if (!rows.length) return add(sec, [emptyNote('No config property was added, removed or changed between these releases.')]);
 
   const state = { tags: new Set(), text: '', expanded: new Set() };
   const status = h('p', { class: 'filter-status', 'aria-live': 'polite' });
@@ -2312,17 +2280,17 @@ function rowDetails(r) {
     r.kinds.map((k) => deltaLine(k, r.a, r.b)),
     r.via
       ? h('div', { class: 'delta delta--hint' }, h('span', { class: 'delta-k' }, 'listed as'), h('code', { class: 'val' }, r.via),
-        h('span', { class: 'heuristic' }, 'in the older snapshot; matched to this key through aliases'))
+        h('span', { class: 'heuristic' }, 'in the older release; matched to this key through aliases'))
       : null);
 }
 
-/* ---------- §3 dependencies ---------- */
+/* ---------- §2 dependencies ---------- */
 
 const BOM_CHIPS = [['downgrade', 'downgrade'], ['major', 'major'], ['minor', 'minor'], ['patch', 'patch'], ['other', 'qualifier'], ['added', 'added'], ['removed', 'removed']];
 
 function depsSection(cmp, data) {
   const sec = h('section', { class: 'sec', id: 'sec-deps', 'aria-labelledby': 'sec-deps-h' },
-    sectionHead(3, 'Dependencies', 'sec-deps-h',
+    sectionHead(2, 'Dependencies', 'sec-deps-h',
       h('p', { class: 'sec-note' }, 'Versions managed by ',
         cmp.platform?.used ? frag('the platform BOM, ', h('code', null, 'io.quarkus.platform:quarkus-bom')) : h('code', null, 'io.quarkus:quarkus-bom'),
         '. Artifacts that share a groupId and the same version change are listed together.')));
@@ -2444,7 +2412,7 @@ function depGroup(g, items) {
   return el;
 }
 
-/* ---------- §4 extensions ---------- */
+/* ---------- §3 extensions ---------- */
 
 function cappedList(cls, items, renderItem) {
   const ul = h('ul', { class: cls });
@@ -2467,13 +2435,9 @@ function cappedList(cls, items, renderItem) {
 function extSection(cmp, data) {
   const V = store.V;
   const { ea, eb } = cmp;
-  const note = h('p', { class: 'sec-note' }, 'Metadata from each extension\'s quarkus-extension.yaml',
-    ea != null && eb != null
-      ? frag(', compared at ', h('span', { class: 'ver' }, short(V.list[ea].v)), ' → ', h('span', { class: 'ver' }, short(V.list[eb].v)),
-        snapshotReason(cmp, 'extension'))
-      : null,
-    '.');
-  const sec = h('section', { class: 'sec', id: 'sec-ext', 'aria-labelledby': 'sec-ext-h' }, sectionHead(4, 'Extensions', 'sec-ext-h', note));
+  const at = comparedAt(cmp, 'extension');
+  const note = h('p', { class: 'sec-note' }, 'Metadata from each extension\'s quarkus-extension.yaml', at ? frag(',', at) : null, '.');
+  const sec = h('section', { class: 'sec', id: 'sec-ext', 'aria-labelledby': 'sec-ext-h' }, sectionHead(3, 'Extensions', 'sec-ext-h', note));
   if (!data.extensions) return add(sec, [missingData('extensions.json', data.errors.extensions)]);
   const gap = gapText(cmp, 'extension');
   if (gap) return add(sec, [emptyNote(gap)]);
@@ -2502,7 +2466,7 @@ function extSection(cmp, data) {
   return sec;
 }
 
-/* ---------- §5 classes ---------- */
+/* ---------- §4 classes ---------- */
 
 const CLASS_CHIPS = [['added', 'added'], ['removed', 'removed'], ['moved', 'moved']];
 
@@ -2527,19 +2491,16 @@ function classNameEl(name) {
 }
 
 /**
- * §5: the classes added, removed and moved, grouped by jar. The section is in the page at once and fills in when the
+ * §4: the classes added, removed and moved, grouped by jar. The section is in the page at once and fills in when the
  * classes files of the two releases' major lines arrive: the comparison does not wait for them.
  */
 function classesSection(cmp) {
   const V = store.V;
   const { la, lb } = cmp;
   const note = h('p', { class: 'sec-note' }, 'The classes of the ', h('code', null, 'io.quarkus'), ' jars that ', h('code', null, 'quarkus-bom'),
-    ' manages, nested ones included',
-    la != null && lb != null
-      ? frag(', compared at ', h('span', { class: 'ver' }, short(V.list[la].v)), ' → ', h('span', { class: 'ver' }, short(V.list[lb].v)), snapshotReason(cmp, 'classes'))
-      : null,
+    ' manages, nested ones included', comparedAt(cmp, 'classes') ? frag(',', comparedAt(cmp, 'classes')) : null,
     '. A class that moved is listed in the jar it left and in the jar it reached.');
-  const sec = h('section', { class: 'sec', id: 'sec-classes', 'aria-labelledby': 'sec-classes-h' }, sectionHead(5, 'Classes', 'sec-classes-h', note));
+  const sec = h('section', { class: 'sec', id: 'sec-classes', 'aria-labelledby': 'sec-classes-h' }, sectionHead(4, 'Classes', 'sec-classes-h', note));
   const gap = gapText(cmp, 'classes');
   if (gap) return add(sec, [emptyNote(gap)]);
   if (la === lb) return add(sec, [emptyNote(sameSnapshotText(cmp, 'classes'))]);
@@ -2557,7 +2518,7 @@ function classesSection(cmp) {
 function classChanges(cmp) {
   const d = cmp.classes;
   const rows = cmp.classRows;
-  if (!rows.length) return emptyNote('No class was added, removed or moved between these snapshots.');
+  if (!rows.length) return emptyNote('No class was added, removed or moved between these releases.');
   const state = { tags: new Set(), text: '', nested: false, expanded: new Set() };
   const status = h('p', { class: 'filter-status', 'aria-live': 'polite' });
   const groupsEl = h('div', { class: 'cgroups' });
@@ -2677,7 +2638,7 @@ async function renderProperty(r) {
   const cfg = await loadFile('config');
   const prop = findProperty(cfg, r.key);
   if (!prop) {
-    return notFoundView('Unknown config property', `No property named ${r.key} appears in any config snapshot of this dataset.`,
+    return notFoundView('Unknown config property', `No property named ${r.key} appears in any release of this dataset.`,
       null, h('div', { class: 'nf-search' }, searchBox({ id: nextId('qs-nf') })));
   }
   if (prop.k !== r.key) canonicalize({ page: 'property', key: prop.k });
@@ -2693,12 +2654,12 @@ async function renderProperty(r) {
   const deprecated = s.x != null;
 
   const statusLine = hist.present
-    ? h('p', { class: 'status-line' }, chip('added', 'current'), ` Present in the latest config snapshot (${short(V.list[lastCv].v)}).`)
+    ? h('p', { class: 'status-line' }, chip('added', 'current'), ` Present in ${newestRelease(lastCv, 'config data')}.`)
     : h('p', { class: 'status-line' }, chip('removed', 'removed'), lastRange
-      ? ` Not in the latest config snapshot; last seen in ${short(V.list[lastRange.to].v)}.`
-      : ' Not in any config snapshot shown.');
+      ? ` Not in ${newestRelease(lastCv, 'config data')}; last seen in ${short(V.list[lastRange.to].v)}.`
+      : ' Not in any release shown.');
   const widenedNote = hist.widened
-    ? h('p', { class: 'note' }, `This property only appears in snapshots of ${widenedKinds(hist.widenedBy)}, so they are shown here although they are hidden elsewhere.`)
+    ? h('p', { class: 'note' }, `This property only appears in ${widenedKinds(hist.widenedBy)}, so they are shown here although they are hidden elsewhere.`)
     : null;
   const tools = switchRow('sec-tools', snapshotSwitches('timeline', V.configVis), { rerender: true });
 
@@ -2715,7 +2676,7 @@ async function renderProperty(r) {
   if (prop.k !== name) row('Key', h('code', { class: 'val' }, prop.k), h('span', { class: 'kv-sub' }, 'Canonical key used to track this property: quoted segments become *.'));
   row('Extension', s.e ? h('a', { class: 'mono', href: link.extension(s.e) }, s.e) : h('em', { class: 'none' }, 'unknown'));
   row('Present in', h('span', { class: 'mono' }, presentInLabel(hist)), hist.present ? h('span', { class: 'muted' }, ' (current)') : null,
-    h('span', { class: 'kv-sub' }, `Config snapshots: ${hist.ranges.map((x) => (x.from === x.to ? short(V.list[x.from].v) : `${short(V.list[x.from].v)} … ${short(V.list[x.to].v)}`)).join(', ')}`));
+    h('span', { class: 'kv-sub' }, `Releases: ${hist.ranges.map((x) => (x.from === x.to ? short(V.list[x.from].v) : `${short(V.list[x.from].v)} … ${short(V.list[x.to].v)}`)).join(', ')}`));
 
   const nameEl = h('span', { class: 'prop-name' }, name);
   return frag(
@@ -2731,29 +2692,29 @@ async function renderProperty(r) {
     statusLine,
     kv,
     h('section', { class: 'sec', 'aria-labelledby': 'presence-h' },
-      sectionHead(1, 'Presence', 'presence-h', h('p', { class: 'sec-note' }, 'One cell per config snapshot, oldest on the left.', hiddenSnapshotsNote(hist, V.configVis)),
+      sectionHead(1, 'Presence', 'presence-h', h('p', { class: 'sec-note' }, 'One cell per release, oldest on the left.', hiddenReleasesNote(hist, V.configVis)),
         tools),
       widenedNote,
       presenceStrip(prop, hist, cvs, cfg.raw.states)),
     h('section', { class: 'sec', 'aria-labelledby': 'history-h' },
-      sectionHead(2, 'History', 'history-h', h('p', { class: 'sec-note' }, 'Every change between consecutive config snapshots shown.')),
+      sectionHead(2, 'History', 'history-h', h('p', { class: 'sec-note' }, 'Every change between consecutive releases shown.')),
       timeline(hist.events, (ev) => propertyEventBody(ev, hist.cvs[0] === V.configVis[0]))));
 }
 
-/** " 2 pre-release snapshots are hidden." when the switch is off and the history skipped some. */
-function hiddenSnapshotsNote(hist, snaps) {
+/** " 2 pre-releases are hidden." when the switches hide some of the releases `snaps` that a history runs over. */
+function hiddenReleasesNote(hist, snaps) {
   if (!hist.hiddenSnapshots) return null;
   const shown = new Set(hist.cvs);
   const hidden = snaps.filter((c) => !shown.has(c));
-  return ` ${hiddenCount(hidden, 'snapshot')} ${hidden.length === 1 ? 'is' : 'are'} hidden.`;
+  return ` ${hiddenCount(hidden)} ${hidden.length === 1 ? 'is' : 'are'} hidden.`;
 }
 
 function presenceStrip(prop, hist, cvs, states) {
   const V = store.V;
   const events = new Map(hist.events.map((e) => [e.vi, e]));
-  // past about 40 snapshots the cells get thin: dense cells keep the strip inside a phone's width
+  // past about 40 releases the cells get thin: dense cells keep the strip inside a phone's width
   const dense = cvs.length > 40;
-  const strip = h('ol', { class: dense ? 'strip strip--dense' : 'strip', 'aria-label': 'Presence in each config snapshot' });
+  const strip = h('ol', { class: dense ? 'strip strip--dense' : 'strip', 'aria-label': 'Presence in each release' });
   let anyPre = false;
   for (const vi of cvs) {
     const si = core.stateAt(prop.h, vi);
@@ -2782,23 +2743,23 @@ function presenceStrip(prop, hist, cvs, states) {
       h('span', null, h('i', { class: 'lg lg-on' }), 'present'),
       h('span', null, h('i', { class: 'lg lg-dep' }), 'deprecated'),
       h('span', null, h('i', { class: 'lg lg-off' }), 'absent'),
-      h('span', null, h('i', { class: 'lg lg-ev' }), 'changed in this snapshot'),
-      anyPre ? h('span', null, h('i', { class: 'lg lg-pre' }), 'pre-release snapshot') : null));
+      h('span', null, h('i', { class: 'lg lg-ev' }), 'changed in this release'),
+      anyPre ? h('span', null, h('i', { class: 'lg lg-pre' }), 'pre-release') : null));
 }
 
-/** `first`: the history starts at the dataset's first config snapshot, not at the first one the switches show. */
+/** `first`: the history starts at the first release with config data, not at the first one the switches show. */
 function propertyEventBody(ev, first = true) {
   switch (ev.type) {
     case 'present':
       return frag(h('p', { class: 'tl-text' }, chip('neutral', 'present'), first
-        ? ' In the first config snapshot of this dataset; it may be older.'
-        : ' In the first config snapshot shown; earlier ones are hidden, so it may be older.'), stateLine(null, ev.state));
+        ? ` In ${firstRelease(store.V.configVis, 'config data')}; it may be older.`
+        : ' In the first release shown; earlier ones are hidden, so it may be older.'), stateLine(null, ev.state));
     case 'introduced':
       return frag(h('p', { class: 'tl-text' }, chip('added', 'introduced')), stateLine(null, ev.state));
     case 'reintroduced':
       return frag(h('p', { class: 'tl-text' }, chip('added', 'reintroduced')), stateLine(null, ev.state));
     case 'removed':
-      return h('p', { class: 'tl-text' }, chip('removed'), ' No longer present in this snapshot.');
+      return h('p', { class: 'tl-text' }, chip('removed'), ' No longer present in this release.');
     default:
       return frag(ev.kinds.map((k) => deltaLine(k, ev.from, ev.to, chip(k))));
   }
@@ -2842,7 +2803,7 @@ async function renderArtifact(r) {
   const hist = art ? core.artifactHistory(bom.raw, id, V.list, { vis, widen: widenSteps() }) : null;
   const last = V.list[hist ? hist.last : vis.indices[vis.indices.length - 1]];
   const idEl = h('span', { class: 'prop-name' }, id);
-  // With a BOM history the switches filter releases; on an extension-only page they filter extension snapshots.
+  // With a BOM history the switches filter releases; on an extension-only page, the releases with extension data.
   const tools = switchRow('sec-tools', hist ? releaseSwitches('timeline') : snapshotSwitches('timeline', V.extVis), { rerender: true });
   let status = null;
   if (hist) {
@@ -3004,18 +2965,18 @@ function artifactRanges(hist, tools) {
         tbody)));
 }
 
-/** `first` as for propertyEventBody, over the extension snapshots. */
+/** `first` as for propertyEventBody, over the releases with extension data. */
 function extensionEventBody(ev, first = true) {
   switch (ev.type) {
     case 'present':
       return h('p', { class: 'tl-text' }, chip('neutral', 'present'),
-        first ? ' In the first extension snapshot of this dataset.' : ' In the first extension snapshot shown; earlier ones are hidden.',
+        first ? ` In ${firstRelease(store.V.extVis, 'extension data')}.` : ' In the first release shown; earlier ones are hidden.',
         ev.state.r ? ` Relocated to ${ev.state.r}.` : '');
     case 'introduced':
     case 'reintroduced':
       return h('p', { class: 'tl-text' }, chip('added', ev.type), ev.state.r ? ` As a relocation to ${ev.state.r}.` : statusChip(ev.state.s));
     case 'removed':
-      return h('p', { class: 'tl-text' }, chip('removed'), ' No longer in this snapshot.');
+      return h('p', { class: 'tl-text' }, chip('removed'), ' No longer in this release.');
     default:
       return frag(ev.kinds.map((k) => {
         if (k === 'relocated') return h('div', { class: 'delta' }, deltaKey(chip(k)), 'to ', h('a', { class: 'mono', href: link.artifact(ev.to.r) }, ev.to.r));
@@ -3051,7 +3012,7 @@ function extensionPanel(x, data, tools) {
   row('Present in', h('span', { class: 'mono' }, presentInLabel(hist)), hist.present ? h('span', { class: 'muted' }, ' (current)') : null);
 
   let propsBlock = null;
-  // extension snapshots do not need config, so a dataset may have extensions and no config snapshot at all
+  // extension data does not need config, so a data set may have extension data and no config at all
   if (data.config && data.config.raw.versions.length) {
     const cfg = data.config.raw;
     const shownCvs = core.visibleOnly(cfg.versions, vis);
@@ -3062,20 +3023,20 @@ function extensionPanel(x, data, tools) {
       if (si != null && cfg.states[si].e === x.id) owned.push({ k: p.k, s: cfg.states[si] });
     }
     propsBlock = h('section', { class: 'sec', 'aria-labelledby': 'ext-props-h' },
-      sectionHead(4, 'Config properties', 'ext-props-h', h('p', { class: 'sec-note' }, `Attributed to ${x.id} in the latest config snapshot (${short(V.list[latest].v)}).`)),
+      sectionHead(4, 'Config properties', 'ext-props-h', h('p', { class: 'sec-note' }, `Attributed to ${x.id} in ${newestRelease(latest, 'config data')}.`)),
       owned.length
         ? cappedList('plist', owned, (o) => h('li', null, h('a', { class: 'prop', href: link.property(o.k) }, o.s.n ?? o.k), phaseBadge(o.s.p)))
-        : emptyNote('None in the latest config snapshot.'));
+        : emptyNote(`None in ${short(V.list[latest].v)}.`));
   }
   return frag(
     h('section', { class: 'sec', 'aria-labelledby': 'ext-h' },
-      sectionHead(2, 'Extension', 'ext-h', h('p', { class: 'sec-note' }, 'Metadata from quarkus-extension.yaml at the extension snapshots.')),
+      sectionHead(2, 'Extension', 'ext-h', h('p', { class: 'sec-note' }, 'Metadata from quarkus-extension.yaml, in the newest release that has the extension.')),
       kv),
     h('section', { class: 'sec', 'aria-labelledby': 'ext-history-h' },
       sectionHead(3, 'Extension history', 'ext-history-h',
-        h('p', { class: 'sec-note' }, 'Status, name and relocation changes between the extension snapshots shown.', hiddenSnapshotsNote(hist, V.extVis)),
+        h('p', { class: 'sec-note' }, 'Status, name and relocation changes between the releases shown.', hiddenReleasesNote(hist, V.extVis)),
         tools),
-      hist.widened ? h('p', { class: 'note' }, `This extension only appears in snapshots of ${widenedKinds(hist.widenedBy)}, so they are shown here although they are hidden elsewhere.`) : null,
+      hist.widened ? h('p', { class: 'note' }, `This extension only appears in ${widenedKinds(hist.widenedBy)}, so they are shown here although they are hidden elsewhere.`) : null,
       timeline(hist.events, (ev) => extensionEventBody(ev, hist.cvs[0] === V.extVis[0]))),
     propsBlock);
 }
@@ -3116,12 +3077,12 @@ async function renderClass(r) {
     row = resolveClass(classes, r.name);
   }
   if (!row) {
-    return notFoundView('Unknown class', `No class named ${r.name || '(empty)'} is in any classes snapshot of this dataset.`,
+    return notFoundView('Unknown class', `No class named ${r.name || '(empty)'} is in any release of this dataset.`,
       null, h('div', { class: 'nf-search' }, searchBox({ id: nextId('qs-nf') })));
   }
   const name = core.className(classes.raw, row);
   if (name !== r.name) canonicalize({ page: 'class', name });
-  // the history runs over the snapshots of the lines loaded; the others are hidden by the switches anyway
+  // the history runs over the releases of the lines loaded; the others are hidden by the switches anyway
   const loadedVis = V.clsVis.filter((i) => lines.includes(core.majorOf(V.list[i])));
   const hist = core.classHistory(classes.raw, row, loadedVis, { vis: currentVis(), widen: widenSteps(), versions: V.list });
   const jarNames = (jars) => jars.map((j) => classes.raw.artifacts[j]);
@@ -3135,13 +3096,13 @@ async function renderClass(r) {
   // the status line is a flex row: one span per sentence keeps its links and punctuation together
   const statusLine = hist.present
     ? h('p', { class: 'status-line' }, chip('added', 'current'),
-      h('span', null, 'In ', jarLinks(jarNames(hist.jars)), ` in the latest classes snapshot (${short(V.list[lastCv].v)}).`))
+      h('span', null, 'In ', jarLinks(jarNames(hist.jars)), ` in ${newestRelease(lastCv, 'class data')}.`))
     : h('p', { class: 'status-line' }, chip('removed', 'removed'), lastRange
-      ? h('span', null, `Not in the latest classes snapshot; last seen in ${short(V.list[lastRange.to].v)}, in `, jarLinks(jarNames(lastJars)), '.')
-      : ' Not in any classes snapshot shown.');
+      ? h('span', null, `Not in ${newestRelease(lastCv, 'class data')}; last seen in ${short(V.list[lastRange.to].v)}, in `, jarLinks(jarNames(lastJars)), '.')
+      : ' Not in any release shown.');
   const tools = switchRow('sec-tools', snapshotSwitches('timeline', V.clsVis), { rerender: true });
   const widenedNote = hist.widened
-    ? h('p', { class: 'note' }, `This class only appears in snapshots of ${widenedKinds(hist.widenedBy)}, so they are shown here although they are hidden elsewhere.`)
+    ? h('p', { class: 'note' }, `This class only appears in ${widenedKinds(hist.widenedBy)}, so they are shown here although they are hidden elsewhere.`)
     : null;
 
   const kv = h('dl', { class: 'kv' });
@@ -3158,7 +3119,7 @@ async function renderClass(r) {
   const nestedRows = classes.raw.classes.filter((x) => x[0] === row[0] && x[1].startsWith(prefix));
   const nestedBlock = nestedRows.length
     ? h('section', { class: 'sec', 'aria-labelledby': 'cls-nested-h' },
-      sectionHead(3, 'Nested classes', 'cls-nested-h', h('p', { class: 'sec-note' }, `${plural(nestedRows.length, 'class', 'classes')} nested in this one, in any classes snapshot.`)),
+      sectionHead(3, 'Nested classes', 'cls-nested-h', h('p', { class: 'sec-note' }, `${plural(nestedRows.length, 'class', 'classes')} nested in this one, in any release.`)),
       cappedList('plist', nestedRows, (x) => {
         const nestedName = core.className(classes.raw, x);
         const now = lastCv != null && core.jarsOf(core.stateAt(x[2], lastCv)).length > 0;
@@ -3178,24 +3139,24 @@ async function renderClass(r) {
     kv,
     h('section', { class: 'sec', 'aria-labelledby': 'cls-jars-h' },
       sectionHead(1, 'Jars', 'cls-jars-h',
-        h('p', { class: 'sec-note' }, 'The jars that have the class in each classes snapshot, oldest first. Each row is a run of snapshots in the same jars.',
-          hiddenSnapshotsNote({ cvs: hist.cvs, hiddenSnapshots: V.clsVis.length - hist.cvs.length }, V.clsVis)),
+        h('p', { class: 'sec-note' }, 'The jars that have the class in each release, oldest first. Each row is a run of releases in the same jars.',
+          hiddenReleasesNote({ cvs: hist.cvs, hiddenSnapshots: V.clsVis.length - hist.cvs.length }, V.clsVis)),
         tools),
       widenedNote,
       classRuns(hist, jarNames)),
     h('section', { class: 'sec', 'aria-labelledby': 'cls-history-h' },
-      sectionHead(2, 'History', 'cls-history-h', h('p', { class: 'sec-note' }, 'When the class came, moved to another jar or went, between consecutive classes snapshots shown.')),
+      sectionHead(2, 'History', 'cls-history-h', h('p', { class: 'sec-note' }, 'When the class came, moved to another jar or went, between consecutive releases shown.')),
       timeline(hist.events, (ev) => classEventBody(ev, jarNames, hist.cvs[0] === V.clsVis[0]))),
     nestedBlock);
 }
 
-/** The runs of a class history as a lane and a table: the jars of each run of snapshots, and the change it starts with. */
+/** The runs of a class history as a lane and a table: the jars of each run of releases, and the change it starts with. */
 function classRuns(hist, jarNames) {
   const V = store.V;
   const first = V.list[hist.cvs[0]];
   const last = V.list[hist.cvs[hist.cvs.length - 1]];
   const events = new Map(hist.events.map((ev) => [ev.vi, ev]));
-  const lane = h('div', { class: 'lane', role: 'img', 'aria-label': `The jars of the class across ${plural(hist.cvs.length, 'classes snapshot')}, oldest on the left. The table below lists the same runs.` });
+  const lane = h('div', { class: 'lane', role: 'img', 'aria-label': `The jars of the class across ${plural(hist.cvs.length, 'release')}, oldest on the left. The table below lists the same runs.` });
   const tbody = h('tbody');
   hist.runs.forEach((run, i) => {
     const jars = jarNames(run.jars).join(', ');
@@ -3205,7 +3166,7 @@ function classRuns(hist, jarNames) {
     const change = !ev || ev.type === 'present' ? null : chip(ev.type);
     tbody.append(h('tr', { class: run.jars.length ? null : 'is-same' },
       h('th', { scope: 'row', class: 'mono' }, rangeLabel(run.from, run.to),
-        h('span', { class: 'cell-sub' }, `${plural(run.count, 'snapshot')}${run.pre ? `, ${plural(run.pre, 'pre-release')}` : ''}`)),
+        h('span', { class: 'cell-sub' }, rangeCount(run))),
       h('td', null, run.jars.length ? jarLinks(jarNames(run.jars)) : h('em', { class: 'none' }, run.before ? 'not yet in any jar' : 'in no jar')),
       h('td', null, change)));
   });
@@ -3214,18 +3175,18 @@ function classRuns(hist, jarNames) {
     h('div', { class: 'strip-axis', 'aria-hidden': 'true' }, h('span', null, short(first.v)), h('span', null, short(last.v))),
     h('div', { class: 'table-scroll' },
       h('table', { class: 'tbl tbl-ranges' },
-        h('thead', null, h('tr', null, h('th', { scope: 'col' }, 'Classes snapshots'), h('th', { scope: 'col' }, 'Jar'), h('th', { scope: 'col' }, 'Change'))),
+        h('thead', null, h('tr', null, h('th', { scope: 'col' }, 'Quarkus releases'), h('th', { scope: 'col' }, 'Jar'), h('th', { scope: 'col' }, 'Change'))),
         tbody)));
 }
 
-/** `first` as for propertyEventBody, over the classes snapshots. A sentence with links is one span of the flex row. */
+/** `first` as for propertyEventBody, over the releases with class data. A sentence with links is one span of the flex row. */
 function classEventBody(ev, jarNames, first = true) {
   const jars = (list) => jarLinks(jarNames(list));
   switch (ev.type) {
     case 'present':
       return h('p', { class: 'tl-text' }, chip('neutral', 'present'), h('span', null, first
-        ? 'In the first classes snapshot of this dataset, so it may be older: in '
-        : 'In the first classes snapshot shown; earlier ones are hidden. In ', jars(ev.jars), '.'));
+        ? `In ${firstRelease(store.V.clsVis, 'class data')}, so it may be older: in `
+        : 'In the first release shown; earlier ones are hidden. In ', jars(ev.jars), '.'));
     case 'introduced':
     case 'reintroduced':
       return h('p', { class: 'tl-text' }, chip(ev.type), h('span', null, 'In ', jars(ev.jars), '.'));
@@ -3256,24 +3217,17 @@ async function renderVersions() {
         return h('li', { class: core.isPreRelease(x) ? 'is-pre' : null }, h('a', { class: 'rel', href: link.version(x.v) },
           h('span', { class: 'ver' }, short(x.v)),
           dateEl(x.date),
-          preChip(x),
-          x.config ? h('span', { class: 'cfg-mark', title: `Config snapshot (${x.configSource ?? 'unknown source'})` }, 'config')
-            : x.ext ? h('span', { class: 'cfg-mark', title: 'Extension snapshot, no config snapshot' }, 'extensions') : null));
+          preChip(x)));
       })))));
   }
   const tools = switchRow('page-tools', releaseSwitches('releases'), { rerender: true });
   const hiddenNow = V.list.map((_, i) => i).filter((i) => !vis.visible[i]);
-  const preSnapshots = V.configVis.some((c) => V.visOff.pre[c]);
-  const extOnly = V.extVis.some((e) => !V.list[e].config);
   return frag(
     h('header', { class: 'page-head band' },
       h('p', { class: 'kicker' }, 'Releases'),
       h('h1', { class: 'page-title', tabindex: '-1' }, 'All releases'),
       h('p', { class: 'lede' }, `${plural(vis.indices.length, 'release')} in ${plural(shownStreams.length, 'stream')}, newest first`,
-        hiddenNow.length ? `, ${hiddenCount(hiddenNow)} hidden` : null, `. ${plural(ltsCount, 'stream')} marked LTS. `,
-        'Releases tagged ', h('span', { class: 'cfg-mark' }, 'config'), ` are the config snapshots, taken ${V.configAtNewestFinals ? 'at' : 'for'} `,
-        andList([...configCoverage(V), ...(preSnapshots ? ['some pre-releases, which are compared only at their own snapshot'] : [])]), '.',
-        extOnly ? frag(' Releases tagged ', h('span', { class: 'cfg-mark' }, 'extensions'), ' have extension data but no config snapshot.') : null),
+        hiddenNow.length ? `, ${hiddenCount(hiddenNow)} hidden` : null, `. ${plural(ltsCount, 'stream')} marked LTS.`),
       tools),
     h('div', { class: 'table-scroll' },
       h('table', { class: 'tbl tbl-streams' },
@@ -3327,17 +3281,20 @@ async function renderVersion(r) {
   const row = (k, ...v) => kv.append(h('dt', null, k), h('dd', null, v));
   row('Released', dateEl(x.date) ?? h('em', { class: 'none' }, 'unknown'));
   row('Stream', h('span', { class: 'mono' }, x.stream || core.stream(x.v)), x.lts ? frag(' ', chip('lts', 'LTS')) : null);
-  const shown = ev == null ? 'dependency changes only' : 'dependency and extension changes only';
-  row('Config snapshot', cv == null
-    ? isPre
-      ? frag(h('em', { class: 'none' }, 'none'), h('span', { class: 'kv-sub' }, `Pre-releases are compared only at their own config snapshot, so comparisons with this release show ${shown}.`))
-      : h('em', { class: 'none' }, 'none: no config data for this release')
-    : frag(verLink(V.list[cv].v), h('span', { class: 'muted' }, cv === i ? ' (this release)' : ev === cv ? ' (used for config and extension comparisons)' : ' (used for config comparisons)'),
-      V.list[cv].configSource ? h('span', { class: 'kv-sub' }, SOURCE_TITLE[V.list[cv].configSource] ?? V.list[cv].configSource) : null));
-  // extension snapshots also exist without config (a config snapshot always has one): name the one used when it
-  // is not the config snapshot
-  if (ev != null && ev !== cv) {
-    row('Extension snapshot', verLink(V.list[ev].v), h('span', { class: 'muted' }, ev === i ? ' (this release)' : ' (used for extension comparisons)'));
+  // the release's config, as it was extracted; in a data set where it has none of its own, whose its comparisons use
+  // (the counts below say "at" which release when they are another's)
+  const source = cv != null && V.list[cv].configSource ? SOURCE_TITLE[V.list[cv].configSource] ?? V.list[cv].configSource : null;
+  if (cv === i) {
+    row('Config source', source ?? h('em', { class: 'none' }, 'unknown'));
+  } else if (cv != null) {
+    row('Config', h('em', { class: 'none' }, 'none of its own'),
+      h('span', { class: 'kv-sub' }, 'Comparisons with this release use the config data of ', verLink(V.list[cv].v), '.'),
+      source ? h('span', { class: 'kv-sub' }, source) : null);
+  } else {
+    const shown = ev == null ? 'dependency changes only' : 'dependency and extension changes only';
+    row('Config', isPre
+      ? frag(h('em', { class: 'none' }, 'none'), h('span', { class: 'kv-sub' }, `Pre-releases are compared only with their own config data, so comparisons with this release show ${shown}.`))
+      : h('em', { class: 'none' }, 'none: no config data for this release'));
   }
   const managedN = h('span', null, '…');
   const propsN = h('span', null, '…');
@@ -3358,19 +3315,19 @@ async function renderVersion(r) {
     managedN.textContent = 'bom.json unavailable';
   });
   if (cv == null) {
-    propsN.textContent = isPre ? 'no config snapshot' : 'no config data';
+    propsN.textContent = 'no config data';
   } else {
     loadFile('config').then((c) => {
-      propsN.textContent = `${fmt(c.raw.props.filter((p) => core.stateAt(p.h, cv) != null).length)} at ${short(V.list[cv].v)}`;
+      propsN.textContent = `${fmt(c.raw.props.filter((p) => core.stateAt(p.h, cv) != null).length)}${cv === i ? '' : `, at ${short(V.list[cv].v)}`}`;
     }).catch(() => {
       propsN.textContent = 'config.json unavailable';
     });
   }
   if (ev == null) {
-    extsN.textContent = isPre ? 'no extension snapshot' : 'no extension data';
+    extsN.textContent = 'no extension data';
   } else {
     loadFile('extensions').then((e) => {
-      extsN.textContent = `${fmt(e.raw.exts.filter((xx) => core.stateAt(xx.h, ev) != null).length)} at ${short(V.list[ev].v)}`;
+      extsN.textContent = `${fmt(e.raw.exts.filter((xx) => core.stateAt(xx.h, ev) != null).length)}${ev === i ? '' : `, at ${short(V.list[ev].v)}`}`;
     }).catch(() => {
       extsN.textContent = 'extensions.json unavailable';
     });
@@ -3403,8 +3360,7 @@ async function renderVersion(r) {
     h('header', { class: 'page-head band' },
       h('p', { class: 'kicker' }, isPre ? 'Pre-release' : 'Release', ' · stream ', x.stream || core.stream(x.v)),
       h('h1', { class: 'page-title page-title--ver', tabindex: '-1' }, short(x.v)),
-      h('div', { class: 'badges' }, dateEl(x.date), versionChips(x), V.visOff.upcoming[i] ? upcomingChip() : null,
-        x.config ? h('span', { class: 'cfg-mark' }, 'config snapshot') : x.ext ? h('span', { class: 'cfg-mark' }, 'extension snapshot') : null)),
+      h('div', { class: 'badges' }, dateEl(x.date), versionChips(x), V.visOff.upcoming[i] ? upcomingChip() : null)),
     h('section', { class: 'sec', 'aria-labelledby': 'vq-h' },
       sectionHead(1, 'Compare with', 'vq-h', h('p', { class: 'sec-note' }, `What changed on the way to ${short(x.v)}.`)),
       quick, forward),

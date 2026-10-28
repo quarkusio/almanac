@@ -1264,19 +1264,6 @@ a.ver:hover {
   height: 13px;
 }
 
-.cfg-mark {
-  display: inline-block;
-  padding: 2px 7px;
-  font: 700 10px/1.2 var(--font-sans);
-  letter-spacing: 0.05em;
-  text-transform: uppercase;
-  color: var(--chip-ink);
-  background: var(--chip-bg);
-  border: 1px solid var(--chip-line);
-  border-radius: 999px;
-  white-space: nowrap;
-}
-
 /* copy buttons */
 
 .copy {
@@ -2748,11 +2735,6 @@ p.cmp-tools {
   color: var(--accent);
 }
 
-.tbl .num {
-  font-variant-numeric: tabular-nums;
-  white-space: nowrap;
-}
-
 .tbl tr.is-same td,
 .tbl tr.is-same th,
 .tbl tr.is-same th a {
@@ -2766,10 +2748,6 @@ p.cmp-tools {
   font: 400 12px/1.4 var(--font-mono);
   color: var(--muted);
   overflow-wrap: anywhere;
-}
-
-.tbl-libs th:first-child {
-  min-width: 170px;
 }
 
 .follows {
@@ -3402,7 +3380,6 @@ p.cmp-tools {
   }
 
   .chip,
-  .cfg-mark,
   .btn-primary {
     -webkit-print-color-adjust: exact;
     print-color-adjust: exact;

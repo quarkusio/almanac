@@ -11,7 +11,7 @@ const {
   parseLibVersion, compareLibVersions, bomChangeKind, splitId, canonicalKey, envVar, lastSegment,
   stateAt, latestValue, configVersionsOf, configVersionFor, phaseInfo, typeLabel, configChangeKinds, enumDelta,
   diffConfig, configRows, tagCounts, filterRows, groupBy, resolveBomValue, diffBom, groupBomRows,
-  HEADLINE_LIBRARIES, headlineLibraries, extensionChangeKinds, diffExtensions, matchTier, buildSearchIndex, search,
+  extensionChangeKinds, diffExtensions, matchTier, buildSearchIndex, search,
   propertyHistory, extensionHistory, artifactHistory, newestFinalIndex, newestInStream, ltsStreamsPresent,
   defaultPair, quickPicks, versionNeighbours, formatDate, spanLabel, CONFIG_FILTER_TAGS, BOM_KIND_ORDER,
   isPreRelease, preQualifier, releaseVisibility, visibleOnly, streamStartIndex, streamSpan, releasedApart, spanApart,
@@ -474,100 +474,6 @@ describe('BOM diff', () => {
 });
 
 /* -------------------------------------------------------------------------- */
-describe('headline libraries', () => {
-  test('matched by artifactId (and groupId for hibernate-core), in contract order', () => {
-    const versions = V('3.8.6', '3.9.0');
-    const bom = {
-      artifacts: [
-        { id: 'com.fasterxml.jackson.core:jackson-databind', h: [[0, '2.16.1'], [1, '2.17.2']] },
-        { id: 'org.hibernate.orm:hibernate-core', h: [[0, '6.4.4.Final']] },
-        { id: 'org.example:hibernate-core', h: [[0, '1.0']] },
-        { id: 'org.jboss.logmanager:jboss-logmanager-embedded', h: [[0, '1.1.2'], [1, null]] },
-        { id: 'org.jboss.logmanager:jboss-logmanager', h: [[1, '3.0.4.Final']] },
-        { id: 'io.vertx:vertx-core:test-jar', h: [[0, '4.5.7']] },
-        { id: 'io.vertx:vertx-web', h: [[0, '4.5.7']] },
-      ],
-    };
-    const rows = headlineLibraries(bom, versions, 0, 1);
-    assert.deepEqual(rows.map((r) => [r.label, r.id, r.kind]), [
-      ['Hibernate ORM', 'org.hibernate.orm:hibernate-core', 'same'],
-      ['Jackson', 'com.fasterxml.jackson.core:jackson-databind', 'minor'],
-      ['JBoss LogManager', 'org.jboss.logmanager:jboss-logmanager', 'added'],
-      ['JBoss LogManager Embedded', 'org.jboss.logmanager:jboss-logmanager-embedded', 'removed'],
-    ]);
-    assert.ok(HEADLINE_LIBRARIES.length >= 27);
-  });
-
-  test('every label names one library: no two entries share a label', () => {
-    const labels = HEADLINE_LIBRARIES.map((d) => d.label);
-    assert.equal(new Set(labels).size, labels.length);
-  });
-
-  test('GraalVM SDK: one row, graal-sdk preferred, nativeimage stands in where graal-sdk is not managed', () => {
-    const versions = V('3.2.0', '3.8.3', '3.20.0', '3.27.0');
-    const bom = {
-      artifacts: [
-        { id: 'org.graalvm.sdk:graal-sdk', h: [[0, '23.0.1'], [1, '23.1.2'], [3, null]] },
-        { id: 'org.graalvm.sdk:nativeimage', h: [[1, '23.1.2'], [3, '24.2.1']] },
-        { id: 'org.example:nativeimage', h: [[0, '9.9']] },
-      ],
-    };
-    const graal = (a, b) => headlineLibraries(bom, versions, a, b).filter((r) => r.label === 'GraalVM SDK');
-    // both managed at the same version in 3.8.3 and 3.20.0: one row, not two
-    assert.deepEqual(graal(1, 2).map((r) => [r.id, r.from, r.to, r.kind]), [['org.graalvm.sdk:graal-sdk', '23.1.2', '23.1.2', 'same']]);
-    // graal-sdk only → both → nativeimage only: one row, continuous versions, ids per side
-    const across = graal(0, 3);
-    assert.equal(across.length, 1);
-    assert.deepEqual(
-      { fromId: across[0].fromId, toId: across[0].toId, id: across[0].id, from: across[0].from, to: across[0].to, kind: across[0].kind },
-      { fromId: 'org.graalvm.sdk:graal-sdk', toId: 'org.graalvm.sdk:nativeimage', id: 'org.graalvm.sdk:nativeimage', from: '23.0.1', to: '24.2.1', kind: 'major' },
-    );
-    assert.equal(graal(3, 3)[0].id, 'org.graalvm.sdk:nativeimage', 'groupId must be org.graalvm.sdk');
-  });
-
-  test('libraries listed under two groupIds: one row per label', () => {
-    const versions = V('3.20.0', '4.0.0');
-    const bom = {
-      artifacts: [
-        { id: 'com.fasterxml.jackson.core:jackson-databind', h: [[0, '2.18.2'], [1, '2.20.1']] },
-        { id: 'io.smallrye.config:smallrye-config', h: [[0, '3.12.4'], [1, '4.0.0']] },
-        { id: 'io.smallrye:smallrye-config', h: [[0, '1.5.0'], [1, null]] },
-        { id: 'org.hibernate.orm:hibernate-core', h: [[0, '6.6.11.Final'], [1, '7.1.1.Final']] },
-        { id: 'org.hibernate:hibernate-core', h: [[0, '5.6.15.Final']] },
-        { id: 'tools.jackson.core:jackson-databind', h: [[1, '3.0.1']] },
-      ],
-    };
-    const rows = headlineLibraries(bom, versions, 0, 1);
-    assert.equal(new Set(rows.map((r) => r.label)).size, rows.length, 'no label twice');
-    assert.deepEqual(rows.map((r) => [r.label, r.id, r.from, r.to, r.kind]), [
-      ['Hibernate ORM', 'org.hibernate.orm:hibernate-core', '6.6.11.Final', '7.1.1.Final', 'major'],
-      ['SmallRye Config', 'io.smallrye.config:smallrye-config', '3.12.4', '4.0.0', 'major'],
-      ['Jackson', 'com.fasterxml.jackson.core:jackson-databind', '2.18.2', '2.20.1', 'minor'],
-      ['Jackson 3', 'tools.jackson.core:jackson-databind', null, '3.0.1', 'added'],
-    ]);
-    // a release that only has the old coordinate still gets its row
-    const legacy = { artifacts: [{ id: 'io.smallrye:smallrye-config', h: [[0, '1.8.5'], [1, null]] }, { id: 'io.smallrye.config:smallrye-config', h: [[1, '2.0.0']] }] };
-    assert.deepEqual(headlineLibraries(legacy, versions, 0, 1).map((r) => [r.fromId, r.toId, r.from, r.to, r.kind]),
-      [['io.smallrye:smallrye-config', 'io.smallrye.config:smallrye-config', '1.8.5', '2.0.0', 'major']]);
-  });
-
-  test('the sample never shows a label twice', () => {
-    const vj = load('versions');
-    const bom = load('bom');
-    for (let a = 0; a < vj.versions.length; a++) {
-      for (let b = 0; b < vj.versions.length; b += 3) {
-        const labels = headlineLibraries(bom, vj.versions, a, b).map((r) => r.label);
-        assert.equal(new Set(labels).size, labels.length, `${vj.versions[a].v} → ${vj.versions[b].v}`);
-      }
-    }
-    const graal = headlineLibraries(bom, vj.versions, findVersionIndex(vj.versions, '3.20.6'), findVersionIndex(vj.versions, '3.27.4'))
-      .filter((r) => r.label === 'GraalVM SDK');
-    assert.deepEqual(graal.map((r) => [r.fromId, r.toId, r.from, r.to, r.kind]),
-      [['org.graalvm.sdk:graal-sdk', 'org.graalvm.sdk:nativeimage', '23.1.2', '24.2.1', 'major']]);
-  });
-});
-
-/* -------------------------------------------------------------------------- */
 describe('platform BOM', () => {
   const {
     hasPlatformBom, platformBomAt, platformArtifactKey, platformDifferences, platformChangeSummary, platformArtifactRuns, platformDiffEffect,
@@ -672,7 +578,7 @@ describe('platform BOM', () => {
     assert.deepEqual(platformChangeSummary([]), []);
   });
 
-  test('platformBomAt: diffBom and headlineLibraries compare platform BOMs', () => {
+  test('platformBomAt: diffBom compares platform BOMs', () => {
     const pb = platformBomAt(bom, platform, [2, 0]);
     // ascending release indices, sorted ids, artifacts it never manages left out
     assert.deepEqual(pb.artifacts.find((a) => a.id === 'io.quarkus:quarkus-pinned').h, [[0, '='], [2, '=']]);
@@ -691,8 +597,6 @@ describe('platform BOM', () => {
     ]);
     // "=" in both releases: quarkus-core, the pinned module the platform aligns, and the platform's own descriptor
     assert.equal(d.modules, 3);
-    const jackson = headlineLibraries(pb, versions, 0, 2).find((r) => r.label === 'Jackson');
-    assert.deepEqual([jackson.from, jackson.to, jackson.kind], ['2.21.6', '2.21.7', 'patch']);
   });
 
   test('platformArtifactRuns: runs over the shown releases with a platform BOM', () => {
@@ -1413,7 +1317,6 @@ describe('sample dataset (dev/sample) follows the site data format', () => {
     for (let a = 0; a < list.length; a += 3) {
       for (let b = 0; b < list.length; b += 4) {
         diffBom(bom, list, a, b);
-        headlineLibraries(bom, list, a, b);
         const ca = configVersionFor(a, list, config.versions);
         const cb = configVersionFor(b, list, config.versions);
         for (const [vi, c] of [[a, ca], [b, cb]]) {

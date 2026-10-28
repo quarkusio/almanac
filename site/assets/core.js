@@ -733,107 +733,6 @@ export function groupBomRows(rows) {
 }
 
 /* ========================================================================== */
-/* Headline libraries                                                          */
-/* ========================================================================== */
-
-/**
- * Shown first on the compare page when present in either release; matched by artifactId (and groupId where
- * given). Each label names one library, so a comparison never shows a label twice: `alternatives` marks one
- * library published under several coordinates (preferred first: artifacts order, then groups order).
- */
-export const HEADLINE_LIBRARIES = [
-  { label: 'Hibernate ORM', artifacts: ['hibernate-core'], groups: ['org.hibernate.orm', 'org.hibernate'], alternatives: true },
-  { label: 'Hibernate Reactive', artifacts: ['hibernate-reactive-core'] },
-  { label: 'Hibernate Validator', artifacts: ['hibernate-validator'] },
-  { label: 'Hibernate Search', artifacts: ['hibernate-search-mapper-orm'] },
-  { label: 'Vert.x', artifacts: ['vertx-core'] },
-  { label: 'Netty', artifacts: ['netty-common'] },
-  { label: 'RESTEasy', artifacts: ['resteasy-core'] },
-  // io.smallrye:smallrye-config is the 1.x coordinate; 3.0 to 3.23 still list it (1.5.0) next to the real one.
-  { label: 'SmallRye Config', artifacts: ['smallrye-config'], groups: ['io.smallrye.config', 'io.smallrye'], alternatives: true },
-  { label: 'Mutiny', artifacts: ['mutiny'] },
-  { label: 'SmallRye Reactive Messaging', artifacts: ['smallrye-reactive-messaging-api'] },
-  { label: 'Jackson', artifacts: ['jackson-databind'], groups: ['com.fasterxml.jackson.core'] },
-  { label: 'Jackson 3', artifacts: ['jackson-databind'], groups: ['tools.jackson.core'] },
-  { label: 'Kotlin', artifacts: ['kotlin-stdlib'] },
-  { label: 'Kafka clients', artifacts: ['kafka-clients'] },
-  { label: 'Micrometer', artifacts: ['micrometer-core'] },
-  { label: 'OpenTelemetry', artifacts: ['opentelemetry-api'] },
-  { label: 'gRPC', artifacts: ['grpc-core'] },
-  // One row: since 3.8.3 Quarkus manages both artifacts at the same version, so a second row would only repeat
-  // the first. graal-sdk stands for the SDK; nativeimage stands in for a release that does not manage graal-sdk.
-  { label: 'GraalVM SDK', artifacts: ['graal-sdk', 'nativeimage'], groups: ['org.graalvm.sdk'], alternatives: true },
-  // Two rows: from 3.4 to 3.30 both are managed, at different versions (3.x and 1.x).
-  { label: 'JBoss LogManager', artifacts: ['jboss-logmanager'] },
-  { label: 'JBoss LogManager Embedded', artifacts: ['jboss-logmanager-embedded'] },
-  { label: 'Narayana JTA', artifacts: ['narayana-jta'] },
-  { label: 'Agroal', artifacts: ['agroal-api'] },
-  { label: 'Flyway', artifacts: ['flyway-core'] },
-  { label: 'Liquibase', artifacts: ['liquibase-core'] },
-  { label: 'JUnit Jupiter', artifacts: ['junit-jupiter-api'] },
-  { label: 'Testcontainers', artifacts: ['testcontainers'] },
-  { label: 'Picocli', artifacts: ['picocli'] },
-  { label: 'MongoDB driver', artifacts: ['mongodb-driver-sync'] },
-  { label: 'Infinispan client', artifacts: ['infinispan-client-hotrod'] },
-];
-
-/**
- * Headline library rows for a comparison, in HEADLINE_LIBRARIES order. An entry marked `alternatives` yields at
- * most one row: in each release, the first of its artifacts that the release manages stands for the library
- * (`fromId` / `toId` say which; `id` is the newer one).
- * @returns {Array<{label:string, id:string, fromId:string|null, toId:string|null, from:string|null, to:string|null, kind:string}>}
- */
-export function headlineLibraries(bom, versions, a, b) {
-  const byArtifact = new Map();
-  for (const art of bom.artifacts) {
-    const parts = art.id.split(':');
-    if (parts.length !== 2) continue;
-    if (!byArtifact.has(parts[1])) byArtifact.set(parts[1], []);
-    byArtifact.get(parts[1]).push(art);
-  }
-  const va = versions[a].v;
-  const vb = versions[b].v;
-  const out = [];
-  const row = (label, artA, artB, ra, rb) => {
-    const from = ra == null ? null : resolveBomValue(ra, va);
-    const to = rb == null ? null : resolveBomValue(rb, vb);
-    const kind = from == null ? 'added' : to == null ? 'removed' : bomChangeKind(from, to);
-    const fromId = artA ? artA.id : null;
-    const toId = artB ? artB.id : null;
-    out.push({ label, id: toId ?? fromId, fromId, toId, from, to, kind });
-  };
-  const groupOf = (art) => art.id.split(':')[0];
-  for (const def of HEADLINE_LIBRARIES) {
-    const arts = [];
-    for (const artifactId of def.artifacts) {
-      const found = (byArtifact.get(artifactId) ?? []).filter((art) => !def.groups || def.groups.includes(groupOf(art)));
-      if (def.groups) found.sort((x, y) => def.groups.indexOf(groupOf(x)) - def.groups.indexOf(groupOf(y)));
-      arts.push(...found);
-    }
-    if (def.alternatives) {
-      const pick = (vi) => {
-        for (const art of arts) {
-          const raw = stateAt(art.h, vi);
-          if (raw != null) return { art, raw };
-        }
-        return null;
-      };
-      const pa = pick(a);
-      const pb = pick(b);
-      if (pa || pb) row(def.label, pa?.art, pb?.art, pa?.raw, pb?.raw);
-      continue;
-    }
-    for (const art of arts) {
-      const ra = stateAt(art.h, a);
-      const rb = stateAt(art.h, b);
-      if (ra == null && rb == null) continue;
-      row(def.label, ra == null ? null : art, rb == null ? null : art, ra, rb);
-    }
-  }
-  return out;
-}
-
-/* ========================================================================== */
 /* Platform BOM                                                                */
 /* ========================================================================== */
 
@@ -873,7 +772,7 @@ function platformRawAt(coreH, platformH, vi) {
 /**
  * The platform BOM at the releases `indices` (each with a platform BOM) in the shape of bom.json, `{artifacts}`, whose
  * histories hold its raw values at those releases only ("=" for the release's own version, null when not managed),
- * so that diffBom and headlineLibraries compare platform BOMs as they compare core BOMs. Sorted by id like bom.json;
+ * so that diffBom compares platform BOMs as it compares core BOMs. Sorted by id like bom.json;
  * an artifact it manages at none of the releases is left out.
  */
 export function platformBomAt(bom, platform, indices) {
