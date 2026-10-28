@@ -36,7 +36,7 @@ class PauseOptionTest {
         try (ScratchDir dir = ScratchDir.create()) {
             String work = dir.resolve("work").toString();
             String dataset = dir.resolve("dataset").toString();
-            for (String pause : List.of("0", "0.4", "0-5")) {
+            for (String pause : List.of("0", "0-0.5", "0-5")) {
                 Run versions = run("versions", "--offline", "--pause", pause, "--work", work, "--dataset", dataset);
                 assertEquals(1, versions.exitCode(), versions.log());
                 assertTrue(versions.log().contains("a pause of " + pause + " s is too short for Maven Central "
@@ -48,7 +48,7 @@ class PauseOptionTest {
                     "--work", work, "--dataset", dataset);
             assertEquals(1, fullyQualified.exitCode(), fullyQualified.log());
             assertTrue(fullyQualified.log().contains("too short for Maven Central"), fullyQualified.log());
-            Run verify = run("verify", "official", "3.20.6", "--offline", "--pause", "0.4", "--work", work);
+            Run verify = run("verify", "official", "3.20.6", "--offline", "--pause", "0", "--work", work);
             assertEquals(1, verify.exitCode(), verify.log());
             assertTrue(verify.log().contains("too short for Maven Central"), verify.log());
             Run check = run(new SourceDocCheck(), "3.8.6", "--offline", "--pause", "0", "--work", work);
