@@ -23,6 +23,9 @@ const SEARCH_DEBOUNCE = 110;
 const SVG_NS = 'http://www.w3.org/2000/svg';
 /** quarkus.io's logo for dark backgrounds, as its own navigation bar shows it. */
 const QUARKUS_LOGO = 'https://quarkus.io/assets/images/quarkus_logo_horizontal_rgb_reverse.svg';
+/** The Commonhaus Foundation's logo for dark backgrounds, from the same place quarkus.io's footer takes it. */
+const COMMONHAUS_LOGO = 'https://raw.githubusercontent.com/commonhaus/artwork/main/foundation/brand/svg/CF_logo_horizontal_single_reverse.svg';
+const ALMANAC_REPO = 'https://github.com/quarkusio/almanac';
 
 const KIND_LABEL = {
   added: 'added', removed: 'removed', changed: 'changed', default: 'default', type: 'type', phase: 'phase',
@@ -643,9 +646,27 @@ function buildShell() {
         shell.searchWrap)));
   const footer = h('footer', { class: 'foot' },
     h('div', { class: 'wrap foot-in' },
-      h('p', null, 'Unofficial community project, not affiliated with the Quarkus project. Data extracted from artifacts published on Maven Central.'),
-      shell.footData));
+      h('p', null, 'Data extracted from artifacts published on Maven Central. Source and issues on GitHub: ',
+        h('a', { href: ALMANAC_REPO }, 'quarkusio/almanac'), '.'),
+      shell.footData),
+    legalBar());
   app.replaceChildren(skip, header, shell.notice, shell.main, footer, shell.live);
+}
+
+/**
+ * The foot of every quarkus.io page: the Commonhaus Foundation's logo and the trademark notice, copied here as
+ * quarkus.io/extensions copies it (its own src/components/footer.js), without quarkus.io's columns of links above it.
+ */
+function legalBar() {
+  return h('div', { class: 'wrap foot-legal' },
+    h('a', { class: 'foot-cf', href: 'https://www.commonhaus.org/' },
+      h('img', { src: COMMONHAUS_LOGO, alt: 'Commonhaus Foundation logo', width: '300', height: '32', loading: 'lazy' })),
+    h('p', null, 'Copyright © ', h('a', { href: `${QUARKUS_IO}/` }, 'Quarkus'),
+      '. All rights reserved. For details on our trademarks, please visit our ',
+      h('a', { href: 'https://www.commonhaus.org/policies/trademark-policy/' }, 'Trademark Policy'), ' and ',
+      h('a', { href: 'https://www.commonhaus.org/trademarks/' }, 'Trademark List'),
+      '. Trademarks of third parties are owned by their respective holders and their mention here does not suggest any '
+      + 'endorsement or association.'));
 }
 
 /**
@@ -787,7 +808,6 @@ function updateDataNotice() {
   shell.footData.textContent = [
     V.generatedAt ? `Data generated ${core.formatDate(V.generatedAt)}` : null,
     `${plural(V.list.length, 'release')} from ${short(V.list[0].v)} to ${short(V.list[V.list.length - 1].v)}`,
-    `source: ${store.dir}/`,
   ].filter(Boolean).join(' · ');
 }
 
@@ -1425,7 +1445,7 @@ function coverageFacts() {
   const V = store.V;
   const first = V.list[0];
   const last = V.list[V.list.length - 1];
-  const fact = (value, label, sub, cls) => h('div', { class: cls ? `fact ${cls}` : 'fact' }, h('dt', null, label), h('dd', { class: 'fact-n' }, value), h('dd', { class: 'fact-sub' }, sub));
+  const fact = (value, label, sub, cls) => h('div', { class: cls ? `fact ${cls}` : 'fact' }, h('dt', null, label), h('dd', { class: 'fact-n' }, value), sub == null ? null : h('dd', { class: 'fact-sub' }, sub));
   const propsN = h('span', null, '…');
   const propsSub = h('span', null, 'loading config.json');
   const artsN = h('span', null, '…');
@@ -1467,7 +1487,7 @@ function coverageFacts() {
         : 'none'),
       fact(propsN, 'config properties tracked', propsSub),
       fact(artsN, 'managed artifacts tracked', artsSub),
-      fact(V.generatedAt ? core.formatDate(V.generatedAt) : '—', 'data generated', `${store.dir}/`, 'fact--date')));
+      fact(V.generatedAt ? core.formatDate(V.generatedAt) : '—', 'data generated', null, 'fact--date')));
 }
 
 /** Where the config snapshots are: at the newest patch of each stream, or in how many streams while some lack one. */

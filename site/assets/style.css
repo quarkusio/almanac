@@ -82,6 +82,7 @@
   --foot-bg: #000000;
   --foot-ink: #aaaaaa;
   --foot-link: #9bcafa;
+  --foot-rule: #333333;
   --font-sans: 'Open Sans', system-ui, -apple-system, 'Segoe UI', Arial, sans-serif;
   --font-mono: 'Roboto Mono', ui-monospace, 'Cascadia Mono', 'SFMono-Regular', Menlo, Consolas, monospace;
   --radius: 10px;
@@ -739,9 +740,10 @@ a.ver:hover {
   }
 }
 
-/* forced colours keep the black bar: the logo is white */
+/* forced colours keep the black behind the white logos: the bar's and the Commonhaus Foundation's in the footer */
 @media (forced-colors: active) {
-  .gbar {
+  .gbar,
+  .foot-cf {
     forced-color-adjust: none;
   }
 }
@@ -874,7 +876,7 @@ a.ver:hover {
   display: grid;
   gap: 6px;
   padding-top: 26px;
-  padding-bottom: 32px;
+  padding-bottom: 20px;
   font-size: 13px;
   color: var(--foot-ink);
 }
@@ -890,6 +892,49 @@ a.ver:hover {
 .foot-data {
   font-family: var(--font-mono);
   font-size: 12px;
+}
+
+/* quarkus.io's legal bar, as quarkus.io/extensions has it: the Commonhaus Foundation logo, then the trademark notice
+   (above the logo on narrow screens) */
+.foot-legal {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px 32px;
+  padding-top: 20px;
+  padding-bottom: 28px;
+  border-top: 1px solid var(--foot-rule);
+}
+
+.foot-cf {
+  flex: none;
+  width: 300px;
+  max-width: 100%;
+  background: var(--foot-bg);
+}
+
+.foot-cf img {
+  display: block;
+  width: 100%;
+  height: auto;
+}
+
+.foot-legal p {
+  max-width: 100ch;
+  font-size: 12px;
+  line-height: 2;
+}
+
+.foot-legal a {
+  color: inherit;
+  text-decoration: underline;
+}
+
+@media (max-width: 760px) {
+  .foot-legal {
+    flex-direction: column-reverse;
+    align-items: flex-start;
+  }
 }
 
 /* ------------------------------------------------------------ controls */
@@ -3142,6 +3187,18 @@ a.dgroup-id:hover {
 
   .foot a {
     color: var(--accent);
+  }
+
+  .foot-legal {
+    border-top-color: var(--rule);
+  }
+
+  .foot-legal a {
+    color: inherit;
+  }
+
+  .foot-cf {
+    display: none;
   }
 
   .chip,

@@ -54,7 +54,7 @@ import java.util.zip.GZIPInputStream;
 /// In offline mode every request fails.
 public final class Http implements AutoCloseable {
 
-    public static final String USER_AGENT = "quarkus-almanac/0.1 (unofficial Quarkus release almanac)";
+    public static final String USER_AGENT = "quarkus-almanac/0.1 (+https://github.com/quarkusio/almanac)";
 
     /// The shortest pause between two requests to Maven Central: the shortest of the default pauses.
     public static final Duration CENTRAL_MIN_PAUSE = Duration.ofMillis(500);

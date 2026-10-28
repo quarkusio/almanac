@@ -3,7 +3,7 @@
 Pick two Quarkus releases and see what changed between them: config properties (added, removed, new default, type,
 phase, deprecation), dependency versions managed by `quarkus-bom`, and extensions.
 
-**Site:** https://eng-fouad.github.io/quarkus-almanac/
+**Site:** https://quarkus.io/almanac/
 
 It covers Quarkus 3.0 and later, pre-releases included, with config taken at the newest patch of each stream.
 
@@ -55,5 +55,5 @@ command that uses the same `work/` folder, and they stop at the first HTTP 403. 
 - Descriptions are the first sentence of each property's documentation.
 - Release dates are the upload times of the BOMs on Maven Central.
 
-Unofficial community project, not affiliated with the Quarkus project. Data extracted from artifacts published on
-Maven Central.
+Data extracted from artifacts published on Maven Central. Problems and ideas go to
+https://github.com/quarkusio/almanac/issues.
