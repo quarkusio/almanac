@@ -877,11 +877,211 @@ export function diffExtensions(extensions, a, b) {
 }
 
 /* ========================================================================== */
+/* Classes                                                                     */
+/* ========================================================================== */
+
+/**
+ * Indices of the releases that have classes snapshots, derived from `versions[].classes` (none in data assembled
+ * before the flag existed).
+ */
+export function classVersionsOf(versions) {
+  const out = [];
+  (Array.isArray(versions) ? versions : []).forEach((x, i) => {
+    if (x && x.classes) out.push(i);
+  });
+  return out;
+}
+
+/**
+ * The classes snapshot used for release `vi`, or null ("no class data"): the config rule over the classes snapshots
+ * (see snapshotVersionFor).
+ * @param {number[]} [clsVis] classes version indices (defaults to classVersionsOf)
+ */
+export function classesVersionFor(vi, versions, clsVis) {
+  if (!Array.isArray(versions)) return null;
+  return snapshotVersionFor(vi, versions, clsVis ?? classVersionsOf(versions));
+}
+
+/** The major version line of a release (a version or a versions.json entry): `3` for `3.40.1`, `4` for `4.0.0.Beta1`. */
+export function majorOf(entry) {
+  return parseVersion(typeof entry === 'object' && entry !== null ? entry.v : entry).nums[0] ?? 0;
+}
+
+/**
+ * The major lines of the releases `indices` (into `versions`), ascending, each once: which classes files
+ * (`classes-<major>.json`) cover them.
+ */
+export function classLinesOf(versions, indices) {
+  return [...new Set((indices ?? []).map((i) => majorOf(versions[i])))].sort((a, b) => a - b);
+}
+
+/**
+ * One classes object from the classes files of several major lines (`classes-3.json`, `classes-4.json`, in any order),
+ * as one file over all their releases would be: their artifacts and packages, renumbered, and one history per class.
+ * Each line's file starts its histories afresh, so where a class that one line ends with is missing at the start of
+ * the next, the merged history gets a null point at that line's first snapshot.
+ */
+export function mergeClasses(parts) {
+  const files = (parts ?? []).filter((f) => f && Array.isArray(f.versions) && f.versions.length)
+    .sort((x, y) => x.versions[0] - y.versions[0]);
+  if (files.length <= 1) return files[0] ?? { versions: [], artifacts: [], packages: [], classes: [] };
+  const artifacts = [...new Set(files.flatMap((f) => f.artifacts))].sort();
+  const packages = [...new Set(files.flatMap((f) => f.packages))].sort();
+  const artifactIndex = new Map(artifacts.map((a, i) => [a, i]));
+  const packageIndex = new Map(packages.map((p, i) => [p, i]));
+  const rows = new Map(); // `${package index} ${name}` → merged row
+  const same = (x, y) => JSON.stringify(x ?? null) === JSON.stringify(y ?? null);
+  for (const f of files) {
+    const first = f.versions[0];
+    const remap = (v) => {
+      if (v == null) return null;
+      if (!Array.isArray(v)) return artifactIndex.get(f.artifacts[v]);
+      return v.map((j) => artifactIndex.get(f.artifacts[j])).sort((a, b) => a - b);
+    };
+    const inLine = new Set();
+    for (const [pi, name, h] of f.classes) {
+      const pkg = packageIndex.get(f.packages[pi]);
+      const key = `${pkg} ${name}`;
+      inLine.add(key);
+      if (!rows.has(key)) rows.set(key, [pkg, name, []]);
+      const out = rows.get(key)[2];
+      // what the earlier lines end with does not hold in this one before its first point
+      if (out.length && out[out.length - 1][1] != null && h[0][0] !== first) out.push([first, null]);
+      for (const [vi, v] of h) {
+        const value = remap(v);
+        if (!out.length || !same(out[out.length - 1][1], value)) out.push([vi, value]);
+      }
+    }
+    for (const [key, row] of rows) {
+      const out = row[2];
+      if (!inLine.has(key) && out[out.length - 1][1] != null && out[out.length - 1][0] < first) out.push([first, null]);
+    }
+  }
+  const classes = [...rows.values()].sort((x, y) => x[0] - y[0] || (x[1] < y[1] ? -1 : x[1] > y[1] ? 1 : 0));
+  return { versions: files.flatMap((f) => f.versions), artifacts, packages, classes };
+}
+
+/** The binary name of a row `[package index, name in the package, h]` of a classes file (or of mergeClasses). */
+export function className(classes, row) {
+  const pkg = classes.packages[row[0]];
+  return pkg ? `${pkg}.${row[1]}` : row[1];
+}
+
+/** The row of a class by binary name, or null. */
+export function findClass(classes, name) {
+  const want = String(name ?? '');
+  return classes.classes.find((row) => className(classes, row) === want) ?? null;
+}
+
+/** The jars of a class history value, as artifact indices: none (null or before the first point), one or several. */
+export function jarsOf(value) {
+  return value == null ? [] : Array.isArray(value) ? value : [value];
+}
+
+const sameJars = (x, y) => x.length === y.length && x.every((j, i) => j === y[i]);
+
+/** `QuarkusUnitTest$Builder` for `io.quarkus.test.QuarkusUnitTest$Builder`. */
+export function simpleClassName(name) {
+  const s = String(name ?? '');
+  return s.slice(s.lastIndexOf('.') + 1);
+}
+
+/** `io.quarkus.test` for `io.quarkus.test.QuarkusUnitTest$Builder`; '' for the unnamed package. */
+export function classPackage(name) {
+  const s = String(name ?? '');
+  const dot = s.lastIndexOf('.');
+  return dot < 0 ? '' : s.slice(0, dot);
+}
+
+/** A nested class (member, local or anonymous): a `$` after the first character of its simple name. */
+export function isNestedClass(name) {
+  return simpleClassName(name).indexOf('$', 1) > 0;
+}
+
+/** An anonymous or local class: a `$` followed by a digit (`Foo$1`, `Foo$1Local`). */
+export function isAnonymousClass(name) {
+  return /.\$\d/.test(simpleClassName(name));
+}
+
+/** The top-level class of a nested class (`io.quarkus.test.QuarkusUnitTest` for `…QuarkusUnitTest$Builder`), else the name. */
+export function topLevelClass(name) {
+  const s = String(name ?? '');
+  const dollar = s.indexOf('$', s.lastIndexOf('.') + 2);
+  return dollar < 0 ? s : s.slice(0, dollar);
+}
+
+/**
+ * Class diff between the classes snapshots at release indices `a` and `b` (see classesVersionFor), one entry per
+ * class: added (in no jar at A), removed (in no jar at B), moved (in jars at both, not the same ones). An entry has
+ * the binary `name` and `from` / `to`, the jars at A and B as artifact indices (ascending). `counts` count every
+ * class, `top` the top-level ones.
+ */
+export function diffClasses(classes, a, b) {
+  const added = [];
+  const removed = [];
+  const moved = [];
+  for (const row of classes.classes) {
+    const from = jarsOf(stateAt(row[2], a));
+    const to = jarsOf(stateAt(row[2], b));
+    if (sameJars(from, to)) continue;
+    const x = { name: className(classes, row), from, to };
+    if (!from.length) added.push(x);
+    else if (!to.length) removed.push(x);
+    else moved.push(x);
+  }
+  const top = (list) => list.filter((x) => !isNestedClass(x.name)).length;
+  return {
+    a, b, added, removed, moved,
+    counts: { added: added.length, removed: removed.length, moved: moved.length },
+    top: { added: top(added), removed: top(removed), moved: top(moved) },
+  };
+}
+
+/** Filter tags shown as chips in the Classes section of the compare page. */
+export const CLASS_FILTER_TAGS = ['added', 'removed', 'moved'];
+
+const CLASS_CHANGE_ORDER = { removed: 0, 'moved-out': 1, 'moved-in': 2, added: 3 };
+
+/**
+ * Flattens a class diff into rows per jar, for groups by artifact. A class that a jar has at B and not at A is
+ * `added` there, or `moved-in` when some jar had it at A; one that a jar has at A and not at B is `removed` from it, or
+ * `moved-out` when some jar has it at B. So a class that moved has a row in each jar it left and in each jar it reached.
+ * A row has `artifact`, `change`, `name`, `other` (its jars at A for moved-in, at B for moved-out: artifactIds),
+ * `nested`, `tags` for the filter chips (added, removed, moved) and a lower-case `text`. Sorted by artifact, then
+ * removed → moved-out → moved-in → added, then name.
+ */
+export function classRows(diff, classes) {
+  const rows = [];
+  const push = (artifact, change, x, other) => rows.push({
+    artifact,
+    change,
+    name: x.name,
+    other,
+    nested: isNestedClass(x.name),
+    tags: [change.startsWith('moved') ? 'moved' : change],
+    text: [x.name, artifact, ...other].join('\n').toLowerCase(),
+  });
+  for (const x of [...diff.removed, ...diff.moved, ...diff.added]) {
+    const from = x.from.map((j) => classes.artifacts[j]);
+    const to = x.to.map((j) => classes.artifacts[j]);
+    for (const jar of from) if (!to.includes(jar)) push(jar, to.length ? 'moved-out' : 'removed', x, to);
+    for (const jar of to) if (!from.includes(jar)) push(jar, from.length ? 'moved-in' : 'added', x, from);
+  }
+  rows.sort(
+    (x, y) =>
+      (x.artifact < y.artifact ? -1 : x.artifact > y.artifact ? 1 : 0) ||
+      CLASS_CHANGE_ORDER[x.change] - CLASS_CHANGE_ORDER[y.change] ||
+      (x.name < y.name ? -1 : x.name > y.name ? 1 : 0),
+  );
+  return rows;
+}
+
+/* ========================================================================== */
 /* Search                                                                      */
 /* ========================================================================== */
 
 const SEGMENT_BOUNDARY = new Set(['.', '-', ':', '_', '"', '[', '/', ' ', '*', '(']);
-const TYPE_ORDER = { property: 0, extension: 1, artifact: 2 };
+const TYPE_ORDER = { property: 0, extension: 1, artifact: 2, class: 3 };
 
 /**
  * Match tier of `token` in `field` (both lower-case): 0 exact, 1 prefix, 2 segment start
@@ -902,10 +1102,11 @@ export function matchTier(field, token) {
 const lower = (s) => String(s).toLowerCase();
 
 /**
- * Builds the search index over properties (keys, names, aliases, env vars), artifacts (ids) and
- * extensions (ids, names). Any of the three data files may be missing.
+ * Builds the search index over properties (keys, names, aliases, env vars), artifacts (ids),
+ * extensions (ids, names) and classes (binary names, names in their package; anonymous and local classes are left
+ * out). Any of the four data files may be missing.
  */
-export function buildSearchIndex({ config, bom, extensions, versions } = {}) {
+export function buildSearchIndex({ config, bom, extensions, classes, versions } = {}) {
   const entries = [];
   const lastRelease = versions && versions.length ? versions.length - 1 : null;
   const cvs = config?.versions ?? [];
@@ -972,14 +1173,48 @@ export function buildSearchIndex({ config, bom, extensions, versions } = {}) {
       });
     }
   }
+  if (classes) {
+    const lvs = classes.versions ?? [];
+    const lastClasses = lvs.length ? lvs[lvs.length - 1] : null;
+    for (const row of classes.classes) {
+      const name = className(classes, row);
+      if (isAnonymousClass(name)) continue;
+      const now = lastClasses == null ? [] : jarsOf(stateAt(row[2], lastClasses));
+      const lastSeen = lastPresence(row[2], lvs);
+      entries.push({
+        type: 'class',
+        id: name,
+        label: name,
+        fields: [lower(name)],
+        alts: [lower(row[1])],
+        current: now.length > 0,
+        jars: (now.length ? now : jarsOf(latestValue(row[2]))).map((j) => classes.artifacts[j]),
+        lastSeen,
+      });
+    }
+  }
   return { entries };
+}
+
+/** The last snapshot of `snapshots` (ascending) that has a value in history `h`, or null. */
+function lastPresence(h, snapshots) {
+  if (!Array.isArray(h) || !h.length || !snapshots.length) return null;
+  const end = h[h.length - 1];
+  if (end[1] != null) return snapshots[snapshots.length - 1];
+  // the last point is a removal: the class was last in the snapshot before it
+  let found = null;
+  for (const vi of snapshots) {
+    if (vi >= end[0]) break;
+    found = vi;
+  }
+  return found;
 }
 
 /**
  * Ranked search: exact > prefix > segment > substring (per whitespace-separated token; an entry must
  * match every token and is ranked by its weakest token). `quarkus.`-less names, artifactIds and
  * environment variable names (`QUARKUS_HTTP_PORT`) count as exact/prefix matches.
- * Ties: current entries first, then property < extension < artifact, then shorter labels.
+ * Ties: current entries first, then property < extension < artifact < class, then shorter labels.
  * @returns {{items: object[], total: number}}
  */
 export function search(index, query, { limit = 20, types } = {}) {
@@ -1199,6 +1434,71 @@ export function artifactHistory(bom, id, versions, { vis, widen = [] } = {}) {
     firstManaged: managedRanges.length ? managedRanges[0].from : null,
     lastManaged: managedRanges.length ? managedRanges[managedRanges.length - 1].to : null,
   };
+}
+
+/** Runs, events and presence ranges of one class history over the snapshots `cvs` (see classHistory). */
+function classTimeline(h, cvs, versions) {
+  const events = [];
+  const runs = [];
+  const ranges = [];
+  let prev = [];
+  let run = null;
+  let range = null;
+  let seen = false;
+  for (const vi of cvs) {
+    const jars = jarsOf(stateAt(h, vi));
+    if (jars.length && !prev.length) {
+      events.push({ vi, type: seen ? 'reintroduced' : vi === cvs[0] ? 'present' : 'introduced', jars });
+      seen = true;
+      range = { from: vi, to: vi };
+      ranges.push(range);
+    } else if (!jars.length && prev.length) {
+      events.push({ vi, type: 'removed', from: prev });
+      range = null;
+    } else if (jars.length && !sameJars(jars, prev)) {
+      events.push({ vi, type: 'moved', from: prev, to: jars });
+    }
+    if (range && jars.length) range.to = vi;
+    const pre = versions && isPreRelease(versions[vi]) ? 1 : 0;
+    if (run && sameJars(run.jars, jars)) {
+      run.to = vi;
+      run.count++;
+      run.pre += pre;
+    } else {
+      run = { from: vi, to: vi, count: 1, pre, jars, before: !seen };
+      runs.push(run);
+    }
+    prev = jars;
+  }
+  return { events, runs, ranges, jars: prev, present: prev.length > 0 };
+}
+
+/**
+ * History of one class over the classes snapshots `clsVis` (release indices, ascending): `runs` of consecutive
+ * snapshots in the same jars (`{from, to, count, pre, jars, before}`: release indices, how many snapshots and how many
+ * of them pre-releases, the jars as artifact indices, empty while absent, `before` for an absent run before the first
+ * presence), `events` (present in the first snapshot used, introduced, moved `from` → `to`, removed, reintroduced),
+ * presence `ranges`, and the jars of the newest snapshot used (`jars`, `present`). `vis` and `widen` as for
+ * propertyHistory; `versions` (versions.json's list) lets runs count their pre-releases.
+ * @param {object} classes a classes file, or several merged (mergeClasses)
+ * @param {string|Array} nameOrRow binary name or the row
+ */
+export function classHistory(classes, nameOrRow, clsVis, { vis, widen = [], versions } = {}) {
+  const row = Array.isArray(nameOrRow) ? nameOrRow : findClass(classes, nameOrRow);
+  if (!row) return null;
+  const all = Array.isArray(clsVis) ? clsVis : [];
+  const over = (v) => {
+    const cvs = visibleOnly(all, v);
+    return { ...classTimeline(row[2], cvs, versions), cvs };
+  };
+  const done = (t, by) => ({ name: className(classes, row), row, ...t, widened: by != null, widenedBy: by, hiddenSnapshots: all.length - t.cvs.length });
+  const t = over(vis);
+  if (!vis || t.ranges.length || t.cvs.length === all.length) return done(t, null);
+  for (const step of [...widen, { vis: null, kind: 'all' }]) {
+    const w = over(step.vis);
+    if (w.ranges.length) return done(w, step.kind);
+  }
+  return done(t, null);
 }
 
 /* ========================================================================== */

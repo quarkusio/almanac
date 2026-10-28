@@ -2,7 +2,8 @@
  * Quarkus Almanac: app.js
  *
  * UI only: routing, data loading, rendering. All data logic lives in core.js.
- * Routes: #/  #/compare/<from>/<to>  #/property/<key>  #/artifact/<id>  #/versions  #/version/<v>
+ * Routes: #/  #/compare/<from>/<to>  #/property/<key>  #/artifact/<id>  #/class/<binary name>  #/versions
+ *   #/version/<v>
  * The route is kept in JS state; location.hash is best effort (read on load, written inside try/catch),
  * because embedded previews may ignore or refuse hash changes.
  */
@@ -14,7 +15,7 @@ import * as core from './core.js';
 
 const ROW_CAP = 8; // config rows shown per extension before "show all"
 const ROW_CAP_FILTERED = 40; // per extension while a text filter is active
-const GROUP_PAGE = 30; // extension groups rendered per page
+const GROUP_PAGE = 30; // extension (or jar) groups rendered per page
 const DEP_GROUP_PAGE = 50; // dependency groups rendered per page
 const DEP_ITEMS_CAP = 12; // artifacts listed per dependency group before "show all"
 const LIST_CAP = 30; // rows in simple lists before "show all"
@@ -37,11 +38,13 @@ const KIND_LABEL = {
   deprecated: 'deprecated', undeprecated: 'undeprecated', enum: 'enum', extension: 'extension',
   major: 'major', minor: 'minor', patch: 'patch', other: 'qualifier', downgrade: 'downgrade', same: 'unchanged',
   relocated: 'relocated', unrelocated: 'relocation dropped', status: 'status', renamed: 'renamed',
+  moved: 'moved', 'moved-in': 'moved in', 'moved-out': 'moved out', introduced: 'introduced', reintroduced: 'reintroduced',
 };
 const KIND_TONE = {
   added: 'add', removed: 'rem', changed: 'chg', default: 'chg', type: 'chg', phase: 'chg', enum: 'chg', extension: 'neu',
   deprecated: 'dep', undeprecated: 'dep-o', major: 'maj', minor: 'chg', patch: 'neu', other: 'neu', downgrade: 'rem',
   same: 'neu', relocated: 'chg', unrelocated: 'neu', status: 'chg', renamed: 'neu',
+  moved: 'chg', 'moved-in': 'chg', 'moved-out': 'chg', introduced: 'add', reintroduced: 'add',
   lts: 'lts', pre: 'pre', cfg: 'neu',
 };
 const KIND_TITLE = {
@@ -50,10 +53,12 @@ const KIND_TITLE = {
   extension: 'Now attributed to another extension', major: 'Major version change', minor: 'Minor version change',
   patch: 'Patch version change', other: 'Only the version qualifier changed, or a version kept as written (${...})',
   downgrade: 'The newer release manages an older version',
+  moved: 'In other jars than before', 'moved-in': 'Now in this jar, which did not have it; another jar had it before',
+  'moved-out': 'No longer in this jar; another jar has it now',
 };
 /** An extension's status takes quarkus.io's tag colour for it, as on quarkus.io/extensions. */
 const STATUS_TONE = { stable: 'stable', preview: 'preview', experimental: 'experimental', deprecated: 'deprecated' };
-const TYPE_LABEL = { property: 'prop', artifact: 'dep', extension: 'ext' };
+const TYPE_LABEL = { property: 'prop', artifact: 'dep', extension: 'ext', class: 'class' };
 const SOURCE_TITLE = {
   model: 'model: read from the official config model shipped in the jars (3.25+)',
   bytecode: 'bytecode: reconstructed from the compiled config classes (before 3.25)',
@@ -222,9 +227,10 @@ const store = {
   override: null, // ?data=<dir>
   V: null, // prepared versions.json
   versionsPromise: null,
-  files: new Map(), // 'bom' | 'config' | 'extensions' → Promise<prepared>
+  files: new Map(), // 'bom' | 'config' | 'extensions' | 'classes-<major>' | 'classes:<majors>' → Promise
   diffs: new Map(), // `${a}:${b}` → comparison (computed once per pair)
   searchIndex: null, // Promise<index>
+  searchLines: '', // the major lines whose classes the search index has, e.g. '3,4'
 };
 
 class DataError extends Error {
@@ -282,6 +288,9 @@ function prepareVersions(json) {
   const configVis = core.configVersionsOf(list);
   // releases with extension snapshots: every config snapshot, plus releases with extensions only
   const extVis = core.extensionVersionsOf(list);
+  // releases with classes snapshots; their classes are in one file per major line (classes-3.json, ...), which only
+  // the pages that show classes load, for the lines they show
+  const clsVis = core.classVersionsOf(list);
   // streams with a final release (items are in version order), and how many have config at a final
   const finals = streams.map((g) => g.items.filter((i) => !core.isPreRelease(list[i]))).filter((f) => f.length);
   return {
@@ -290,6 +299,8 @@ function prepareVersions(json) {
     streams,
     configVis,
     extVis,
+    clsVis,
+    clsLines: core.classLinesOf(list, clsVis),
     finalStreamCount: finals.length,
     configStreamCount: finals.filter((f) => f.some((i) => list[i].config)).length,
     configAtNewestFinals: finals.every((f) => list[f[f.length - 1]].config),
@@ -351,6 +362,12 @@ const PREPARE = {
     if (!json || !Array.isArray(json.exts) || !Array.isArray(json.states)) throw new Error('extensions.json: missing "states" or "exts"');
     return { raw: json, byId: new Map(json.exts.map((x) => [x.id, x])) };
   },
+  classes(json) {
+    if (!json || !Array.isArray(json.classes) || !Array.isArray(json.artifacts) || !Array.isArray(json.packages) || !Array.isArray(json.versions)) {
+      throw new Error('classes-<major>.json: missing "versions", "artifacts", "packages" or "classes"');
+    }
+    return { raw: json, byName: new Map(json.classes.map((row) => [core.className(json, row), row])) };
+  },
 };
 
 function loadFile(name) {
@@ -363,6 +380,35 @@ function loadFile(name) {
     p.catch(() => store.files.delete(name));
   }
   return p;
+}
+
+/** The classes file of a major line, `classes-<major>.json`, fetched once. */
+function loadClassesFile(major) {
+  const name = `classes-${major}`;
+  let p = store.files.get(name);
+  if (!p) {
+    p = ensureVersions().then(() => fetchJson(`${store.dir}/${name}.json`));
+    store.files.set(name, p);
+    p.catch(() => store.files.delete(name));
+  }
+  return p;
+}
+
+/** The classes of the given major lines (ascending), merged into one classes object (core.mergeClasses), once per set. */
+function loadClasses(lines) {
+  const key = `classes:${lines.join(',')}`;
+  let p = store.files.get(key);
+  if (!p) {
+    p = Promise.all(lines.map(loadClassesFile)).then((parts) => PREPARE.classes(core.mergeClasses(parts)));
+    store.files.set(key, p);
+    p.catch(() => store.files.delete(key));
+  }
+  return p;
+}
+
+/** The major lines of the classes snapshots that the switches show now: what the pages that list classes load. */
+function shownClassLines() {
+  return core.classLinesOf(store.V.list, core.visibleOnly(store.V.clsVis, currentVis()));
 }
 
 async function loadSettled(names) {
@@ -378,11 +424,16 @@ async function loadSettled(names) {
   return out;
 }
 
+/** The search index; its classes are those of the major lines the switches show, so it is rebuilt when they change. */
 function getSearchIndex() {
-  if (!store.searchIndex) {
-    store.searchIndex = loadSettled(['config', 'bom', 'extensions']).then((d) => {
-      if (!d.config && !d.bom && !d.extensions) throw new Error('no data files could be loaded');
-      return core.buildSearchIndex({ config: d.config?.raw, bom: d.bom?.raw, extensions: d.extensions?.raw, versions: store.V.list });
+  const lines = shownClassLines();
+  if (!store.searchIndex || store.searchLines !== lines.join(',')) {
+    store.searchLines = lines.join(',');
+    store.searchIndex = Promise.all([loadSettled(['config', 'bom', 'extensions']), loadClasses(lines).catch(() => null)]).then(([d, classes]) => {
+      if (!d.config && !d.bom && !d.extensions && !classes) throw new Error('no data files could be loaded');
+      return core.buildSearchIndex({
+        config: d.config?.raw, bom: d.bom?.raw, extensions: d.extensions?.raw, classes: classes?.raw, versions: store.V.list,
+      });
     });
     store.searchIndex.catch(() => {
       store.searchIndex = null;
@@ -504,7 +555,8 @@ const dec = (s) => {
     return s;
   }
 };
-const enc = (s) => encodeURIComponent(String(s)).replace(/%3A/gi, ':').replace(/%40/g, '@').replace(/%2C/gi, ',');
+const enc = (s) => encodeURIComponent(String(s)).replace(/%3A/gi, ':').replace(/%40/g, '@').replace(/%2C/gi, ',')
+  .replace(/%24/g, () => '$');
 
 function parseRoute(hash) {
   const raw = String(hash || '').replace(/^#/, '').replace(/^\/+/, '');
@@ -519,6 +571,8 @@ function parseRoute(hash) {
       return { page: 'property', key: rest.join('/') };
     case 'artifact':
       return { page: 'artifact', id: rest.join('/') };
+    case 'class':
+      return { page: 'class', name: rest.join('/') };
     case 'versions':
       return { page: 'versions' };
     case 'version':
@@ -536,6 +590,8 @@ function hrefFor(r) {
       return `#/property/${enc(r.key)}`;
     case 'artifact':
       return `#/artifact/${enc(r.id)}`;
+    case 'class':
+      return `#/class/${enc(r.name)}`;
     case 'versions':
       return '#/versions';
     case 'version':
@@ -553,6 +609,7 @@ const link = {
   property: (key) => hrefFor({ page: 'property', key }),
   artifact: (id) => hrefFor({ page: 'artifact', id }),
   extension: (artifactId) => hrefFor({ page: 'artifact', id: `io.quarkus:${artifactId}` }),
+  class: (name) => hrefFor({ page: 'class', name }),
   versions: () => '#/versions',
   version: (v) => hrefFor({ page: 'version', v: short(v) }),
 };
@@ -599,6 +656,7 @@ const PAGES = {
   compare: renderCompare,
   property: renderProperty,
   artifact: renderArtifact,
+  class: renderClass,
   versions: renderVersions,
   version: renderVersion,
 };
@@ -612,6 +670,8 @@ function pageTitle(r) {
       return `${r.key} · ${base}`;
     case 'artifact':
       return `${r.id} · ${base}`;
+    case 'class':
+      return `${core.simpleClassName(r.name)} · ${base}`;
     case 'versions':
       return `Releases · ${base}`;
     case 'version':
@@ -1311,6 +1371,7 @@ function pickerForm({ from, to }) {
 function routeForResult(it) {
   if (it.type === 'property') return { page: 'property', key: it.id };
   if (it.type === 'extension') return { page: 'artifact', id: `io.quarkus:${it.id}` };
+  if (it.type === 'class') return { page: 'class', name: it.id };
   return { page: 'artifact', id: it.id };
 }
 
@@ -1324,6 +1385,11 @@ function resultSub(it) {
   if (it.type === 'artifact') {
     if (!it.current) return 'no longer managed by quarkus-bom';
     return it.follows ? `${short(it.value)} (versioned with Quarkus)` : `managed at ${it.value}`;
+  }
+  if (it.type === 'class') {
+    const jars = it.jars.join(', ');
+    if (it.current) return `in ${jars}`;
+    return it.lastSeen != null ? `not in the latest classes snapshot; last in ${jars} (${short(V.list[it.lastSeen].v)})` : jars;
   }
   const parts = [it.name, it.status];
   if (it.relocatedTo) parts.push(`relocated to ${it.relocatedTo}`);
@@ -1341,10 +1407,10 @@ function searchBox({ id, compact = false }) {
     'aria-autocomplete': 'list',
     'aria-expanded': 'false',
     'aria-controls': listId,
-    'aria-label': 'Search config properties, managed artifacts and extensions',
+    'aria-label': 'Search config properties, managed artifacts, extensions and classes',
     autocomplete: 'off',
     spellcheck: 'false',
-    placeholder: compact ? 'Search properties, artifacts…' : 'quarkus.http.port, vertx-core, QUARKUS_DATASOURCE_JDBC_URL',
+    placeholder: compact ? 'Search properties, artifacts, classes…' : 'quarkus.http.port, vertx-core, QuarkusUnitTest, QUARKUS_HTTP_PORT',
   });
   const list = h('ul', { id: listId, class: 'search-list', role: 'listbox', 'aria-label': 'Search results', hidden: true });
   const status = h('p', { class: 'sr-only', 'aria-live': 'polite' });
@@ -1516,13 +1582,14 @@ async function renderHome() {
     h('h1', { class: 'display', id: 'home-title', tabindex: '-1' }, 'What changed between Quarkus releases?'),
     h('p', { class: 'lede' },
       'Pick two releases to see which ', h('code', null, 'quarkus.*'), ' config properties were added, removed or changed, ',
-      'which dependency versions managed by ', h('code', null, 'quarkus-bom'), ' moved, and which extensions appeared, disappeared or were relocated.'),
+      'which dependency versions managed by ', h('code', null, 'quarkus-bom'), ' moved, which extensions appeared, disappeared or were relocated, ',
+      'and which classes of the Quarkus jars were added, removed or moved to another jar.'),
     pickerForm({ from: pair.from, to: pair.to }),
     h('p', { class: 'picker-note' }, 'Preselected: the newest patch of the previous LTS stream and the newest final release.'));
 
   const search = h('section', { class: 'home-search', 'aria-labelledby': 'home-search-h' },
     h('h2', { class: 'label-h', id: 'home-search-h' }, 'Look something up'),
-    h('p', { class: 'home-search-note' }, 'Find a config property by name, alias or environment variable, a managed artifact, or an extension, and see its history across releases.'),
+    h('p', { class: 'home-search-note' }, 'Find a config property by name, alias or environment variable, a managed artifact, an extension or a class, and see its history across releases.'),
     searchBox({ id: 'qs-home' }));
 
   const picks = core.quickPicks(V.json);
@@ -1672,6 +1739,9 @@ function comparison(ia, ib, data) {
   out.ea = core.extensionVersionFor(ia, V.list, V.extVis);
   out.eb = core.extensionVersionFor(ib, V.list, V.extVis);
   if (data.extensions && out.ea != null && out.eb != null) out.ext = core.diffExtensions(data.extensions.raw, out.ea, out.eb);
+  // classes have snapshots of their own too; their diff waits for the classes files (see classDiff)
+  out.la = core.classesVersionFor(ia, V.list, V.clsVis);
+  out.lb = core.classesVersionFor(ib, V.list, V.clsVis);
   if (!Object.keys(data.errors).length) {
     if (store.diffs.size >= 12) store.diffs.delete(store.diffs.keys().next().value);
     store.diffs.set(key, out);
@@ -1697,7 +1767,8 @@ async function renderCompare(r) {
   if (ia === ib) return frag(head, emptyNote('From and To are the same release, so there is nothing to compare. Change one of them above.'));
   // the sections start collapsed (the summary above says what each holds), except those the reader left open in
   // this pair earlier in the visit, so that Back from a property or an artifact finds them as they were
-  const sections = [libsSection(cmp, data), configSection(cmp, data), depsSection(cmp, data), extSection(cmp, data)].map(collapsible);
+  const sections = [libsSection(cmp, data), configSection(cmp, data), depsSection(cmp, data), extSection(cmp, data), classesSection(cmp)]
+    .map(collapsible);
   const pair = `${ia}:${ib}`;
   const all = h('button', { type: 'button', class: 'btn jump-all', 'aria-controls': sections.map((s) => `${s.id}-body`).join(' ') });
   const sync = () => {
@@ -1720,7 +1791,8 @@ async function renderCompare(r) {
     summaryLedger(cmp, data),
     h('nav', { class: 'jump', 'aria-label': 'Sections of this comparison' },
       h('span', { class: 'jump-k' }, 'On this page'),
-      [['sec-libs', 'Key libraries'], ['sec-config', 'Configuration'], ['sec-deps', 'Dependencies'], ['sec-ext', 'Extensions']].map(([id, label]) =>
+      [['sec-libs', 'Key libraries'], ['sec-config', 'Configuration'], ['sec-deps', 'Dependencies'], ['sec-ext', 'Extensions'],
+        ['sec-classes', 'Classes']].map(([id, label]) =>
         h('button', { type: 'button', class: 'jump-link', onclick: () => jumpTo(id) }, label)),
       all),
     sections);
@@ -1757,19 +1829,21 @@ function compareHeader(cmp) {
 }
 
 /**
- * The snapshots a comparison uses for one kind of data: config, or extensions (which also exist for releases
- * without config). `a` and `b` are the snapshot indices for From and To, null when a release has none.
+ * The snapshots a comparison uses for one kind of data: config, extensions (which also exist for releases without
+ * config) or classes. `a` and `b` are the snapshot indices for From and To, null when a release has none.
  */
 function snapshotsOf(cmp, kind) {
+  if (kind === 'classes') return { a: cmp.la, b: cmp.lb, all: store.V.clsVis, noun: 'classes', title: 'Classes' };
   return kind === 'config'
     ? { a: cmp.ca, b: cmp.cb, all: store.V.configVis, noun: 'config', title: 'Config' }
     : { a: cmp.ea, b: cmp.eb, all: store.V.extVis, noun: 'extension', title: 'Extensions' };
 }
 
 /**
- * Why a comparison has no diff of one kind ('config' or 'extension'), or null when both releases have such data.
- * A pre-release only uses its own snapshot, so one without a snapshot says so plainly:
- * "No config snapshot for 3.33.0.CR1: dependency changes only." The end names what the comparison still shows.
+ * Why a comparison has no diff of one kind ('config', 'extension' or 'classes'), or null when both releases have such
+ * data. A pre-release only uses its own snapshot, so one without a snapshot says so plainly:
+ * "No config snapshot for 3.33.0.CR1: dependency changes only." The end names what the comparison still shows (for
+ * config and extensions, which the rest of the page depends on).
  */
 function gapText(cmp, kind) {
   const V = store.V;
@@ -1787,12 +1861,13 @@ function gapText(cmp, kind) {
     const first = s.all.length ? short(V.list[s.all[0]].v) : null;
     parts.push(`${pre.length ? 'no' : 'No'} ${s.noun} data for ${names(fin)}${first ? ` (${s.noun} snapshots start at ${first})` : ''}`);
   }
+  if (kind === 'classes') return `${parts.join(', and ')}.`;
   // config needs extensions, so only a config gap can leave an extension diff to show
   const shown = kind === 'config' && cmp.ext ? 'dependency and extension changes only' : 'dependency changes only';
   return `${parts.join(', and ')}: ${shown}.`;
 }
 
-/** Both releases use one snapshot of a kind ('config' or 'extension'), so there is no diff of it to show. */
+/** Both releases use one snapshot of a kind ('config', 'extension' or 'classes'), so there is no diff of it to show. */
 function sameSnapshotText(cmp, kind) {
   const V = store.V;
   const { A, B } = cmp;
@@ -1840,6 +1915,24 @@ function summaryLedger(cmp, data) {
       kinds.length ? kinds.join(' · ') : null));
   } else {
     cells.push(cell('Extensions', 'sec-ext', [], data.extensions ? gapText(cmp, 'extension') ?? 'No extension data for this pair of releases.' : 'extensions.json is unavailable.'));
+  }
+  // classes: the page does not wait for the classes files, so the cell fills in when they arrive
+  const gap = gapText(cmp, 'classes');
+  if (gap) {
+    cells.push(cell('Classes', 'sec-classes', [], gap));
+  } else if (cmp.la === cmp.lb) {
+    cells.push(cell('Classes', 'sec-classes', [], sameSnapshotText(cmp, 'classes')));
+  } else {
+    const pending = cell('Classes', 'sec-classes', [], 'Loading the classes…');
+    cells.push(pending);
+    loadClasses(core.classLinesOf(store.V.list, [cmp.la, cmp.lb])).then((classes) => {
+      const d = classDiff(cmp, classes);
+      const t = d.top;
+      const c = d.counts;
+      const nested = c.added + c.removed + c.moved - t.added - t.removed - t.moved;
+      pending.replaceWith(cell('Classes', 'sec-classes', [[t.added, 'added', 'add'], [t.removed, 'removed', 'rem'], [t.moved, 'moved', 'chg']],
+        nested ? `Top-level classes. With nested ones: ${fmt(c.added)} added, ${fmt(c.removed)} removed, ${fmt(c.moved)} moved.` : 'No nested class changed.'));
+    }).catch(() => pending.replaceWith(cell('Classes', 'sec-classes', [], 'The classes data is unavailable.')));
   }
   return h('section', { class: 'ledger', 'aria-label': 'Summary of changes' }, cells);
 }
@@ -1946,11 +2039,19 @@ function configSection(cmp, data) {
 }
 
 function renderConfigGroups(container, rows, state) {
-  const groups = [...core.groupBy(rows, (r) => r.ext)];
   const filtering = state.text.trim() !== '';
+  renderGroupPages(container, [...core.groupBy(rows, (r) => r.ext)], (ext, list) => configGroup(ext, list, state, filtering),
+    'No change matches these filters.', 'more extension');
+}
+
+/**
+ * Renders `groups` ([key, rows] pairs) GROUP_PAGE at a time, with a button for the next page; `empty` when there is
+ * none. `noun` names what the button adds ("more extension").
+ */
+function renderGroupPages(container, groups, renderGroup, empty, noun) {
   container.replaceChildren();
   if (!groups.length) {
-    container.append(emptyNote('No change matches these filters.'));
+    container.append(emptyNote(empty));
     return;
   }
   let shown = 0;
@@ -1963,7 +2064,7 @@ function renderConfigGroups(container, rows, state) {
     let firstNew = null;
     const end = Math.min(groups.length, shown + GROUP_PAGE);
     for (; shown < end; shown++) {
-      const el = configGroup(groups[shown][0], groups[shown][1], state, filtering);
+      const el = renderGroup(groups[shown][0], groups[shown][1]);
       firstNew = firstNew ?? el;
       f.append(el);
     }
@@ -1971,7 +2072,7 @@ function renderConfigGroups(container, rows, state) {
     container.append(f);
     const rest = groups.length - shown;
     if (rest > 0) {
-      more.textContent = `Show ${plural(rest, 'more extension')}`;
+      more.textContent = `Show ${plural(rest, noun)}`;
       container.append(more);
     }
     return firstNew;
@@ -2270,6 +2371,152 @@ function extSection(cmp, data) {
     block('Added', e.added, (c) => h('li', { class: 'erow' }, extLink(c.id), c.b.n ? h('span', { class: 'erow-name' }, c.b.n) : null,
       c.b.r ? h('span', { class: 'erow-note' }, `relocation to ${c.b.r}`) : statusChip(c.b.s)))));
   return sec;
+}
+
+/* ---------- §5 classes ---------- */
+
+const CLASS_CHIPS = [['added', 'added'], ['removed', 'removed'], ['moved', 'moved']];
+
+/** The class diff of a comparison and its rows per jar, computed once (the comparison keeps them). */
+function classDiff(cmp, classes) {
+  if (!cmp.classes) {
+    cmp.classes = core.diffClasses(classes.raw, cmp.la, cmp.lb);
+    cmp.classRows = core.classRows(cmp.classes, classes.raw);
+  }
+  return cmp.classes;
+}
+
+/** Links to the artifact pages of jars (artifactIds), separated by commas. */
+function jarLinks(artifactIds) {
+  return frag(artifactIds.map((a, i) => frag(i ? ', ' : null, h('a', { class: 'mono', href: link.extension(a) }, a))));
+}
+
+/** A binary class name: its package in a lighter colour, then its name in the package. */
+function classNameEl(name) {
+  const pkg = core.classPackage(name);
+  return frag(pkg ? h('span', { class: 'cls-pkg' }, `${pkg}.`) : null, core.simpleClassName(name));
+}
+
+/**
+ * §5: the classes added, removed and moved, grouped by jar. The section is in the page at once and fills in when the
+ * classes files of the two releases' major lines arrive: the comparison does not wait for them.
+ */
+function classesSection(cmp) {
+  const V = store.V;
+  const { la, lb } = cmp;
+  const note = h('p', { class: 'sec-note' }, 'The classes of the ', h('code', null, 'io.quarkus'), ' jars that ', h('code', null, 'quarkus-bom'),
+    ' manages, nested ones included',
+    la != null && lb != null
+      ? frag(', compared at ', h('span', { class: 'ver' }, short(V.list[la].v)), ' → ', h('span', { class: 'ver' }, short(V.list[lb].v)), snapshotReason(cmp, 'classes'))
+      : null,
+    '. A class that moved is listed in the jar it left and in the jar it reached.');
+  const sec = h('section', { class: 'sec', id: 'sec-classes', 'aria-labelledby': 'sec-classes-h' }, sectionHead(5, 'Classes', 'sec-classes-h', note));
+  const gap = gapText(cmp, 'classes');
+  if (gap) return add(sec, [emptyNote(gap)]);
+  if (la === lb) return add(sec, [emptyNote(sameSnapshotText(cmp, 'classes'))]);
+  const lines = core.classLinesOf(V.list, [la, lb]);
+  const slot = h('div', { class: 'cls-slot' }, h('p', { class: 'empty', role: 'status' }, 'Loading the classes…'));
+  sec.append(slot);
+  loadClasses(lines).then((classes) => {
+    classDiff(cmp, classes);
+    slot.replaceChildren(classChanges(cmp));
+  }).catch((e) => slot.replaceChildren(missingData(lines.map((major) => `classes-${major}.json`).join(' or '), e?.message)));
+  return sec;
+}
+
+/** The filters and the groups of the Classes section. Nested classes are left out until their switch is on. */
+function classChanges(cmp) {
+  const d = cmp.classes;
+  const rows = cmp.classRows;
+  if (!rows.length) return emptyNote('No class was added, removed or moved between these snapshots.');
+  const state = { tags: new Set(), text: '', nested: false, expanded: new Set() };
+  const status = h('p', { class: 'filter-status', 'aria-live': 'polite' });
+  const groupsEl = h('div', { class: 'cgroups' });
+  const nestedCount = d.counts.added + d.counts.removed + d.counts.moved - d.top.added - d.top.removed - d.top.moved;
+  const chips = h('div', { class: 'cls-chips' });
+  const update = () => {
+    const pool = state.nested ? rows : rows.filter((r) => !r.nested);
+    const filtered = core.filterRows(pool, state);
+    const filtering = state.text.trim() !== '';
+    renderGroupPages(groupsEl, [...core.groupBy(filtered, (r) => r.artifact)], (jar, list) => classGroup(jar, list, state, filtering),
+      'No class change matches these filters.', 'more jar');
+    const jars = new Set(filtered.map((r) => r.artifact)).size;
+    status.textContent = filtered.length === pool.length
+      ? `${plural(pool.length, 'change')} in ${plural(jars, 'jar')}${state.nested || !nestedCount ? '' : ', nested classes left out'}.`
+      : `Showing ${fmt(filtered.length)} of ${plural(pool.length, 'change')}, in ${plural(jars, 'jar')}.`;
+  };
+  const fillChips = () => chips.replaceChildren(filterChips(CLASS_CHIPS, state.nested ? d.counts : d.top, state.tags, update,
+    'Show only these kinds of class change'));
+  const nested = h('button', {
+    type: 'button', class: 'fchip tone-neu', 'aria-pressed': 'false', disabled: nestedCount === 0,
+    title: 'Also list the nested classes: member, local and anonymous classes, whose names have a $',
+  }, h('span', { class: 'fchip-dot', 'aria-hidden': 'true' }), 'nested classes', h('span', { class: 'fchip-n' }, fmt(nestedCount)));
+  nested.addEventListener('click', () => {
+    state.nested = !state.nested;
+    nested.setAttribute('aria-pressed', String(state.nested));
+    fillChips();
+    update();
+  });
+  fillChips();
+  update();
+  return frag(
+    h('div', { class: 'toolbar' },
+      h('div', { class: 'cls-filters' }, chips, nested),
+      textFilter('Filter by class, package or jar', (v) => {
+        state.text = v;
+        update();
+      })),
+    status,
+    groupsEl);
+}
+
+function classGroup(jar, list, state, filtering) {
+  let added = 0;
+  let removed = 0;
+  let moved = 0;
+  for (const r of list) {
+    if (r.change === 'added') added++;
+    else if (r.change === 'removed') removed++;
+    else moved++;
+  }
+  const cap = filtering ? ROW_CAP_FILTERED : ROW_CAP;
+  const initial = state.expanded.has(jar) ? list.length : Math.min(list.length, cap);
+  const ul = h('ul', { class: 'crows' });
+  const fill = (from, to) => {
+    const f = document.createDocumentFragment();
+    for (let i = from; i < to; i++) f.append(classRow(list[i]));
+    return f;
+  };
+  ul.append(fill(0, initial));
+  const sec = h('section', { class: 'cgroup', 'aria-label': `${jar}: ${plural(list.length, 'change')}` },
+    h('div', { class: 'cgroup-head' },
+      h('h3', { class: 'cgroup-title' }, h('a', { href: link.extension(jar) }, jar)),
+      h('span', { class: 'cgroup-counts' },
+        countMark('add', '+', added, 'added'),
+        countMark('rem', '−', removed, 'removed'),
+        countMark('chg', '~', moved, 'moved in or out'))),
+    ul);
+  if (list.length > initial) {
+    const btn = moreButton(`Show all ${plural(list.length, 'change')} in ${jar}`, () => {
+      state.expanded.add(jar);
+      ul.append(fill(initial, list.length));
+      btn.remove();
+      ul.children[initial]?.querySelector('a')?.focus();
+    });
+    sec.append(btn);
+  }
+  return sec;
+}
+
+function classRow(r) {
+  const name = h('a', { class: 'prop', href: link.class(r.name) }, classNameEl(r.name));
+  const moved = r.change === 'moved-in' || r.change === 'moved-out';
+  return h('li', { class: `crow crow--${moved ? 'changed' : r.change}` },
+    h('div', { class: 'crow-name' }, name, copyButton(r.name, { label: 'Copy class name', target: name })),
+    h('div', { class: 'crow-tags' }, chip(r.change), r.nested ? chip('neutral', 'nested', 'A member, local or anonymous class') : null),
+    r.other.length
+      ? h('div', { class: 'crow-delta' }, h('div', { class: 'delta' }, deltaKey(r.change === 'moved-in' ? 'was in' : 'now in'), h('span', null, jarLinks(r.other))))
+      : null);
 }
 
 /* ========================================================================== */
@@ -2612,6 +2859,162 @@ function extensionPanel(x, data, tools) {
       hist.widened ? h('p', { class: 'note' }, `This extension only appears in snapshots of ${widenedKinds(hist.widenedBy)}, so they are shown here although they are hidden elsewhere.`) : null,
       timeline(hist.events, (ev) => extensionEventBody(ev, hist.cvs[0] === V.extVis[0]))),
     propsBlock);
+}
+
+/* ========================================================================== */
+/* Class                                                                       */
+/* ========================================================================== */
+
+/**
+ * The classes row a route names: a binary name, or what a reader may write instead: `<artifactId>/<class>`, the
+ * internal form (`io/quarkus/runtime/Application`, with or without `.class`), or a name in its package that one class
+ * alone has (`QuarkusUnitTest`). Null when nothing matches.
+ */
+function resolveClass(classes, raw) {
+  const text = String(raw ?? '').trim();
+  const byName = classes.byName;
+  if (byName.has(text)) return byName.get(text);
+  const slash = text.indexOf('/');
+  if (slash > 0 && !text.slice(0, slash).includes('.') && byName.has(text.slice(slash + 1))) return byName.get(text.slice(slash + 1));
+  const internal = text.replace(/\.class$/, '').replace(/\//g, '.');
+  if (byName.has(internal)) return byName.get(internal);
+  if (text && !/[./]/.test(text)) {
+    const matches = classes.raw.classes.filter((row) => row[1] === text);
+    if (matches.length === 1) return matches[0];
+  }
+  return null;
+}
+
+async function renderClass(r) {
+  const V = store.V;
+  // the classes of the lines the switches show; a class that none of them has may be in a hidden one
+  let lines = shownClassLines();
+  let classes = await loadClasses(lines);
+  let row = resolveClass(classes, r.name);
+  if (!row && lines.length < V.clsLines.length) {
+    lines = V.clsLines;
+    classes = await loadClasses(lines);
+    row = resolveClass(classes, r.name);
+  }
+  if (!row) {
+    return notFoundView('Unknown class', `No class named ${r.name || '(empty)'} is in any classes snapshot of this dataset.`,
+      null, h('div', { class: 'nf-search' }, searchBox({ id: nextId('qs-nf') })));
+  }
+  const name = core.className(classes.raw, row);
+  if (name !== r.name) canonicalize({ page: 'class', name });
+  // the history runs over the snapshots of the lines loaded; the others are hidden by the switches anyway
+  const loadedVis = V.clsVis.filter((i) => lines.includes(core.majorOf(V.list[i])));
+  const hist = core.classHistory(classes.raw, row, loadedVis, { vis: currentVis(), widen: widenSteps(), versions: V.list });
+  const jarNames = (jars) => jars.map((j) => classes.raw.artifacts[j]);
+  const lastCv = hist.cvs[hist.cvs.length - 1];
+  const lastRange = hist.ranges[hist.ranges.length - 1];
+  const lastJars = hist.present ? hist.jars : lastRange ? core.jarsOf(core.stateAt(row[2], lastRange.to)) : [];
+  const pkg = core.classPackage(name);
+  const nested = core.isNestedClass(name);
+  const outer = nested ? core.topLevelClass(name) : null;
+
+  // the status line is a flex row: one span per sentence keeps its links and punctuation together
+  const statusLine = hist.present
+    ? h('p', { class: 'status-line' }, chip('added', 'current'),
+      h('span', null, 'In ', jarLinks(jarNames(hist.jars)), ` in the latest classes snapshot (${short(V.list[lastCv].v)}).`))
+    : h('p', { class: 'status-line' }, chip('removed', 'removed'), lastRange
+      ? h('span', null, `Not in the latest classes snapshot; last seen in ${short(V.list[lastRange.to].v)}, in `, jarLinks(jarNames(lastJars)), '.')
+      : ' Not in any classes snapshot shown.');
+  const tools = switchRow('sec-tools', snapshotSwitches('timeline', V.clsVis), { rerender: true });
+  const widenedNote = hist.widened
+    ? h('p', { class: 'note' }, `This class only appears in snapshots of ${widenedKinds(hist.widenedBy)}, so they are shown here although they are hidden elsewhere.`)
+    : null;
+
+  const kv = h('dl', { class: 'kv' });
+  const kvRow = (k, ...v) => kv.append(h('dt', null, k), h('dd', null, v));
+  kvRow('Package', pkg ? h('code', { class: 'val' }, pkg) : h('em', { class: 'none' }, 'the unnamed package'));
+  if (outer) kvRow('Nested in', classes.byName.has(outer) ? h('a', { class: 'mono', href: link.class(outer) }, outer) : h('code', { class: 'val' }, outer));
+  kvRow(lastJars.length > 1 ? 'Jars' : 'Jar', lastJars.length ? jarLinks(jarNames(lastJars)) : h('em', { class: 'none' }, 'none'),
+    lastJars.length > 1 ? h('span', { class: 'kv-sub' }, 'Each of these jars has a class of this name.') : null,
+    hist.present ? null : h('span', { class: 'kv-sub' }, 'The last jar that had it.'));
+  kvRow('Present in', h('span', { class: 'mono' }, presentInLabel(hist)), hist.present ? h('span', { class: 'muted' }, ' (current)') : null);
+
+  // its nested classes: the names in its package that start with its own and a $
+  const prefix = `${row[1]}$`;
+  const nestedRows = classes.raw.classes.filter((x) => x[0] === row[0] && x[1].startsWith(prefix));
+  const nestedBlock = nestedRows.length
+    ? h('section', { class: 'sec', 'aria-labelledby': 'cls-nested-h' },
+      sectionHead(3, 'Nested classes', 'cls-nested-h', h('p', { class: 'sec-note' }, `${plural(nestedRows.length, 'class', 'classes')} nested in this one, in any classes snapshot.`)),
+      cappedList('plist', nestedRows, (x) => {
+        const nestedName = core.className(classes.raw, x);
+        const now = lastCv != null && core.jarsOf(core.stateAt(x[2], lastCv)).length > 0;
+        return h('li', null, h('a', { class: 'prop', href: link.class(nestedName) }, x[1]), now ? null : chip('removed', 'not in the latest'));
+      }))
+    : null;
+
+  const nameEl = h('span', { class: 'prop-name' }, classNameEl(name));
+  return frag(
+    h('header', { class: 'page-head band' },
+      h('p', { class: 'kicker' }, nested ? 'Nested class' : 'Class', lastJars.length ? frag(' · ', jarLinks(jarNames(lastJars))) : null),
+      h('h1', { class: 'page-title page-title--mono', tabindex: '-1' }, nameEl, copyButton(name, { label: 'Copy class name', target: nameEl })),
+      h('div', { class: 'badges' },
+        hist.present ? null : chip('removed'),
+        nested ? chip('neutral', core.isAnonymousClass(name) ? 'anonymous or local class' : 'nested class') : null)),
+    statusLine,
+    kv,
+    h('section', { class: 'sec', 'aria-labelledby': 'cls-jars-h' },
+      sectionHead(1, 'Jars', 'cls-jars-h',
+        h('p', { class: 'sec-note' }, 'The jars that have the class in each classes snapshot, oldest first. Each row is a run of snapshots in the same jars.',
+          hiddenSnapshotsNote({ cvs: hist.cvs, hiddenSnapshots: V.clsVis.length - hist.cvs.length }, V.clsVis)),
+        tools),
+      widenedNote,
+      classRuns(hist, jarNames)),
+    h('section', { class: 'sec', 'aria-labelledby': 'cls-history-h' },
+      sectionHead(2, 'History', 'cls-history-h', h('p', { class: 'sec-note' }, 'When the class came, moved to another jar or went, between consecutive classes snapshots shown.')),
+      timeline(hist.events, (ev) => classEventBody(ev, jarNames, hist.cvs[0] === V.clsVis[0]))),
+    nestedBlock);
+}
+
+/** The runs of a class history as a lane and a table: the jars of each run of snapshots, and the change it starts with. */
+function classRuns(hist, jarNames) {
+  const V = store.V;
+  const first = V.list[hist.cvs[0]];
+  const last = V.list[hist.cvs[hist.cvs.length - 1]];
+  const events = new Map(hist.events.map((ev) => [ev.vi, ev]));
+  const lane = h('div', { class: 'lane', role: 'img', 'aria-label': `The jars of the class across ${plural(hist.cvs.length, 'classes snapshot')}, oldest on the left. The table below lists the same runs.` });
+  const tbody = h('tbody');
+  hist.runs.forEach((run, i) => {
+    const jars = jarNames(run.jars).join(', ');
+    lane.append(h('div', { class: `lane-seg${run.jars.length ? '' : ' is-off'}${i % 2 ? ' is-alt' : ''}`, style: `flex-grow:${run.count}`, title: `${rangeLabel(run.from, run.to)}: ${jars || 'in no jar'}` },
+      jars ? h('span', { class: 'lane-label' }, jars) : null));
+    const ev = events.get(run.from);
+    const change = !ev || ev.type === 'present' ? null : chip(ev.type);
+    tbody.append(h('tr', { class: run.jars.length ? null : 'is-same' },
+      h('th', { scope: 'row', class: 'mono' }, rangeLabel(run.from, run.to),
+        h('span', { class: 'cell-sub' }, `${plural(run.count, 'snapshot')}${run.pre ? `, ${plural(run.pre, 'pre-release')}` : ''}`)),
+      h('td', null, run.jars.length ? jarLinks(jarNames(run.jars)) : h('em', { class: 'none' }, run.before ? 'not yet in any jar' : 'in no jar')),
+      h('td', null, change)));
+  });
+  return frag(
+    lane,
+    h('div', { class: 'strip-axis', 'aria-hidden': 'true' }, h('span', null, short(first.v)), h('span', null, short(last.v))),
+    h('div', { class: 'table-scroll' },
+      h('table', { class: 'tbl tbl-ranges' },
+        h('thead', null, h('tr', null, h('th', { scope: 'col' }, 'Classes snapshots'), h('th', { scope: 'col' }, 'Jar'), h('th', { scope: 'col' }, 'Change'))),
+        tbody)));
+}
+
+/** `first` as for propertyEventBody, over the classes snapshots. A sentence with links is one span of the flex row. */
+function classEventBody(ev, jarNames, first = true) {
+  const jars = (list) => jarLinks(jarNames(list));
+  switch (ev.type) {
+    case 'present':
+      return h('p', { class: 'tl-text' }, chip('neutral', 'present'), h('span', null, first
+        ? 'In the first classes snapshot of this dataset, so it may be older: in '
+        : 'In the first classes snapshot shown; earlier ones are hidden. In ', jars(ev.jars), '.'));
+    case 'introduced':
+    case 'reintroduced':
+      return h('p', { class: 'tl-text' }, chip(ev.type), h('span', null, 'In ', jars(ev.jars), '.'));
+    case 'removed':
+      return h('p', { class: 'tl-text' }, chip('removed'), h('span', null, 'No longer in any jar; it was in ', jars(ev.from), '.'));
+    default:
+      return delta(chip('moved'), jars(ev.from), jars(ev.to));
+  }
 }
 
 /* ========================================================================== */

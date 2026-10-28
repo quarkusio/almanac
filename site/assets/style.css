@@ -1792,6 +1792,12 @@ mark {
   overflow-wrap: anywhere;
 }
 
+/* a class name: its package lighter than its name in the package (the band's own --muted in a title band) */
+.cls-pkg {
+  font-weight: 400;
+  color: var(--muted);
+}
+
 .page-title--ver {
   font-family: var(--font-mono);
   font-weight: 650;
@@ -1928,7 +1934,7 @@ mark {
 
 .ledger {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: repeat(4, minmax(0, 1fr));
   margin-top: 32px;
   border-top: 2px solid var(--rule-strong);
   border-bottom: 1px solid var(--rule);
@@ -1996,6 +2002,22 @@ mark {
   margin: 10px 0 0;
   font-size: 12.5px;
   color: var(--ink-2);
+}
+
+/* four cells: two rows of two between the phone and a width where three counts fit in a quarter */
+@media (min-width: 760.02px) and (max-width: 1099.98px) {
+  .ledger {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .ledger-cell:nth-child(odd) {
+    padding-left: 0;
+    border-left: 0;
+  }
+
+  .ledger-cell:nth-child(n + 3) {
+    border-top: 1px solid var(--rule);
+  }
 }
 
 @media (max-width: 760px) {
@@ -2180,6 +2202,14 @@ mark {
   display: flex;
   flex-wrap: wrap;
   gap: 6px;
+}
+
+/* the Classes section: the kind chips, then the switch for nested classes */
+.cls-filters {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 14px;
 }
 
 .fchip {
