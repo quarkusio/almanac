@@ -2,7 +2,9 @@ package io.quarkiverse.almanac.dataset;
 
 import io.quarkiverse.almanac.maven.BomDifferences;
 import io.quarkiverse.almanac.maven.BomSnapshots;
+import io.quarkiverse.almanac.model.ArtifactClasses;
 import io.quarkiverse.almanac.model.BomSnapshot;
+import io.quarkiverse.almanac.model.ClassesSnapshot;
 import io.quarkiverse.almanac.model.ConfigProperty;
 import io.quarkiverse.almanac.model.ConfigSnapshot;
 import io.quarkiverse.almanac.model.ExtensionInfo;
@@ -17,10 +19,13 @@ import java.util.Set;
 import java.util.regex.Pattern;
 
 /// What `dataset import` requires of a work snapshot: the invariants that make it restorable
-/// exactly from the dataset (sorted, unique ids, the release's own version), and, for config, a validated extractor.
+/// exactly from the dataset (sorted, unique ids, the release's own version, class lines that can be split again), and,
+/// for config, a validated extractor.
 final class SnapshotChecks {
 
     private static final Pattern DATE = Pattern.compile("\\d{4}-\\d{2}-\\d{2}");
+    /// What `classes.jsonl` can tell apart in `<artifactId> <class>`: no whitespace, and no empty name.
+    private static final Pattern NAME = Pattern.compile("\\S+");
     private static final Set<String> CONFIG_SOURCES = Set.of("model", "bytecode");
     /// At most this many problems are listed per snapshot.
     private static final int MAX_PROBLEMS = 5;
@@ -37,6 +42,7 @@ final class SnapshotChecks {
             case BOM -> bom(release, (BomSnapshot) snapshot, problems);
             case CONFIG -> config(release, (ConfigSnapshot) snapshot, problems);
             case EXTENSIONS -> extensions(release, (ExtensionsSnapshot) snapshot, problems);
+            case CLASSES -> classes(release, (ClassesSnapshot) snapshot, problems);
             case PLATFORM -> platform(release, (BomSnapshot) snapshot, problems);
         }
         return problems.size() > MAX_PROBLEMS
@@ -148,6 +154,34 @@ final class SnapshotChecks {
                 continue;
             }
             previous = ascending(previous, extension.id(), "extension", problems);
+        }
+    }
+
+    private static void classes(String release, ClassesSnapshot classes, List<String> problems) {
+        version(release, classes.version(), problems);
+        if (classes.artifacts() == null || classes.artifacts().isEmpty()) {
+            problems.add("no jar with classes");
+            return;
+        }
+        String previous = null;
+        for (ArtifactClasses artifact : classes.artifacts()) {
+            if (artifact == null || artifact.id() == null || !NAME.matcher(artifact.id()).matches()) {
+                problems.add("a jar without a usable artifactId: " + (artifact == null ? null : artifact.id()));
+                continue;
+            }
+            previous = ascending(previous, artifact.id(), "jar", problems);
+            if (artifact.classes() == null || artifact.classes().isEmpty()) {
+                problems.add(artifact.id() + " lists no class");
+                continue;
+            }
+            String previousClass = null;
+            for (String name : artifact.classes()) {
+                if (name == null || !NAME.matcher(name).matches() || name.contains("/")) {
+                    problems.add(artifact.id() + " has a class that is no binary name: " + name);
+                    continue;
+                }
+                previousClass = ascending(previousClass, name, "class of " + artifact.id(), problems);
+            }
         }
     }
 

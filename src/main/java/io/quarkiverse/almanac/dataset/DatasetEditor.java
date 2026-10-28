@@ -1,7 +1,9 @@
 package io.quarkiverse.almanac.dataset;
 
 import com.fasterxml.jackson.databind.JsonNode;
+import io.quarkiverse.almanac.model.ArtifactClasses;
 import io.quarkiverse.almanac.model.BomSnapshot;
+import io.quarkiverse.almanac.model.ClassesSnapshot;
 import io.quarkiverse.almanac.model.ConfigSnapshot;
 import io.quarkiverse.almanac.util.AtomicFiles;
 import io.quarkiverse.almanac.util.Json;
@@ -99,13 +101,26 @@ public final class DatasetEditor {
     public static DatasetEditor open(Path dir) throws IOException {
         Contents contents = Dataset.open(dir).contents();
         Map<String, String> onDisk = new HashMap<>();
-        for (String name : DatasetFormat.FILES) {
-            Path file = dir.resolve(name);
-            if (Files.isRegularFile(file)) {
-                onDisk.put(name, Files.readString(file, StandardCharsets.UTF_8));
-            }
+        for (String name : datasetFiles(dir)) {
+            onDisk.put(name, Files.readString(dir.resolve(name), StandardCharsets.UTF_8));
         }
         return new DatasetEditor(dir, contents, onDisk);
+    }
+
+    /// The dataset files in a folder: those of [DatasetFormat#FILES] that exist, and its classes files.
+    private static List<String> datasetFiles(Path dir) throws IOException {
+        List<String> names = new ArrayList<>();
+        for (String name : DatasetFormat.FILES) {
+            if (Files.isRegularFile(dir.resolve(name))) {
+                names.add(name);
+            }
+        }
+        for (String name : DatasetFormat.filesInClassesDir(dir)) {
+            if (DatasetFormat.majorOfClassesFile(name) >= 0) {
+                names.add(name);
+            }
+        }
+        return names;
     }
 
     /// The dataset folder.
@@ -122,19 +137,25 @@ public final class DatasetEditor {
     /// breaks the snapshot invariants, when its config extractor is not validated
     /// ([DatasetFormat#UNVALIDATED_EXTRACTORS]), when it differs from the dataset's snapshot of the same release and
     /// kind and `replace` is false, or when it would leave a release with config but no extensions, or with config,
-    /// extensions or a platform BOM but no BOM. Extensions need no config. The others are imported; refusals never
-    /// stop them. A BOM whose managed dependencies keep a `${...}` reference is imported as it is, with a warning.
+    /// extensions, classes or a platform BOM but no BOM. Extensions need no config, classes need neither. The others
+    /// are imported; refusals never stop them. A BOM whose managed dependencies keep a `${...}` reference is imported
+    /// as it is, with a warning.
     public ImportReport importSnapshots(List<Candidate> candidates, boolean replace) {
         List<Refusal> refusals = new ArrayList<>();
         List<String> warnings = new ArrayList<>();
         SortedMap<String, Map<Kind, Object>> accepted = new TreeMap<>(ReleaseOrder.COMPARATOR);
         Map<String, Refusal> refusedExtensions = new HashMap<>();
+        // the class names of one release are mostly those of the others: one copy of each for all of them
+        Map<String, String> classNames = new HashMap<>();
         for (Candidate candidate : candidates) {
             String version = candidate.version();
             Kind kind = candidate.kind();
             Object snapshot;
             try {
                 snapshot = read(candidate);
+                if (snapshot instanceof ClassesSnapshot classes) {
+                    snapshot = shared(classes, classNames);
+                }
             } catch (IOException e) {
                 refusals.add(new Refusal(version, kind, e.getMessage(), false));
                 continue;
@@ -187,18 +208,18 @@ public final class DatasetEditor {
                 List.copyOf(refusals), List.copyOf(warnings));
     }
 
-    /// Config needs the release's extensions, and both need its BOM (extensions need no config), as does the platform
-    /// BOM, which the dataset keeps as differences from it: drops accepted config, extension or platform BOM snapshots
-    /// whose release would lack what they need, recording why.
+    /// Config needs the release's extensions, and config, extensions and classes need its BOM (extensions need no
+    /// config), as does the platform BOM, which the dataset keeps as differences from it: drops accepted config,
+    /// extension, classes or platform BOM snapshots whose release would lack what they need, recording why.
     private void requirePrerequisites(SortedMap<String, Map<Kind, Object>> accepted,
             Map<String, Refusal> refusedExtensions, List<Refusal> refusals) {
         accepted.forEach((version, kinds) -> {
             if (!kinds.containsKey(Kind.BOM) && !contents.has(version, Kind.BOM)) {
-                for (Kind kind : List.of(Kind.CONFIG, Kind.EXTENSIONS, Kind.PLATFORM)) {
+                for (Kind kind : List.of(Kind.CONFIG, Kind.EXTENSIONS, Kind.CLASSES, Kind.PLATFORM)) {
                     if (kinds.remove(kind) != null) {
                         refusals.add(new Refusal(version, kind, (kind == Kind.PLATFORM
                                 ? "the platform BOM, kept as differences from the release's BOM, needs the BOM "
-                                : "config and extensions need the release's BOM ")
+                                : "config, extensions and classes need the release's BOM ")
                                 + "snapshot, which is neither in the dataset nor in this import", false));
                     }
                 }
@@ -219,14 +240,15 @@ public final class DatasetEditor {
     }
 
     /// Removes snapshots; the releases stay known with their dates. Removing a BOM removes the release's config,
-    /// extensions and platform BOM too, and removing extensions removes the config, which needs them; config and the
-    /// platform BOM go alone. Returns the removed `kind version` entries.
+    /// extensions, classes and platform BOM too, and removing extensions removes the config, which needs them; config,
+    /// classes and the platform BOM go alone. Returns the removed `kind version` entries.
     public List<String> remove(Collection<String> versions, Set<Kind> kinds) {
-        // a BOM takes config, extensions and the platform BOM along (they need it), extensions take the config (it
-        // needs them)
+        // a BOM takes config, extensions, classes and the platform BOM along (they need it), extensions take the
+        // config (it needs them)
         Set<Kind> effective = EnumSet.copyOf(kinds);
         if (effective.contains(Kind.BOM)) {
             effective.add(Kind.EXTENSIONS);
+            effective.add(Kind.CLASSES);
             effective.add(Kind.PLATFORM);
         }
         if (effective.contains(Kind.EXTENSIONS)) {
@@ -251,10 +273,8 @@ public final class DatasetEditor {
         published.stream().map(String::strip).filter(version -> !version.isEmpty()).forEach(keep::add);
         SortedSet<String> before = contents.releases();
         for (String version : before) {
-            for (Kind kind : Kind.values()) {
-                if (contents.has(version, kind)) {
-                    keep.add(version);
-                }
+            if (contents.holdsData(version)) {
+                keep.add(version);
             }
         }
         List<String> dropped = new ArrayList<>();
@@ -282,7 +302,8 @@ public final class DatasetEditor {
         return new RefreshReport(keep.size(), List.copyOf(added), List.copyOf(dropped), dated);
     }
 
-    /// Encodes the dataset, checks that it restores exactly, and writes the files whose bytes changed.
+    /// Encodes the dataset, checks that it restores exactly, and writes the files whose bytes changed. The classes file
+    /// of a major line that no longer has classes is deleted (with the classes folder when it ends up empty).
     ///
     /// The files are replaced one after the other, so [DatasetFormat#WRITE_MARKER] exists from before the first until
     /// after the last: a write that does not finish leaves it behind, and readers then refuse the folder instead of
@@ -291,7 +312,7 @@ public final class DatasetEditor {
     /// changes. Holding it, the write then checks that no file changed since [#open] read them (another command that
     /// wrote in between would otherwise lose its changes to this one) and writes nothing if one did.
     ///
-    /// @return the names of the files written, in [DatasetFormat#FILES] order
+    /// @return the names of the files written, in writing order (see [DatasetEncoder#encode]), then those deleted
     public List<String> write() throws IOException {
         Map<String, String> files = DatasetEncoder.encode(contents);
         checkRoundTrip(files);
@@ -301,6 +322,9 @@ public final class DatasetEditor {
                 changed.add(file.getKey());
             }
         }
+        List<String> stale = new ArrayList<>(new TreeSet<>(onDisk.keySet()));
+        stale.removeAll(files.keySet());
+        changed.addAll(stale);
         if (changed.isEmpty()) {
             return changed;
         }
@@ -319,8 +343,17 @@ public final class DatasetEditor {
             throw e;
         }
         for (String name : changed) {
-            AtomicFiles.writeString(dir.resolve(name), files.get(name));
-            onDisk.put(name, files.get(name));
+            if (files.containsKey(name)) {
+                AtomicFiles.writeString(dir.resolve(name), files.get(name));
+                onDisk.put(name, files.get(name));
+            } else {
+                Files.deleteIfExists(dir.resolve(name));
+                onDisk.remove(name);
+            }
+        }
+        Path classesDir = dir.resolve(DatasetFormat.CLASSES_DIR);
+        if (!stale.isEmpty() && Files.isDirectory(classesDir) && DatasetFormat.filesInClassesDir(dir).isEmpty()) {
+            Files.delete(classesDir);
         }
         Files.delete(marker);
         return changed;
@@ -328,7 +361,10 @@ public final class DatasetEditor {
 
     /// Fails when a dataset file is not what [#open] read (or last wrote): another command wrote the dataset since.
     private void checkUnchangedOnDisk() throws IOException {
-        for (String name : DatasetFormat.FILES) {
+        Set<String> names = new TreeSet<>(DatasetFormat.FILES);
+        names.addAll(onDisk.keySet());
+        names.addAll(datasetFiles(dir));
+        for (String name : names) {
             Path file = dir.resolve(name);
             String now = Files.isRegularFile(file) ? Files.readString(file, StandardCharsets.UTF_8) : null;
             if (!Objects.equals(now, onDisk.get(name))) {
@@ -373,6 +409,19 @@ public final class DatasetEditor {
             }
         }
         return "?";
+    }
+
+    /// The snapshot with each name taken from `names` (added there when new), so that equal names are one string.
+    private static ClassesSnapshot shared(ClassesSnapshot snapshot, Map<String, String> names) {
+        List<ArtifactClasses> artifacts = new ArrayList<>(snapshot.artifacts().size());
+        for (ArtifactClasses artifact : snapshot.artifacts()) {
+            List<String> classes = new ArrayList<>(artifact.classes().size());
+            for (String name : artifact.classes()) {
+                classes.add(names.computeIfAbsent(name, n -> n));
+            }
+            artifacts.add(new ArtifactClasses(names.computeIfAbsent(artifact.id(), a -> a), List.copyOf(classes)));
+        }
+        return new ClassesSnapshot(snapshot.version(), List.copyOf(artifacts));
     }
 
     /// Reads a work snapshot into its record; fails when the record does not keep everything the file holds.

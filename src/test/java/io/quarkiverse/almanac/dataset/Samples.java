@@ -1,6 +1,8 @@
 package io.quarkiverse.almanac.dataset;
 
+import io.quarkiverse.almanac.model.ArtifactClasses;
 import io.quarkiverse.almanac.model.BomSnapshot;
+import io.quarkiverse.almanac.model.ClassesSnapshot;
 import io.quarkiverse.almanac.model.ConfigProperty;
 import io.quarkiverse.almanac.model.ConfigSnapshot;
 import io.quarkiverse.almanac.model.ExtensionInfo;
@@ -104,6 +106,54 @@ final class Samples {
 
     static final ExtensionsSnapshot EXTENSIONS_310 = extensions("3.1.0", RESTEASY_REACTIVE);
     static final ExtensionsSnapshot EXTENSIONS_320 = extensions("3.2.0", REST, RESTEASY_REACTIVE_RELOCATED);
+
+    static ClassesSnapshot classes(String version, Object... idThenClasses) {
+        List<ArtifactClasses> artifacts = new ArrayList<>();
+        for (int i = 0; i < idThenClasses.length; i += 2) {
+            List<String> names = new ArrayList<>(Arrays.asList((String[]) idThenClasses[i + 1]));
+            names.sort(null);
+            artifacts.add(new ArtifactClasses((String) idThenClasses[i], List.copyOf(names)));
+        }
+        artifacts.sort((a, b) -> a.id().compareTo(b.id()));
+        return new ClassesSnapshot(version, List.copyOf(artifacts));
+    }
+
+    private static String[] names(String... names) {
+        return names;
+    }
+
+    static final String UNIT_TEST = "io.quarkus.test.QuarkusUnitTest";
+
+    /// 3.0.0.Final, a BOM-only release: the jars of classes need only the BOM.
+    static final ClassesSnapshot CLASSES_300 = classes("3.0.0.Final",
+            "quarkus-core", names("io.quarkus.runtime.Application"),
+            "quarkus-junit5-internal", names(UNIT_TEST, UNIT_TEST + "$1"));
+    static final ClassesSnapshot CLASSES_310 = classes("3.1.0",
+            "quarkus-core", names("io.quarkus.runtime.Application", "io.quarkus.runtime.Old"),
+            "quarkus-junit5-internal", names(UNIT_TEST, UNIT_TEST + "$1"));
+    /// QuarkusUnitTest moves to quarkus-junit-internal, which also gets a new class; one class is in two jars.
+    static final ClassesSnapshot CLASSES_320 = classes("3.2.0",
+            "quarkus-amazon-lambda-http", names("io.quarkus.amazon.lambda.http.LambdaHttpHandler"),
+            "quarkus-amazon-lambda-rest", names("io.quarkus.amazon.lambda.http.LambdaHttpHandler"),
+            "quarkus-core", names("io.quarkus.runtime.Application"),
+            "quarkus-junit-internal", names(UNIT_TEST, UNIT_TEST + "$1", "io.quarkus.test.QuarkusExtensionTest"));
+
+    static final BomSnapshot BOM_400_ALPHA1 = bom("4.0.0.Alpha1", "2026-07-29", "io.quarkus:quarkus-core",
+            "4.0.0.Alpha1", "io.vertx:vertx-core", "5.0.0");
+    /// 4.0.0.Alpha1: classes of another major line, which have a file of their own.
+    static final ClassesSnapshot CLASSES_400_ALPHA1 = classes("4.0.0.Alpha1",
+            "quarkus-core", names("io.quarkus.runtime.Application"),
+            "quarkus-junit-internal", names(UNIT_TEST, "io.quarkus.test.QuarkusExtensionTest"));
+
+    /// [#contents()] with the classes of 3.0.0.Final, 3.1.0 and 3.2.0, and 4.0.0.Alpha1 with a BOM and classes.
+    static Contents contentsWithClasses() {
+        Contents contents = contents();
+        contents.put(BOM_400_ALPHA1.version(), Kind.BOM, BOM_400_ALPHA1);
+        for (ClassesSnapshot classes : List.of(CLASSES_300, CLASSES_310, CLASSES_320, CLASSES_400_ALPHA1)) {
+            contents.put(classes.version(), Kind.CLASSES, classes);
+        }
+        return contents;
+    }
 
     /// The four sample releases plus 2.16.12.Final, known without data (and without date).
     static Contents contents() {

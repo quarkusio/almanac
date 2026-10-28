@@ -4,7 +4,9 @@ import com.fasterxml.jackson.databind.JsonNode;
 import io.quarkiverse.almanac.ScratchDir;
 import io.quarkiverse.almanac.dataset.DatasetEditor;
 import io.quarkiverse.almanac.dataset.Kind;
+import io.quarkiverse.almanac.model.ArtifactClasses;
 import io.quarkiverse.almanac.model.BomSnapshot;
+import io.quarkiverse.almanac.model.ClassesSnapshot;
 import io.quarkiverse.almanac.model.ConfigProperty;
 import io.quarkiverse.almanac.model.ConfigSnapshot;
 import io.quarkiverse.almanac.model.ExtensionInfo;
@@ -33,6 +35,8 @@ class SnapshotStoreTest {
     private static final ExtensionsSnapshot EXTENSIONS = new ExtensionsSnapshot("3.40.1", List.of(
             new ExtensionInfo("quarkus-vertx-http", "Vert.x HTTP", null, "stable", List.of("web"), null, false,
                     List.of("quarkus.http"), null)));
+    private static final ClassesSnapshot CLASSES = new ClassesSnapshot("3.40.1", List.of(
+            new ArtifactClasses("quarkus-core", List.of("io.quarkus.runtime.Application"))));
 
     @Test
     void readsFallBackToTheDatasetNextToTheWorkFolder() throws Exception {
@@ -48,6 +52,7 @@ class SnapshotStoreTest {
             assertEquals(BOM, store.read("3.40.1", SnapshotStore.BOM, BomSnapshot.class));
             assertEquals(CONFIG, store.read("3.40.1", SnapshotStore.CONFIG, ConfigSnapshot.class));
             assertEquals(EXTENSIONS, store.read("3.40.1", SnapshotStore.EXTENSIONS, ExtensionsSnapshot.class));
+            assertEquals(CLASSES, store.read("3.40.1", SnapshotStore.CLASSES, ClassesSnapshot.class));
             assertEquals("8080", store.read("3.40.1", SnapshotStore.CONFIG, JsonNode.class)
                     .at("/properties/0/default").asText());
             assertEquals(List.of("3.40.1"), store.versionsWith(SnapshotStore.BOM));
@@ -88,8 +93,9 @@ class SnapshotStoreTest {
         sourceStore.write("3.40.1", SnapshotStore.BOM, BOM);
         sourceStore.write("3.40.1", SnapshotStore.CONFIG, CONFIG);
         sourceStore.write("3.40.1", SnapshotStore.EXTENSIONS, EXTENSIONS);
+        sourceStore.write("3.40.1", SnapshotStore.CLASSES, CLASSES);
         List<DatasetEditor.Candidate> candidates = new ArrayList<>();
-        for (Kind kind : List.of(Kind.BOM, Kind.CONFIG, Kind.EXTENSIONS)) {
+        for (Kind kind : List.of(Kind.BOM, Kind.CONFIG, Kind.EXTENSIONS, Kind.CLASSES)) {
             candidates.add(new DatasetEditor.Candidate("3.40.1", kind, sourceStore.file("3.40.1", kind.snapshotFile())));
         }
         DatasetEditor editor = DatasetEditor.open(dir.resolve("dataset"));

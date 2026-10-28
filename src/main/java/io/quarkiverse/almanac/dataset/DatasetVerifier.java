@@ -59,6 +59,10 @@ public final class DatasetVerifier {
     private final Map<String, String> files = new LinkedHashMap<>();
     /// The `config` summary of each `releases.jsonl` line that has one, in line order.
     private final Map<String, Dataset.ConfigInfo> releaseConfigs = new LinkedHashMap<>();
+    /// The major lines of the `releases.jsonl` lines with classes: the classes files the dataset must have.
+    private final Set<Integer> classesLines = new TreeSet<>();
+    /// The classes files of the folder, by name (`classes/3.x.jsonl`).
+    private final List<String> classesFiles = new ArrayList<>();
 
     private DatasetVerifier(Path dir) {
         this.dir = dir;
@@ -89,6 +93,7 @@ public final class DatasetVerifier {
         checkHistoryLines(DatasetFormat.PLATFORM, "id");
         Set<String> configIds = checkHistoryLines(DatasetFormat.CONFIG, "key");
         Set<String> extensionIds = checkHistoryLines(DatasetFormat.EXTENSIONS, "id");
+        checkClassesFiles();
         checkStateLines(DatasetFormat.CONFIG_STATES, ConfigProperty.class, configIds);
         checkStateLines(DatasetFormat.EXTENSION_STATES, ExtensionInfo.class, extensionIds);
         checkMetaLines();
@@ -110,8 +115,19 @@ public final class DatasetVerifier {
         }
     }
 
+    /// Reads the files of [DatasetFormat#FILES] and the classes files, in writing order (the classes files before
+    /// `README.md`), checking each one's encoding and line ends.
     private void readFiles() throws IOException {
-        for (String name : DatasetFormat.FILES) {
+        for (String name : DatasetFormat.filesInClassesDir(dir)) {
+            if (DatasetFormat.majorOfClassesFile(name) >= 0) {
+                classesFiles.add(name);
+            } else {
+                summary.add("(not part of the dataset: " + name + ")");
+            }
+        }
+        List<String> names = new ArrayList<>(DatasetFormat.FILES);
+        names.addAll(names.indexOf(DatasetFormat.README), classesFiles);
+        for (String name : names) {
             Path file = dir.resolve(name);
             if (!Files.isRegularFile(file)) {
                 problem("files", name + " is missing");
@@ -149,9 +165,30 @@ public final class DatasetVerifier {
         }
         try (Stream<Path> entries = Files.list(dir)) {
             entries.map(entry -> entry.getFileName().toString())
-                    .filter(name -> !DatasetFormat.FILES.contains(name) && !name.equals(DatasetFormat.WRITE_MARKER))
+                    .filter(name -> !DatasetFormat.FILES.contains(name) && !name.equals(DatasetFormat.WRITE_MARKER)
+                            && !(name.equals(DatasetFormat.CLASSES_DIR) && Files.isDirectory(dir.resolve(name))))
                     .sorted()
                     .forEach(name -> summary.add("(not part of the dataset: " + name + ")"));
+        }
+    }
+
+    /// The classes files: one for each major line that has classes in `releases.jsonl`, no other, each a history file.
+    private void checkClassesFiles() {
+        Set<Integer> present = new TreeSet<>();
+        for (String name : classesFiles) {
+            int major = DatasetFormat.majorOfClassesFile(name);
+            present.add(major);
+            if (!classesLines.contains(major)) {
+                problem("files", name + ": no release of the " + major + ".x line has classes in "
+                        + DatasetFormat.RELEASES);
+            }
+            checkHistoryLines(name, "id");
+        }
+        for (int major : classesLines) {
+            if (!present.contains(major)) {
+                problem("files", DatasetFormat.classesFile(major) + " is missing, but " + DatasetFormat.RELEASES
+                        + " has classes of the " + major + ".x line");
+            }
         }
     }
 
@@ -167,6 +204,13 @@ public final class DatasetVerifier {
                 continue;
             }
             String version = row.get().path("version").asText("");
+            if (row.get().path("classes").asBoolean(false)) {
+                try {
+                    classesLines.add(DatasetFormat.majorOf(version));
+                } catch (IllegalArgumentException e) {
+                    problem("releases", DatasetFormat.RELEASES + ":" + lineNumber + ": " + e.getMessage());
+                }
+            }
             JsonNode config = row.get().get("config");
             if (config != null && config.isObject()) {
                 releaseConfigs.put(version, new Dataset.ConfigInfo(text(config, "source"), text(config, "extractor"),
@@ -277,8 +321,9 @@ public final class DatasetVerifier {
         }
     }
 
-    /// The release rules: config only with extensions (extensions need no config), both only with a BOM (a platform
-    /// BOM without its BOM does not even decode), every restored snapshot consistent and from a validated extractor.
+    /// The release rules: config only with extensions (extensions need no config), config, extensions and classes
+    /// only with a BOM (a platform BOM without its BOM does not even decode), every restored snapshot consistent and
+    /// from a validated extractor.
     private void checkReleases(Dataset dataset, Contents contents) {
         Map<Kind, Integer> counts = new EnumMap<>(Kind.class);
         for (Dataset.Release release : dataset.releases()) {
@@ -299,15 +344,18 @@ public final class DatasetVerifier {
                 problem("releases", version + " has " + (release.has(Kind.CONFIG) ? "config" : "extensions")
                         + " but no BOM");
             }
+            if (release.has(Kind.CLASSES) && !release.bom()) {
+                problem("releases", version + " has classes but no BOM");
+            }
             ConfigSnapshot config = contents.configs().get(version);
             if (config != null) {
                 SnapshotChecks.unvalidated(config).ifPresent(why -> problem("releases", version + ": " + why));
             }
         }
         summary.add(String.format(Locale.ROOT, "%d known releases: %d with bom, %d with config, %d with extensions, "
-                        + "%d with platform", dataset.releases().size(), counts.getOrDefault(Kind.BOM, 0),
+                + "%d with classes, %d with platform", dataset.releases().size(), counts.getOrDefault(Kind.BOM, 0),
                 counts.getOrDefault(Kind.CONFIG, 0), counts.getOrDefault(Kind.EXTENSIONS, 0),
-                counts.getOrDefault(Kind.PLATFORM, 0)));
+                counts.getOrDefault(Kind.CLASSES, 0), counts.getOrDefault(Kind.PLATFORM, 0)));
     }
 
     /// `config-meta.jsonl` against `releases.jsonl`, line by line (decoding stops at the first disagreement): one line

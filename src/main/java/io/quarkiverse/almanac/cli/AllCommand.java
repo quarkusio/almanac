@@ -13,11 +13,11 @@ import java.nio.file.Path;
 import java.util.List;
 import java.util.concurrent.Callable;
 
-/// `all`: versions → bom (all) → platform (all) → config (streams) → dataset import of what they extracted →
-/// assemble (from the dataset). Releases the dataset has are not extracted again.
+/// `all`: versions → bom (all) → platform (all) → config (streams, with their classes) → dataset import of what they
+/// extracted → assemble (from the dataset). Releases the dataset has are not extracted again.
 @Command(name = "all", description = "Run versions, bom (all releases), platform (all releases), config (newest of "
-        + "each stream) for the releases the dataset does not have, import what they extracted into the dataset, and "
-        + "assemble the site data from the dataset.")
+        + "each stream, with the classes of its jars) for the releases the dataset does not have, import what they "
+        + "extracted into the dataset, and assemble the site data from the dataset.")
 public final class AllCommand implements Callable<Integer> {
 
     @Mixin

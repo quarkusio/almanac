@@ -1,6 +1,7 @@
 package io.quarkiverse.almanac.dataset;
 
 import io.quarkiverse.almanac.model.BomSnapshot;
+import io.quarkiverse.almanac.model.ClassesSnapshot;
 import io.quarkiverse.almanac.model.ConfigSnapshot;
 import io.quarkiverse.almanac.model.ExtensionsSnapshot;
 import io.quarkiverse.almanac.util.SnapshotStore;
@@ -18,6 +19,8 @@ public enum Kind {
     CONFIG("config", SnapshotStore.CONFIG, ConfigSnapshot.class),
     /// Extension metadata: `extensions.json`, an [ExtensionsSnapshot].
     EXTENSIONS("extensions", SnapshotStore.EXTENSIONS, ExtensionsSnapshot.class),
+    /// The classes of the `io.quarkus` jars: `classes.json`, a [ClassesSnapshot].
+    CLASSES("classes", SnapshotStore.CLASSES, ClassesSnapshot.class),
     /// The platform BOM `io.quarkus.platform:quarkus-bom` of the same version: `platform-bom.json`, a [BomSnapshot].
     /// The dataset keeps how it differs from the release's BOM, which it needs.
     PLATFORM("platform", SnapshotStore.PLATFORM_BOM, BomSnapshot.class);
@@ -32,7 +35,8 @@ public enum Kind {
         this.recordType = recordType;
     }
 
-    /// The name used on the command line and in `releases.jsonl`: `bom`, `config`, `extensions` or `platform`.
+    /// The name used on the command line and in `releases.jsonl`: `bom`, `config`, `extensions`, `classes` or
+    /// `platform`.
     public String label() {
         return label;
     }
@@ -80,12 +84,13 @@ public enum Kind {
             }
             if (match == null) {
                 throw new IllegalArgumentException("unknown kind '" + part.strip() + "': expected bom, config, "
-                        + "extensions, platform or all");
+                        + "extensions, classes, platform or all");
             }
             kinds.add(match);
         }
         if (kinds.isEmpty()) {
-            throw new IllegalArgumentException("no kind given: expected bom, config, extensions, platform or all");
+            throw new IllegalArgumentException("no kind given: expected bom, config, extensions, classes, platform "
+                    + "or all");
         }
         return kinds;
     }

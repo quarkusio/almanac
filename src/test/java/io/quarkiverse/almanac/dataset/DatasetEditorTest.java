@@ -1,7 +1,9 @@
 package io.quarkiverse.almanac.dataset;
 
 import io.quarkiverse.almanac.ScratchDir;
+import io.quarkiverse.almanac.model.ArtifactClasses;
 import io.quarkiverse.almanac.model.BomSnapshot;
+import io.quarkiverse.almanac.model.ClassesSnapshot;
 import io.quarkiverse.almanac.model.ConfigSnapshot;
 import io.quarkiverse.almanac.model.ManagedDep;
 import io.quarkiverse.almanac.util.AtomicFiles;
@@ -72,10 +74,10 @@ class DatasetEditorTest {
                             "bom 3.2.0.CR1", "inconsistent: " + cr1 + " holds data its BomSnapshot record does not "
                                     + "keep (/extra: 1 vs (absent))",
                             // no BOM for 3.1.0 in the dataset or the import
-                            "config 3.1.0", "config and extensions need the release's BOM snapshot, which is neither "
-                                    + "in the dataset nor in this import",
-                            "extensions 3.1.0", "config and extensions need the release's BOM snapshot, which is "
-                                    + "neither in the dataset nor in this import"),
+                            "config 3.1.0", "config, extensions and classes need the release's BOM snapshot, which "
+                                    + "is neither in the dataset nor in this import",
+                            "extensions 3.1.0", "config, extensions and classes need the release's BOM snapshot, "
+                                    + "which is neither in the dataset nor in this import"),
                     reasons(report));
             assertTrue(report.hasInconsistencies());
             assertEquals(List.of("bom 3.2.0", "config 3.2.0", "extensions 3.2.0"), report.added());
@@ -171,8 +173,8 @@ class DatasetEditorTest {
             work.write("3.0.0.Final", SnapshotStore.EXTENSIONS, Samples.extensions("3.0.0.Final", Samples.REST));
             DatasetEditor.ImportReport noBom = DatasetEditor.open(dir.resolve("other"))
                     .importSnapshots(List.of(candidate(work, "3.0.0.Final", Kind.EXTENSIONS)), false);
-            assertEquals(Map.of("extensions 3.0.0.Final", "config and extensions need the release's BOM snapshot, "
-                    + "which is neither in the dataset nor in this import"), reasons(noBom));
+            assertEquals(Map.of("extensions 3.0.0.Final", "config, extensions and classes need the release's BOM "
+                    + "snapshot, which is neither in the dataset nor in this import"), reasons(noBom));
 
             // a missing work file is refused too
             DatasetEditor.ImportReport missing = editor.importSnapshots(List.of(
@@ -205,6 +207,88 @@ class DatasetEditorTest {
             assertTrue(Files.readString(datasetDir.resolve(DatasetFormat.RELEASES)).contains(
                     "{\"version\":\"3.1.0\",\"date\":\"2023-05-31\",\"bom\":true,\"extensions\":true}\n"));
             assertEquals(List.of(), DatasetVerifier.verify(datasetDir, null).problems());
+        }
+    }
+
+    @Test
+    void classesNeedTheBomOnlyAndGoWithIt() throws Exception {
+        try (ScratchDir dir = ScratchDir.create()) {
+            SnapshotStore work = work(dir);
+            for (ClassesSnapshot classes : List.of(Samples.CLASSES_300, Samples.CLASSES_310, Samples.CLASSES_320)) {
+                work.write(classes.version(), SnapshotStore.CLASSES, classes);
+            }
+            // a release without BOM, and classes that do not sort
+            work.write("3.3.0", SnapshotStore.CLASSES, Samples.classes("3.3.0", "quarkus-core",
+                    new String[] {"io.quarkus.runtime.Application"}));
+            work.write("3.2.0.CR1", SnapshotStore.CLASSES, new ClassesSnapshot("3.2.0.CR1", List.of(
+                    new ArtifactClasses("quarkus-core", List.of("io.quarkus.runtime.B", "io.quarkus.runtime.A")))));
+            Path datasetDir = dir.resolve("dataset");
+            DatasetEditor editor = DatasetEditor.open(datasetDir);
+            DatasetEditor.ImportReport report = editor.importSnapshots(all(work), false);
+            assertEquals(Map.of(
+                    "classes 3.2.0.CR1", "inconsistent: class of quarkus-core io.quarkus.runtime.A is not sorted "
+                            + "(after io.quarkus.runtime.B)",
+                    "classes 3.3.0", "config, extensions and classes need the release's BOM snapshot, which is "
+                            + "neither in the dataset nor in this import"), reasons(report));
+            assertEquals(11, report.added().size());
+            editor.write();
+
+            // 3.0.0.Final has a BOM and classes, no config or extensions
+            Dataset dataset = Dataset.open(datasetDir);
+            assertEquals(List.of("3.0.0.Final", "3.1.0", "3.2.0"), dataset.versionsWith(Kind.CLASSES));
+            assertEquals(Samples.CLASSES_300, dataset.classes("3.0.0.Final"));
+            assertEquals(List.of(), DatasetVerifier.verify(datasetDir, work).problems());
+
+            DatasetEditor removing = DatasetEditor.open(datasetDir);
+            assertEquals(List.of("classes 3.1.0"), removing.remove(List.of("3.1.0"), Set.of(Kind.CLASSES)));
+            assertEquals(List.of("bom 3.2.0", "config 3.2.0", "extensions 3.2.0", "classes 3.2.0"),
+                    removing.remove(List.of("3.2.0"), Set.of(Kind.BOM)));
+            removing.write();
+            assertEquals(List.of("3.0.0.Final"), Dataset.open(datasetDir).versionsWith(Kind.CLASSES));
+            assertEquals(List.of(), DatasetVerifier.verify(datasetDir, null).problems());
+
+            // the file of a line without classes goes, and the classes folder with it
+            Path classes3 = datasetDir.resolve(DatasetFormat.classesFile(3));
+            assertTrue(Files.isRegularFile(classes3));
+            DatasetEditor last = DatasetEditor.open(datasetDir);
+            last.remove(List.of("3.0.0.Final"), Set.of(Kind.CLASSES));
+            assertEquals(List.of(DatasetFormat.RELEASES, DatasetFormat.classesFile(3)), last.write());
+            assertFalse(Files.exists(classes3));
+            assertFalse(Files.exists(datasetDir.resolve(DatasetFormat.CLASSES_DIR)));
+            assertEquals(List.of(), DatasetVerifier.verify(datasetDir, null).problems());
+        }
+    }
+
+    @Test
+    void eachMajorLineHasAClassesFileOfItsOwn() throws Exception {
+        try (ScratchDir dir = ScratchDir.create()) {
+            SnapshotStore work = work(dir);
+            work.write("3.0.0.Final", SnapshotStore.CLASSES, Samples.CLASSES_300);
+            Path datasetDir = dir.resolve("dataset");
+            DatasetEditor editor = DatasetEditor.open(datasetDir);
+            assertEquals(List.of(), editor.importSnapshots(all(work), false).refusals());
+            editor.write();
+            Map<String, String> before = read(datasetDir);
+            String classes3 = Files.readString(datasetDir.resolve(DatasetFormat.classesFile(3)));
+
+            // a release of the 4.x line adds a file and leaves the 3.x one as it is
+            work.write("4.0.0.Alpha1", SnapshotStore.BOM, Samples.BOM_400_ALPHA1);
+            work.write("4.0.0.Alpha1", SnapshotStore.CLASSES, Samples.CLASSES_400_ALPHA1);
+            DatasetEditor adding = DatasetEditor.open(datasetDir);
+            assertEquals(List.of(), adding.importSnapshots(all(work), false).refusals());
+            assertEquals(List.of(DatasetFormat.RELEASES, DatasetFormat.BOM, DatasetFormat.classesFile(4)),
+                    adding.write());
+            assertEquals(classes3, Files.readString(datasetDir.resolve(DatasetFormat.classesFile(3))));
+            assertEquals(Samples.CLASSES_400_ALPHA1, Dataset.open(datasetDir).classes("4.0.0.Alpha1"));
+            assertEquals(List.of(), DatasetVerifier.verify(datasetDir, work).problems());
+
+            // removing it again gives back exactly the files before
+            DatasetEditor removing = DatasetEditor.open(datasetDir);
+            removing.remove(List.of("4.0.0.Alpha1"), Set.of(Kind.BOM));
+            removing.refreshReleases(List.of(), version -> null);
+            removing.write();
+            assertEquals(before, read(datasetDir));
+            assertFalse(Files.exists(datasetDir.resolve(DatasetFormat.classesFile(4))));
         }
     }
 

@@ -1,5 +1,7 @@
 package io.quarkiverse.almanac.config;
 
+import io.quarkiverse.almanac.maven.RemoteJar;
+
 import java.io.IOException;
 import java.util.Optional;
 import java.util.Set;
@@ -10,6 +12,11 @@ import java.util.Set;
 /// implement it over in-memory entries. Implementations must be thread-safe: readers may read entries of the same or
 /// different jars from several threads.
 public interface JarSource {
+
+    /// The production view of a jar of a repository.
+    static JarSource of(RemoteJar jar) {
+        return new RemoteJarSource(jar);
+    }
 
     String groupId();
 

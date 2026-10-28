@@ -100,6 +100,8 @@ const versionsJson = {
     if (entry.config) entry.configSource = compareVersions(v, '3.25') >= 0 ? 'model' : 'bytecode';
     // extension snapshots: here exactly the config snapshots (the site tests cover releases with extensions only)
     entry.ext = entry.config;
+    // classes snapshots: here too
+    entry.classes = entry.config;
     return entry;
   }),
 };
@@ -458,6 +460,60 @@ X('quarkus-smallrye-opentracing', { n: 'SmallRye OpenTracing', s: 'deprecated', 
 exts.sort((a, b) => (a.id < b.id ? -1 : 1));
 const extensionsJson = { states: extIntern.states, exts };
 
+/* ---------- classes: the jars of a few classes, at the classes snapshots (the config snapshots here) ---------- */
+// One file per major line (classes-3.json, classes-4.json), each over the snapshots of its line only.
+// [binary name, [[release, jars], ...]]: the jars from that release on, several separated by spaces, '-' for none.
+// A snapshot takes the last point at or before its release; nothing is recorded before the first point.
+const CLASS_LINES = [
+  ['io.quarkus.runtime.Application', [['3.0.0.Final', 'quarkus-core']]],
+  ['io.quarkus.runtime.Quarkus', [['3.0.0.Final', 'quarkus-core']]],
+  ['io.quarkus.runtime.Quarkus$1', [['3.0.0.Final', 'quarkus-core'], ['3.20.0', '-']]],
+  ['io.quarkus.runtime.util.ClassPathUtils', [['3.0.0.Final', 'quarkus-core'], ['3.15.1', 'quarkus-classloader-commons']]],
+  ['io.quarkus.arc.runtime.ArcRecorder', [['3.0.0.Final', 'quarkus-arc']]],
+  ['io.quarkus.arc.runtime.ArcRecorder$1', [['3.0.0.Final', 'quarkus-arc']]],
+  ['io.quarkus.virtual.threads.VirtualThreadsRecorder', [['3.8.1', 'quarkus-virtual-threads']]],
+  ['io.quarkus.opentracing.runtime.TracingRecorder', [['3.0.0.Final', 'quarkus-smallrye-opentracing'], ['3.15.1', '-']]],
+  ['io.quarkus.resteasy.reactive.server.runtime.ResteasyReactiveRecorder', [['3.0.0.Final', 'quarkus-resteasy-reactive'], ['3.9.0', 'quarkus-rest']]],
+  ['io.quarkus.amazon.lambda.http.LambdaHttpHandler', [['3.2.0.Final', 'quarkus-amazon-lambda-http quarkus-amazon-lambda-rest']]],
+  ['io.quarkus.test.junit.QuarkusTest', [['3.0.0.Final', 'quarkus-junit5'], ['3.33.0', 'quarkus-junit']]],
+  ['io.quarkus.test.QuarkusUnitTest', [['3.0.0.Final', 'quarkus-junit5-internal'], ['3.33.0', 'quarkus-junit-internal']]],
+  ['io.quarkus.test.QuarkusUnitTest$1', [['3.0.0.Final', 'quarkus-junit5-internal'], ['3.33.0', 'quarkus-junit-internal'], ['3.40.0', '-']]],
+  ['io.quarkus.test.QuarkusUnitTest$Builder', [['3.27.0', 'quarkus-junit5-internal'], ['3.33.0', 'quarkus-junit-internal']]],
+  ['io.quarkus.test.QuarkusExtensionTest', [['3.40.0', 'quarkus-junit-internal']]],
+];
+const CLASS_VIS = CONFIG_VIS;
+const packageOf = (name) => (name.includes('.') ? name.slice(0, name.lastIndexOf('.')) : '');
+const nameInPackage = (name) => name.slice(name.lastIndexOf('.') + 1);
+const majorOfRelease = (i) => Number(RELEASES[i][0].split('.')[0]);
+
+/** The classes file of the snapshots `vis` (one major line): its histories start at the first snapshot of the line. */
+function classesFile(vis) {
+  // the jars of each class at each snapshot, null when in none; undefined before the first point of its line
+  const at = CLASS_LINES.map(([name, points]) => [name, vis.map((i) => {
+    let jars;
+    for (const [from, value] of points) if (compareVersions(from, RELEASES[i][0]) <= 0) jars = value;
+    return jars === undefined || jars === '-' ? null : jars.split(' ');
+  })]).filter(([, jarsAt]) => jarsAt.some(Boolean));
+  const artifacts = [...new Set(at.flatMap(([, jarsAt]) => jarsAt.flatMap((jars) => jars ?? [])))].sort();
+  const packages = [...new Set(at.map(([name]) => packageOf(name)))].sort();
+  const classes = at.map(([name, jarsAt]) => {
+    const h = [];
+    let prev = null;
+    jarsAt.forEach((jars, k) => {
+      const indices = (jars ?? []).map((a) => artifacts.indexOf(a)).sort((a, b) => a - b);
+      const value = !indices.length ? null : indices.length === 1 ? indices[0] : indices;
+      if (JSON.stringify(value) !== JSON.stringify(prev) && (h.length || value !== null)) h.push([vis[k], value]);
+      prev = value;
+    });
+    return [packages.indexOf(packageOf(name)), nameInPackage(name), h];
+  }).sort((x, y) => x[0] - y[0] || (x[1] < y[1] ? -1 : x[1] > y[1] ? 1 : 0));
+  return { versions: vis, artifacts, packages, classes };
+}
+const classesFiles = new Map();
+for (const major of [...new Set(CLASS_VIS.map(majorOfRelease))]) {
+  classesFiles.set(major, classesFile(CLASS_VIS.filter((i) => majorOfRelease(i) === major)));
+}
+
 /* ---------- write (one array element per line: compact but diffable) ---------- */
 
 function write(name, obj) {
@@ -487,5 +543,7 @@ write('versions', versionsJson);
 write('bom', bomJson);
 write('config', configJson);
 write('extensions', extensionsJson);
+for (const [major, file] of classesFiles) write(`classes-${major}`, file);
 console.log(`wrote ${OUT}: ${RELEASES.length} releases, ${CONFIG_VIS.length} config snapshots, ${props.length} properties ` +
-  `(${config.states.length} states), ${bomJson.artifacts.length} artifacts, ${exts.length} extensions (${extIntern.states.length} states)`);
+  `(${config.states.length} states), ${bomJson.artifacts.length} artifacts, ${exts.length} extensions (${extIntern.states.length} states), ` +
+  `classes of ${classesFiles.size} major lines (${[...classesFiles].map(([major, f]) => `${major}.x: ${f.classes.length}`).join(', ')})`);

@@ -8,7 +8,6 @@ import org.junit.jupiter.api.Test;
 
 import java.io.IOException;
 import java.nio.file.Files;
-import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.List;
 import java.util.Map;
@@ -29,9 +28,9 @@ class DatasetVerifierTest {
             DatasetVerifier.Report report = DatasetVerifier.verify(datasetDir, work);
             assertEquals(List.of(), report.problems());
             assertTrue(report.summary().contains("5 known releases: 4 with bom, 2 with config, 2 with extensions, "
-                    + "0 with platform"), report.summary().toString());
+                    + "0 with classes, 0 with platform"), report.summary().toString());
             assertTrue(report.summary().contains("compared with " + work.root() + ": bom 4 (0 different) config 2 "
-                    + "(0 different) extensions 2 (0 different) platform 0 (0 different)"),
+                    + "(0 different) extensions 2 (0 different) classes 0 (0 different) platform 0 (0 different)"),
                     report.summary().toString());
 
             // a work snapshot that differs from the dataset's is reported
@@ -176,7 +175,7 @@ class DatasetVerifierTest {
             DatasetVerifier.Report report = DatasetVerifier.verify(datasetDir, null);
             assertEquals(List.of(), report.problems());
             assertTrue(report.summary().contains("5 known releases: 4 with bom, 2 with config, 3 with extensions, "
-                    + "0 with platform"), report.summary().toString());
+                    + "0 with classes, 0 with platform"), report.summary().toString());
             assertTrue(report.summary().stream().anyMatch(line -> line.startsWith("round trip: 9 of 9 files")),
                     report.summary().toString());
 
@@ -198,7 +197,7 @@ class DatasetVerifierTest {
             DatasetVerifier.Report report = DatasetVerifier.verify(datasetDir, work);
             assertEquals(List.of(), report.problems());
             assertTrue(report.summary().contains("5 known releases: 4 with bom, 2 with config, 2 with extensions, "
-                    + "2 with platform"), report.summary().toString());
+                    + "0 with classes, 2 with platform"), report.summary().toString());
             assertTrue(report.summary().stream().anyMatch(line -> line.endsWith("platform 2 (0 different)")),
                     report.summary().toString());
 
@@ -218,6 +217,31 @@ class DatasetVerifierTest {
             DatasetVerifier.Report report = DatasetVerifier.verify(dir.path(), null);
             assertFalse(report.ok());
             assertEquals(1, report.problems().size());
+        }
+    }
+
+    @Test
+    void namesClassesFilesOfLinesWithoutClassesAndMissingOnes() throws Exception {
+        try (ScratchDir dir = ScratchDir.create()) {
+            Path datasetDir = dir.resolve("dataset");
+            writeFiles(datasetDir, Samples.contentsWithClasses());
+            DatasetVerifier.Report sound = DatasetVerifier.verify(datasetDir, null);
+            assertEquals(List.of(), sound.problems());
+            assertTrue(sound.summary().contains("6 known releases: 5 with bom, 2 with config, 2 with extensions, "
+                    + "4 with classes, 0 with platform"), sound.summary().toString());
+            assertTrue(sound.summary().stream().anyMatch(line -> line.startsWith("classes/4.x.jsonl")),
+                    sound.summary().toString());
+
+            Files.move(datasetDir.resolve(DatasetFormat.classesFile(4)),
+                    datasetDir.resolve(DatasetFormat.classesFile(2)));
+            AtomicFiles.writeString(datasetDir.resolve("classes/notes.txt"), "not a classes file\n");
+            DatasetVerifier.Report report = DatasetVerifier.verify(datasetDir, null);
+            assertTrue(report.problems().contains("files: classes/2.x.jsonl: no release of the 2.x line has classes in "
+                    + "releases.jsonl"), report.problems().toString());
+            assertTrue(report.problems().contains("files: classes/4.x.jsonl is missing, but releases.jsonl has classes "
+                    + "of the 4.x line"), report.problems().toString());
+            assertTrue(report.summary().contains("(not part of the dataset: classes/notes.txt)"),
+                    report.summary().toString());
         }
     }
 

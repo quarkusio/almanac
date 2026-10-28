@@ -1,0 +1,19 @@
+{
+  "versions": [29],
+  "artifacts": ["quarkus-amazon-lambda-http","quarkus-amazon-lambda-rest","quarkus-arc","quarkus-classloader-commons","quarkus-core","quarkus-junit","quarkus-junit-internal","quarkus-rest","quarkus-virtual-threads"],
+  "packages": ["io.quarkus.amazon.lambda.http","io.quarkus.arc.runtime","io.quarkus.resteasy.reactive.server.runtime","io.quarkus.runtime","io.quarkus.runtime.util","io.quarkus.test","io.quarkus.test.junit","io.quarkus.virtual.threads"],
+  "classes": [
+    [0,"LambdaHttpHandler",[[29,[0,1]]]],
+    [1,"ArcRecorder",[[29,2]]],
+    [1,"ArcRecorder$1",[[29,2]]],
+    [2,"ResteasyReactiveRecorder",[[29,7]]],
+    [3,"Application",[[29,4]]],
+    [3,"Quarkus",[[29,4]]],
+    [4,"ClassPathUtils",[[29,3]]],
+    [5,"QuarkusExtensionTest",[[29,6]]],
+    [5,"QuarkusUnitTest",[[29,6]]],
+    [5,"QuarkusUnitTest$Builder",[[29,6]]],
+    [6,"QuarkusTest",[[29,5]]],
+    [7,"VirtualThreadsRecorder",[[29,8]]]
+  ]
+}

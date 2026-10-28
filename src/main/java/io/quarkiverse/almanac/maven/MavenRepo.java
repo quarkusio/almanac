@@ -49,6 +49,18 @@ public final class MavenRepo {
         return http;
     }
 
+    /// This repository over another cache folder, with the same base URL and HTTP client: for reading what another work
+    /// folder cached. What it downloads goes to that folder; a jar it has cached is only read.
+    public MavenRepo withCache(Path otherCacheRoot) {
+        return new MavenRepo(base, otherCacheRoot, http, jarOptions);
+    }
+
+    /// Whether the cache knows a jar without a request: it holds the jar, its central directory or its 404 marker.
+    public boolean hasCachedJar(String groupId, String artifactId, String version) {
+        Path file = cacheRoot.resolve(artifactPath(groupId, artifactId, version, "jar"));
+        return Files.exists(file) || Files.exists(sibling(file, ".cd")) || Files.exists(sibling(file, ".404"));
+    }
+
     /// Repository path of an artifact file, e.g. `io/quarkus/quarkus-bom/3.20.6/quarkus-bom-3.20.6.pom`.
     public static String artifactPath(String groupId, String artifactId, String version, String extension) {
         return groupId.replace('.', '/') + "/" + artifactId + "/" + version + "/"

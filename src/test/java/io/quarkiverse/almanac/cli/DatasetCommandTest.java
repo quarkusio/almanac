@@ -148,8 +148,8 @@ class DatasetCommandTest {
                     "--site", site.toString(), "--include-work");
             assertEquals(0, withWork.exitCode(), withWork.log());
             assertEquals(List.of("3.0.0.Final", "3.1.0", "3.2.0"), published(site));
-            assertTrue(withWork.log().contains("--include-work used 1 BOM, 2 config, 2 extensions and 0 platform BOM "
-                    + "snapshots"), withWork.log());
+            assertTrue(withWork.log().contains("--include-work used 1 BOM, 2 config, 2 extensions, 0 classes and 0 "
+                    + "platform BOM snapshots"), withWork.log());
 
             Run noDataset = run("assemble", "--offline", "--work", work.toString(), "--dataset",
                     dir.resolve("missing").toString(), "--site", site.toString());

@@ -20,6 +20,7 @@ import static io.quarkiverse.almanac.dataset.Samples.EXTENSIONS_310;
 import static io.quarkiverse.almanac.dataset.Samples.EXTENSIONS_320;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -113,6 +114,88 @@ class DatasetCodecTest {
         assertFalse(dataset.has("2.16.12.Final", Kind.BOM));
         assertThrows(IOException.class, () -> dataset.bom("2.16.12.Final"));
         assertThrows(IOException.class, () -> dataset.config("3.0.0.Final"));
+    }
+
+    @Test
+    void classLinesNameTheJarAndTheClassAndRestoreExactly() throws IOException {
+        Contents contents = Samples.contentsWithClasses();
+        Map<String, String> files = DatasetEncoder.encode(contents);
+        String classes3 = DatasetFormat.classesFile(3);
+        String classes4 = DatasetFormat.classesFile(4);
+        assertEquals("classes/3.x.jsonl", classes3);
+        // one file per major line, before README.md
+        List<String> names = List.copyOf(files.keySet());
+        assertEquals(List.of(DatasetFormat.EXTENSION_STATES, classes3, classes4, DatasetFormat.README),
+                names.subList(names.size() - 4, names.size()));
+        // class histories run over the releases of the line with classes only (3.2.0.CR1 has none); a move ends one
+        // line and starts another, a class in two jars has two lines
+        assertEquals("""
+                {"id":"quarkus-amazon-lambda-http io.quarkus.amazon.lambda.http.LambdaHttpHandler","h":[["3.2.0","+"]]}
+                {"id":"quarkus-amazon-lambda-rest io.quarkus.amazon.lambda.http.LambdaHttpHandler","h":[["3.2.0","+"]]}
+                {"id":"quarkus-core io.quarkus.runtime.Application","h":[["3.0.0.Final","+"]]}
+                {"id":"quarkus-core io.quarkus.runtime.Old","h":[["3.1.0","+"],["3.2.0",null]]}
+                {"id":"quarkus-junit-internal io.quarkus.test.QuarkusExtensionTest","h":[["3.2.0","+"]]}
+                {"id":"quarkus-junit-internal io.quarkus.test.QuarkusUnitTest","h":[["3.2.0","+"]]}
+                {"id":"quarkus-junit-internal io.quarkus.test.QuarkusUnitTest$1","h":[["3.2.0","+"]]}
+                {"id":"quarkus-junit5-internal io.quarkus.test.QuarkusUnitTest","h":[["3.0.0.Final","+"],["3.2.0",null]]}
+                {"id":"quarkus-junit5-internal io.quarkus.test.QuarkusUnitTest$1","h":[["3.0.0.Final","+"],["3.2.0",null]]}
+                """, files.get(classes3));
+        // the 4.x line starts afresh: its histories begin at its first presence in the line
+        assertEquals("""
+                {"id":"quarkus-core io.quarkus.runtime.Application","h":[["4.0.0.Alpha1","+"]]}
+                {"id":"quarkus-junit-internal io.quarkus.test.QuarkusExtensionTest","h":[["4.0.0.Alpha1","+"]]}
+                {"id":"quarkus-junit-internal io.quarkus.test.QuarkusUnitTest","h":[["4.0.0.Alpha1","+"]]}
+                """, files.get(classes4));
+        List<String> releases = DatasetFormat.lines(files.get(DatasetFormat.RELEASES));
+        assertEquals("{\"version\":\"3.0.0.Final\",\"date\":\"2023-04-26\",\"bom\":true,\"classes\":true}",
+                releases.get(1));
+        assertTrue(releases.get(4).endsWith(",\"extensions\":true,\"classes\":true}"), releases.get(4));
+        assertEquals("{\"version\":\"3.2.0.CR1\",\"date\":\"2023-06-28\",\"bom\":true}", releases.get(3));
+        assertEquals("{\"version\":\"4.0.0.Alpha1\",\"date\":\"2026-07-29\",\"bom\":true,\"classes\":true}",
+                releases.get(5));
+
+        Dataset dataset = Dataset.of(files);
+        assertEquals(List.of("3.0.0.Final", "3.1.0", "3.2.0", "4.0.0.Alpha1"), dataset.versionsWith(Kind.CLASSES));
+        assertEquals(Samples.CLASSES_300, dataset.classes("3.0.0.Final"));
+        assertEquals(Samples.CLASSES_310, dataset.classes("3.1.0"));
+        assertEquals(Samples.CLASSES_320, dataset.classes("3.2.0"));
+        assertEquals(Samples.CLASSES_400_ALPHA1, dataset.classes("4.0.0.Alpha1"));
+        assertEquals(contents, dataset.contents());
+        assertEquals(files, DatasetEncoder.encode(dataset.contents()));
+        // the restored snapshots share the name strings of the decoded lines
+        assertSame(dataset.classes("3.0.0.Final").artifacts().get(1).classes().getFirst(),
+                dataset.classes("3.1.0").artifacts().get(1).classes().getFirst());
+        assertThrows(IOException.class, () -> dataset.classes("3.2.0.CR1"));
+
+        // the classes of a release change its releases line and the lines of what only it had, in its line's file
+        Contents without = Samples.contentsWithClasses();
+        without.remove("3.1.0", Kind.CLASSES);
+        assertEquals(Map.of(DatasetFormat.RELEASES, "+1 -1", classes3, "+1 -0"),
+                Samples.lineChanges(DatasetEncoder.encode(without), files));
+        // a release of another line never changes the file of this one
+        Contents before4 = Samples.contentsWithClasses();
+        before4.remove("4.0.0.Alpha1", Kind.CLASSES);
+        Map<String, String> changes = Samples.lineChanges(DatasetEncoder.encode(before4), files);
+        assertEquals("+3 -0", changes.get(classes4));
+        assertFalse(changes.containsKey(classes3), changes.toString());
+        assertFalse(DatasetEncoder.encode(before4).containsKey(classes4), "no file for a line without classes");
+
+        // a value other than "+", an id that is not "<artifactId> <class>", a release of another line
+        assertRefused(files, classes3, files.get(classes3).replace(
+                "[[\"3.0.0.Final\",\"+\"]]", "[[\"3.0.0.Final\",\"1\"]]"),
+                "quarkus-core io.quarkus.runtime.Application has the value 1, not \"+\"");
+        assertRefused(files, classes3, files.get(classes3).replace(
+                "quarkus-core io.quarkus.runtime.Application", "quarkus-core:io.quarkus.runtime.Application"),
+                "quarkus-core:io.quarkus.runtime.Application is not <artifactId> <class>");
+        assertRefused(files, classes3, files.get(classes3).replace("[[\"3.0.0.Final\",\"+\"]]",
+                "[[\"4.0.0.Alpha1\",\"+\"]]"), "quarkus-core io.quarkus.runtime.Application has a change point at "
+                + "4.0.0.Alpha1, which has no classes of the 3.x line in releases.jsonl");
+        Map<String, String> lost = new HashMap<>(files);
+        lost.remove(classes4);
+        IOException missing = assertThrows(IOException.class, () -> Dataset.of(lost).classes("4.0.0.Alpha1"));
+        assertTrue(missing.getMessage().contains("classes/4.x.jsonl is missing, but releases.jsonl lists 1 releases "
+                + "with classes of the 4.x line"), missing.getMessage());
+        assertEquals(Samples.CLASSES_320, Dataset.of(lost).classes("3.2.0"), "the other lines still restore");
     }
 
     @Test

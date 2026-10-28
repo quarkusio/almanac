@@ -16,6 +16,9 @@ const {
   defaultPair, quickPicks, versionNeighbours, formatDate, spanLabel, CONFIG_FILTER_TAGS, BOM_KIND_ORDER,
   isPreRelease, preQualifier, releaseVisibility, visibleOnly, streamStartIndex, streamSpan, releasedApart, spanApart,
   extensionVersionsOf, extensionVersionFor, snapshotVersionFor,
+  classVersionsOf, classesVersionFor, className, findClass, jarsOf, simpleClassName, classPackage, isNestedClass,
+  isAnonymousClass, topLevelClass, diffClasses, classRows, CLASS_FILTER_TAGS, classHistory, majorOf, classLinesOf,
+  mergeClasses,
 } = core;
 
 const SAMPLE = join(dirname(fileURLToPath(import.meta.url)), '..', 'dev', 'sample');
@@ -752,6 +755,181 @@ describe('extension diff', () => {
 });
 
 /* -------------------------------------------------------------------------- */
+describe('classes', () => {
+  // three classes snapshots (releases 0, 1, 2): QuarkusUnitTest moves at 2, one of its nested classes goes, another
+  // comes at 1 and moves along; a class of the unnamed package and one in two jars come at 2
+  const classes = {
+    versions: [0, 1, 2],
+    artifacts: ['quarkus-amazon-lambda-http', 'quarkus-amazon-lambda-rest', 'quarkus-core', 'quarkus-junit-internal', 'quarkus-junit5-internal'],
+    packages: ['', 'io.quarkus.amazon.lambda.http', 'io.quarkus.runtime', 'io.quarkus.test'],
+    classes: [
+      [0, 'Main', [[2, 2]]],
+      [1, 'Handler', [[2, [0, 1]]]],
+      [2, 'Application', [[0, 2]]],
+      [2, 'Gone', [[0, 2], [1, null]]],
+      [2, 'Old', [[0, 2], [2, null]]],
+      [3, 'QuarkusExtensionTest', [[2, 3]]],
+      [3, 'QuarkusUnitTest', [[0, 4], [2, 3]]],
+      [3, 'QuarkusUnitTest$1', [[0, 4], [2, null]]],
+      [3, 'QuarkusUnitTest$Builder', [[1, 4], [2, 3]]],
+    ],
+  };
+  const versions = V('3.30.0', '3.30.1', '3.31.0');
+  versions.forEach((x) => {
+    x.classes = true;
+  });
+
+  test('names: binary, in the package, nested, anonymous, top-level', () => {
+    assert.equal(className(classes, classes.classes[6]), 'io.quarkus.test.QuarkusUnitTest');
+    assert.equal(className(classes, classes.classes[0]), 'Main', 'the unnamed package');
+    assert.equal(findClass(classes, 'io.quarkus.test.QuarkusUnitTest$1'), classes.classes[7]);
+    assert.equal(findClass(classes, 'io.quarkus.test.Nope'), null);
+    assert.equal(simpleClassName('io.quarkus.test.QuarkusUnitTest$Builder'), 'QuarkusUnitTest$Builder');
+    assert.equal(classPackage('io.quarkus.test.QuarkusUnitTest$Builder'), 'io.quarkus.test');
+    assert.equal(classPackage('Main'), '');
+    assert.equal(isNestedClass('io.quarkus.test.QuarkusUnitTest$Builder'), true);
+    assert.equal(isNestedClass('io.quarkus.test.QuarkusUnitTest'), false);
+    assert.equal(isNestedClass('io.quarkus.gen.$Proxy'), false, 'a $ that starts the name does not nest it');
+    assert.equal(isAnonymousClass('io.quarkus.test.QuarkusUnitTest$1'), true);
+    assert.equal(isAnonymousClass('io.quarkus.test.QuarkusUnitTest$4$2'), true);
+    assert.equal(isAnonymousClass('io.quarkus.test.Outer$1Local'), true, 'local classes too');
+    assert.equal(isAnonymousClass('io.quarkus.test.QuarkusUnitTest$Builder'), false);
+    assert.equal(topLevelClass('io.quarkus.test.QuarkusUnitTest$4$2'), 'io.quarkus.test.QuarkusUnitTest');
+    assert.equal(topLevelClass('io.quarkus.test.QuarkusUnitTest'), 'io.quarkus.test.QuarkusUnitTest');
+    assert.equal(topLevelClass('io.quarkus.gen.$Proxy$1'), 'io.quarkus.gen.$Proxy');
+    assert.deepEqual([jarsOf(null), jarsOf(undefined), jarsOf(3), jarsOf([0, 1])], [[], [], [3], [0, 1]]);
+  });
+
+  test('classes snapshots follow the classes flags and the config rule', () => {
+    const list = V('3.30.0', '3.30.1', '3.31.0.CR1', '3.31.0');
+    list[1].classes = true;
+    list[3].classes = true;
+    assert.deepEqual(classVersionsOf(list), [1, 3]);
+    assert.deepEqual(classVersionsOf(undefined), []);
+    assert.equal(classesVersionFor(0, list), 1, 'a final without a snapshot uses its stream\'s');
+    assert.equal(classesVersionFor(2, list), null, 'a pre-release only its own');
+    assert.equal(classesVersionFor(3, list, [1, 3]), 3);
+  });
+
+  test('diffClasses: added, removed and moved, for every class and the top-level ones', () => {
+    const d = diffClasses(classes, 0, 2);
+    const names = (list) => list.map((x) => x.name);
+    assert.deepEqual(names(d.added), ['Main', 'io.quarkus.amazon.lambda.http.Handler', 'io.quarkus.test.QuarkusExtensionTest', 'io.quarkus.test.QuarkusUnitTest$Builder']);
+    assert.deepEqual(names(d.removed), ['io.quarkus.runtime.Gone', 'io.quarkus.runtime.Old', 'io.quarkus.test.QuarkusUnitTest$1']);
+    assert.deepEqual(d.moved, [{ name: 'io.quarkus.test.QuarkusUnitTest', from: [4], to: [3] }]);
+    assert.deepEqual(d.added[1].to, [0, 1], 'a class in two jars');
+    assert.deepEqual(d.counts, { added: 4, removed: 3, moved: 1 });
+    assert.deepEqual(d.top, { added: 3, removed: 2, moved: 1 });
+    // from 1: the builder moves too, Gone is gone already
+    const later = diffClasses(classes, 1, 2);
+    assert.deepEqual(names(later.moved), ['io.quarkus.test.QuarkusUnitTest', 'io.quarkus.test.QuarkusUnitTest$Builder']);
+    assert.deepEqual(names(later.removed), ['io.quarkus.runtime.Old', 'io.quarkus.test.QuarkusUnitTest$1']);
+    // nothing between a snapshot and itself; the reverse mirrors
+    assert.deepEqual(diffClasses(classes, 2, 2).counts, { added: 0, removed: 0, moved: 0 });
+    const back = diffClasses(classes, 2, 0);
+    assert.deepEqual([back.counts.added, back.counts.removed, back.counts.moved], [3, 4, 1]);
+  });
+
+  test('classRows: a row per jar, a move in the jar it left and in the jar it reached', () => {
+    const rows = classRows(diffClasses(classes, 0, 2), classes);
+    assert.deepEqual(rows.map((r) => [r.artifact, r.change, r.name, r.other]), [
+      ['quarkus-amazon-lambda-http', 'added', 'io.quarkus.amazon.lambda.http.Handler', []],
+      ['quarkus-amazon-lambda-rest', 'added', 'io.quarkus.amazon.lambda.http.Handler', []],
+      ['quarkus-core', 'removed', 'io.quarkus.runtime.Gone', []],
+      ['quarkus-core', 'removed', 'io.quarkus.runtime.Old', []],
+      ['quarkus-core', 'added', 'Main', []],
+      ['quarkus-junit-internal', 'moved-in', 'io.quarkus.test.QuarkusUnitTest', ['quarkus-junit5-internal']],
+      ['quarkus-junit-internal', 'added', 'io.quarkus.test.QuarkusExtensionTest', []],
+      ['quarkus-junit-internal', 'added', 'io.quarkus.test.QuarkusUnitTest$Builder', []],
+      ['quarkus-junit5-internal', 'removed', 'io.quarkus.test.QuarkusUnitTest$1', []],
+      ['quarkus-junit5-internal', 'moved-out', 'io.quarkus.test.QuarkusUnitTest', ['quarkus-junit-internal']],
+    ]);
+    assert.deepEqual(rows.filter((r) => r.nested).map((r) => r.name), ['io.quarkus.test.QuarkusUnitTest$Builder', 'io.quarkus.test.QuarkusUnitTest$1']);
+    assert.deepEqual([...new Set(rows.flatMap((r) => r.tags))].sort(), [...CLASS_FILTER_TAGS].sort());
+    // the chips and the text filter of the compare page
+    assert.deepEqual(filterRows(rows, { tags: new Set(['moved']) }).map((r) => r.artifact), ['quarkus-junit-internal', 'quarkus-junit5-internal']);
+    assert.deepEqual(filterRows(rows, { text: 'junit5 unittest' }).map((r) => r.change), ['moved-in', 'removed', 'moved-out']);
+  });
+
+  test('classHistory: runs of jars, moves, removals and the switches', () => {
+    const unit = classHistory(classes, 'io.quarkus.test.QuarkusUnitTest', classes.versions, { versions });
+    assert.deepEqual(unit.events.map((e) => [e.vi, e.type]), [[0, 'present'], [2, 'moved']]);
+    assert.deepEqual([unit.events[1].from, unit.events[1].to], [[4], [3]]);
+    assert.deepEqual(unit.runs.map((r) => [r.from, r.to, r.count, r.jars]), [[0, 1, 2, [4]], [2, 2, 1, [3]]]);
+    assert.deepEqual(unit.ranges, [{ from: 0, to: 2 }]);
+    assert.deepEqual([unit.present, unit.jars, unit.name, unit.widened], [true, [3], 'io.quarkus.test.QuarkusUnitTest', false]);
+
+    const old = classHistory(classes, 'io.quarkus.runtime.Old', classes.versions);
+    assert.deepEqual(old.events.map((e) => [e.vi, e.type]), [[0, 'present'], [2, 'removed']]);
+    assert.deepEqual(old.events[1].from, [2]);
+    assert.deepEqual(old.runs.map((r) => [r.from, r.to, r.jars, r.before]), [[0, 1, [2], false], [2, 2, [], false]]);
+    assert.equal(old.present, false);
+
+    const main = classHistory(classes, 'Main', classes.versions);
+    assert.deepEqual(main.events.map((e) => [e.vi, e.type, e.jars]), [[2, 'introduced', [2]]]);
+    assert.deepEqual(main.runs.map((r) => [r.from, r.to, r.jars, r.before]), [[0, 1, [], true], [2, 2, [2], false]]);
+
+    // the switches hide snapshot 0: Gone is only there, so its history widens to every snapshot
+    const vis = { visible: [false, true, true] };
+    assert.deepEqual(classHistory(classes, 'io.quarkus.test.QuarkusUnitTest', classes.versions, { vis }).cvs, [1, 2]);
+    assert.equal(classHistory(classes, 'io.quarkus.test.QuarkusUnitTest', classes.versions, { vis }).hiddenSnapshots, 1);
+    const gone = classHistory(classes, 'io.quarkus.runtime.Gone', classes.versions, { vis, widen: [{ vis: { visible: [true, true, true] }, kind: 'old' }] });
+    assert.deepEqual([gone.widened, gone.widenedBy, gone.cvs], [true, 'old', [0, 1, 2]]);
+    assert.equal(classHistory(classes, 'io.quarkus.Nope', classes.versions), null);
+  });
+
+  test('one file per major line: which lines releases need, and the files merged as one', () => {
+    const list = V('3.30.0', '3.31.0', '4.0.0.Alpha1', '4.0.0');
+    assert.deepEqual([majorOf('3.40.1'), majorOf('4.0.0.Beta1'), majorOf(list[2])], [3, 4, 4]);
+    assert.deepEqual(classLinesOf(list, [3, 0, 1]), [3, 4]);
+    assert.deepEqual(classLinesOf(list, []), []);
+    // each line's file starts its histories afresh, with jars and packages of its own
+    const line3 = {
+      versions: [0, 1], artifacts: ['quarkus-a', 'quarkus-b'], packages: ['p'],
+      classes: [[0, 'Gap', [[0, 0]]], [0, 'Gone', [[0, 0], [1, null]]], [0, 'Kept', [[0, 0]]], [0, 'Late', [[1, 1]]], [0, 'Moved', [[0, 0]]]],
+    };
+    const line4 = {
+      versions: [2, 3], artifacts: ['quarkus-a', 'quarkus-c'], packages: ['p', 'q'],
+      classes: [[0, 'Gap', [[3, 0]]], [0, 'Kept', [[2, 0]]], [0, 'Moved', [[2, 1]]], [1, 'New', [[3, [0, 1]]]]],
+    };
+    const merged = mergeClasses([line4, line3]);
+    assert.deepEqual(merged, {
+      versions: [0, 1, 2, 3],
+      artifacts: ['quarkus-a', 'quarkus-b', 'quarkus-c'],
+      packages: ['p', 'q'],
+      classes: [
+        [0, 'Gap', [[0, 0], [2, null], [3, 0]]], // missing at the start of the 4.x line
+        [0, 'Gone', [[0, 0], [1, null]]],
+        [0, 'Kept', [[0, 0]]], // the same jar on both sides of the line change: no point
+        [0, 'Late', [[1, 1], [2, null]]], // not in the 4.x line at all
+        [0, 'Moved', [[0, 0], [2, 2]]],
+        [1, 'New', [[3, [0, 2]]]],
+      ],
+    });
+    const across = diffClasses(merged, 1, 2);
+    assert.deepEqual([across.removed.map((x) => x.name), across.moved.map((x) => x.name)], [['p.Gap', 'p.Late'], ['p.Moved']]);
+    // a single file is used as it is; none gives an empty one
+    assert.equal(mergeClasses([line3]), line3);
+    assert.deepEqual(mergeClasses([]), { versions: [], artifacts: [], packages: [], classes: [] });
+  });
+
+  test('search finds classes by binary name and by name in the package, not anonymous ones', () => {
+    const index = buildSearchIndex({ classes, versions });
+    const entries = index.entries.filter((e) => e.type === 'class');
+    assert.equal(entries.length, 8, 'QuarkusUnitTest$1 is left out');
+    const r = search(index, 'QuarkusUnitTest').items;
+    assert.deepEqual(r.map((x) => [x.id, x.tier]), [['io.quarkus.test.QuarkusUnitTest', 0], ['io.quarkus.test.QuarkusUnitTest$Builder', 1]]);
+    assert.deepEqual(r[0].jars, ['quarkus-junit-internal']);
+    const old = search(index, 'io.quarkus.runtime.Old').items[0];
+    assert.deepEqual([old.current, old.lastSeen, old.jars], [false, 1, ['quarkus-core']]);
+    assert.deepEqual(search(index, 'lambda handler').items[0].jars, ['quarkus-amazon-lambda-http', 'quarkus-amazon-lambda-rest']);
+    // at equal tiers, classes come after properties, extensions and artifacts
+    const mixed = buildSearchIndex({ classes, versions, bom: { artifacts: [{ id: 'io.quarkus:application', h: [[2, '=']]}] } });
+    assert.deepEqual(search(mixed, 'application').items.map((x) => x.type), ['artifact', 'class']);
+  });
+});
+
+/* -------------------------------------------------------------------------- */
 describe('search', () => {
   const config = {
     versions: [0, 1],
@@ -1035,6 +1213,8 @@ describe('sample dataset (dev/sample) follows the site data format', () => {
   const bom = load('bom');
   const config = load('config');
   const extensions = load('extensions');
+  const classFiles = [load('classes-3'), load('classes-4')];
+  const classes = mergeClasses(classFiles);
   const list = vj.versions;
 
   test('versions.json', () => {
@@ -1046,6 +1226,7 @@ describe('sample dataset (dev/sample) follows the site data format', () => {
       assert.equal(x.lts, vj.lts.includes(x.stream));
       assert.equal(typeof x.config, 'boolean');
       assert.equal(typeof x.ext, 'boolean');
+      assert.equal(typeof x.classes, 'boolean');
       assert.match(x.date, /^\d{4}-\d{2}-\d{2}$/);
       if (x.config) assert.ok(['model', 'bytecode'].includes(x.configSource));
       if (x.config) assert.ok(x.ext, `${x.v}: a config snapshot comes with extensions`);
@@ -1129,6 +1310,42 @@ describe('sample dataset (dev/sample) follows the site data format', () => {
     assert.ok(all.added.length && all.removed.length);
   });
 
+  test('classes-3.json and classes-4.json', () => {
+    assert.deepEqual(classLinesOf(list, classVersionsOf(list)), [3, 4], 'one file per line with classes snapshots');
+    for (const [k, file] of classFiles.entries()) {
+      assert.ok(file.versions.length && file.versions.every((i) => majorOf(list[i]) === k + 3), 'a file holds its line only');
+      for (const row of file.classes) assert.ok(row[2][0][1] != null && file.versions.includes(row[2][0][0]), `${row[1]}: starts in its line`);
+    }
+    assert.deepEqual(classVersionsOf(list), classes.versions);
+    for (const names of [classes.artifacts, classes.packages]) {
+      assert.deepEqual(names, [...names].sort());
+      assert.equal(new Set(names).size, names.length);
+    }
+    const keys = classes.classes.map(([p, n]) => [p, n]);
+    assert.deepEqual(keys, [...keys].sort((x, y) => x[0] - y[0] || (x[1] < y[1] ? -1 : x[1] > y[1] ? 1 : 0)), 'sorted by package, then name');
+    for (const row of classes.classes) {
+      const name = className(classes, row);
+      assert.ok(row[0] >= 0 && row[0] < classes.packages.length, `${name}: package index`);
+      assert.ok(row[2][0][1] != null, `${name}: nothing recorded before the first presence`);
+      for (let i = 0; i < row[2].length; i++) {
+        const [vi, value] = row[2][i];
+        assert.ok(classes.versions.includes(vi), `${name}: points only at classes versions`);
+        if (i) assert.ok(vi > row[2][i - 1][0] && JSON.stringify(value) !== JSON.stringify(row[2][i - 1][1]), `${name}: change points only`);
+        for (const j of jarsOf(value)) assert.ok(j >= 0 && j < classes.artifacts.length, `${name}: artifact index`);
+        if (Array.isArray(value)) assert.ok(value.length > 1 && value.every((j, k) => !k || j > value[k - 1]), `${name}: several jars, ascending`);
+      }
+    }
+    const kinds = new Set();
+    const lvs = classes.versions;
+    for (let i = 1; i < lvs.length; i++) {
+      const d = diffClasses(classes, lvs[i - 1], lvs[i]);
+      for (const k of ['added', 'removed', 'moved']) if (d[k].length) kinds.add(k);
+      if (d.moved.some((x) => isNestedClass(x.name))) kinds.add('nested moved');
+    }
+    for (const k of ['added', 'removed', 'moved', 'nested moved']) assert.ok(kinds.has(k), `sample exercises ${k}`);
+    assert.ok(classes.classes.some((row) => row[2].some(([, v]) => Array.isArray(v))), 'sample has a class in two jars');
+  });
+
   test('pre-releases cover Alpha, Beta and CR; with and without config; with finals and upcoming', () => {
     const vis = releaseVisibility(list);
     const pres = list.map((x, i) => ({ x, i })).filter(({ x }) => x.pre);
@@ -1139,8 +1356,9 @@ describe('sample dataset (dev/sample) follows the site data format', () => {
   });
 
   test('the whole pipeline runs on the sample for every pair of releases', () => {
-    const index = buildSearchIndex({ config, bom, extensions, versions: list });
+    const index = buildSearchIndex({ config, bom, extensions, classes, versions: list });
     assert.ok(search(index, 'datasource').total > 5);
+    assert.equal(search(index, 'QuarkusUnitTest').items[0].id, 'io.quarkus.test.QuarkusUnitTest');
     let skipped = 0;
     for (let a = 0; a < list.length; a += 3) {
       for (let b = 0; b < list.length; b += 4) {
@@ -1161,6 +1379,9 @@ describe('sample dataset (dev/sample) follows the site data format', () => {
         }
         configRows(diffConfig(config, ca, cb), config.desc);
         diffExtensions(extensions, ca, cb);
+        // classes too have snapshots of their own, here at the config snapshots
+        assert.equal(classesVersionFor(a, list), ca);
+        classRows(diffClasses(classes, ca, cb), classes);
       }
     }
     assert.ok(skipped > 0, 'some pairs involve a pre-release without a snapshot');
@@ -1169,6 +1390,7 @@ describe('sample dataset (dev/sample) follows the site data format', () => {
       for (const p of config.props) assert.ok(propertyHistory(config, p, { vis }).events.length >= 1, p.k);
       for (const art of bom.artifacts) assert.ok(artifactHistory(bom, art.id, list, { vis }).ranges.length >= 1, art.id);
       for (const x of extensions.exts) assert.ok(extensionHistory(extensions, x.id, extensionVersionsOf(list), { vis }).events.length >= 1, x.id);
+      for (const row of classes.classes) assert.ok(classHistory(classes, row, classVersionsOf(list), { vis, versions: list }).events.length >= 1, row[1]);
     }
     for (const p of config.props) assert.ok(propertyHistory(config, p).events.length >= 1);
     for (const art of bom.artifacts) assert.ok(artifactHistory(bom, art.id, list).ranges.length >= 1);
