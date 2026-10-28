@@ -8,8 +8,7 @@ its history.
 
 **Site:** https://quarkus.io/almanac/
 
-It covers Quarkus 3.0 and later, pre-releases included, with config taken at every patch of 3.0 and of the LTS streams,
-and at the newest patch of the other streams.
+It covers every Quarkus release from 3.0 on, pre-releases included, with its config, extensions and classes.
 
 ## How it works
 
