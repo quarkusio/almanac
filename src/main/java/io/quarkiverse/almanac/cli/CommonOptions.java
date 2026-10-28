@@ -33,8 +33,8 @@ public final class CommonOptions {
     @Option(names = "--pause", defaultValue = "0.5-1.5", paramLabel = "SECONDS", converter = PauseConverter.class,
             description = "Random pause between two requests to the repository, in seconds: a range such as 2-5, a "
                     + "fixed 3, or 0 for none. With a pause, requests go one at a time, also across commands that "
-                    + "share --work. Maven Central needs at least 0.5; shorter pauses and 0 are only for other "
-                    + "repositories (default: ${DEFAULT-VALUE}).")
+                    + "share --work. Maven Central needs a pause, at least 0.001, so its requests go one at a time; 0 "
+                    + "is only for other repositories (default: ${DEFAULT-VALUE}).")
     Pacer.Pause pause;
 
     @Option(names = "--offline", description = "Use cached files only; fail when something is not cached.")
