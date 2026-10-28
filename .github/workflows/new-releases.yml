@@ -92,11 +92,11 @@ jobs:
         with:
           name: almanac-jar
           path: target
-      - name: Extract the BOM, config and extensions
+      - name: Extract the BOM, config, extensions and classes
         run: |
           java -jar target/quarkus-almanac.jar bom --versions "$VERSION" --pause "$PAUSE"
           java -jar target/quarkus-almanac.jar config --versions "$VERSION" --pause "$PAUSE"
-          for f in bom.json config.json extensions.json; do test -f "work/snapshots/$VERSION/$f"; done
+          for f in bom.json config.json extensions.json classes.json; do test -f "work/snapshots/$VERSION/$f"; done
       # the snapshots, and the BOM pom whose Last-Modified dates the release
       - uses: actions/upload-artifact@v7
         with:

@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Adds the releases the new-releases workflow extracted to the dataset, rebuilds the site data from it, and commits both
 # to main. Expects the jar and, under work/, each release's snapshots (work/snapshots/<version>/) and BOM pom
-# (work/cache/io/quarkus/quarkus-bom/<version>/, whose Last-Modified dates the release). Only releases with all three
+# (work/cache/io/quarkus/quarkus-bom/<version>/, whose Last-Modified dates the release). Only releases with all four
 # snapshots are added. It starts from origin/main and, when main moves before the push, starts over from it; when
 # main's code is no longer the code that built the jar (BUILT, a commit), it adds nothing, since the next run extracts
 # the releases again with main's code.
@@ -21,7 +21,8 @@ ready=()
 for dir in work/snapshots/*/; do
     [ -d "$dir" ] || continue
     v=$(basename "$dir")
-    if [ -f "$dir/bom.json" ] && [ -f "$dir/config.json" ] && [ -f "$dir/extensions.json" ]; then
+    if [ -f "$dir/bom.json" ] && [ -f "$dir/config.json" ] && [ -f "$dir/extensions.json" ] \
+        && [ -f "$dir/classes.json" ]; then
         ready+=("$v")
     else
         echo "skipped $v: its snapshots are incomplete" >&2
