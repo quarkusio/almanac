@@ -6,7 +6,7 @@ name: Add new Quarkus releases
 # (io.quarkus.platform:quarkus-bom) of each release, including those that come out after their release.
 on:
   schedule:
-    - cron: '17 */3 * * *'
+    - cron: '17 */12 * * *'
   workflow_dispatch:
     inputs:
       versions:
