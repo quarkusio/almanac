@@ -44,9 +44,16 @@ java -jar target/quarkus-almanac.jar assemble --offline --pre-releases all
 Then commit `dataset/` and `site/data/`. `all` runs the whole pipeline for the releases the dataset does not have yet,
 and `--help` lists every command and option.
 
-Downloads are polite: one request at a time, with a random 0.5–1.5 s pause between requests (`--pause`), shared by every
-command that uses the same `work/` folder, and they stop at the first HTTP 403. An uncached release costs about
-800 requests, roughly 20 minutes; a release already in the dataset costs nothing.
+New releases come in on their own: every three hours, the workflow `.github/workflows/new-releases.yml` looks for GitHub
+releases of quarkusio/quarkus published at least 6 hours earlier that Maven Central serves and the dataset lacks,
+extracts them on up to four runners at once, adds them to the dataset, rebuilds `site/data/`, commits both to `main` and
+starts the Pages deploy. Run it by hand from the Actions tab to add given releases.
+
+Downloads are polite: one request at a time per `work/` folder, with a random 0.5–1.5 s pause between requests
+(`--pause`, down to 0.001), shared by every command that uses that folder, and they stop at the first HTTP 403. The
+workflow gives each of its runners a folder of its own and a 1 ms pause, so up to four request streams run at once, each
+stopping on its own. An uncached release costs about 800 requests, roughly 20 minutes; a release already in the dataset
+costs nothing.
 
 ## Limitations
 

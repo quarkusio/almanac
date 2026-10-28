@@ -1,0 +1,142 @@
+name: Add new Quarkus releases
+
+# Looks for releases of quarkusio/quarkus that Maven Central serves and the dataset lacks, extracts them on up to four
+# runners at once (each sends its requests to Maven Central one at a time, 1 ms apart), adds them to the dataset,
+# rebuilds the site data, commits both to main and starts the Pages deploy.
+on:
+  schedule:
+    - cron: '17 */3 * * *'
+  workflow_dispatch:
+    inputs:
+      versions:
+        description: >-
+          Releases to add, comma-separated. Empty: every GitHub release of quarkusio/quarkus published at least 6 hours
+          ago. Only releases missing from the site data are added.
+        required: false
+        default: ''
+
+permissions:
+  contents: read
+
+concurrency:
+  group: new-releases
+  cancel-in-progress: false
+
+env:
+  PAUSE: '0.001'
+
+defaults:
+  run:
+    shell: bash
+
+jobs:
+  check:
+    # the jobs commit to main, so they run only from main's own workflow
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    outputs:
+      versions: ${{ steps.new.outputs.versions }}
+      count: ${{ steps.new.outputs.count }}
+      built: ${{ steps.built.outputs.sha }}
+    steps:
+      # main as it is when the job starts: a run that waited in the queue sees what the previous run added
+      - uses: actions/checkout@v7
+        with:
+          ref: main
+      - id: built
+        run: echo "sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+      - uses: actions/setup-java@v6
+        with:
+          distribution: temurin
+          java-version: 21
+          cache: maven
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+      - name: Build the almanac
+        run: mvn -B -q package -DskipTests
+      - name: Find the new releases
+        id: new
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REQUESTED: ${{ inputs.versions }}
+        run: bash .github/scripts/new-releases.sh >> "$GITHUB_OUTPUT"
+      - uses: actions/upload-artifact@v7
+        if: steps.new.outputs.count != '0'
+        with:
+          name: almanac-jar
+          path: target/quarkus-almanac.jar
+          retention-days: 3
+
+  extract:
+    needs: check
+    if: needs.check.outputs.count != '0'
+    name: Extract ${{ matrix.version }}
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      max-parallel: 4
+      matrix:
+        version: ${{ fromJSON(needs.check.outputs.versions) }}
+    env:
+      VERSION: ${{ matrix.version }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ needs.check.outputs.built }}
+      - uses: actions/setup-java@v6
+        with:
+          distribution: temurin
+          java-version: 21
+      - uses: actions/download-artifact@v8
+        with:
+          name: almanac-jar
+          path: target
+      - name: Extract the BOM, config and extensions
+        run: |
+          java -jar target/quarkus-almanac.jar bom --versions "$VERSION" --pause "$PAUSE"
+          java -jar target/quarkus-almanac.jar config --versions "$VERSION" --pause "$PAUSE"
+          for f in bom.json config.json extensions.json; do test -f "work/snapshots/$VERSION/$f"; done
+      # the snapshots, and the BOM pom whose Last-Modified dates the release
+      - uses: actions/upload-artifact@v7
+        with:
+          name: release-${{ matrix.version }}
+          path: |
+            work/snapshots/${{ matrix.version }}/
+            work/cache/io/quarkus/quarkus-bom/${{ matrix.version }}/
+          if-no-files-found: error
+          retention-days: 3
+
+  publish:
+    needs: [check, extract]
+    # also when some extractions failed: the others are added, and the next run retries the rest
+    if: ${{ !cancelled() && needs.check.result == 'success' && needs.check.outputs.count != '0' }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      actions: write
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: main
+      - uses: actions/setup-java@v6
+        with:
+          distribution: temurin
+          java-version: 21
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+      - uses: actions/download-artifact@v8
+        with:
+          name: almanac-jar
+          path: target
+      - uses: actions/download-artifact@v8
+        with:
+          pattern: release-*
+          path: work
+          merge-multiple: true
+      - name: Add them to the dataset and commit
+        env:
+          GH_TOKEN: ${{ github.token }}
+          BUILT: ${{ needs.check.outputs.built }}
+        run: bash .github/scripts/publish-releases.sh
