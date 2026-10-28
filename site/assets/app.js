@@ -286,6 +286,10 @@ function prepareVersions(json) {
     finalStreamCount: finals.length,
     configStreamCount: finals.filter((f) => f.some((i) => list[i].config)).length,
     configAtNewestFinals: finals.every((f) => list[f[f.length - 1]].config),
+    configAtEveryFinal: finals.every((f) => f.every((i) => list[i].config)),
+    // streams with more than one final, each of which has a config snapshot (newest first)
+    configEveryPatch: finals.filter((f) => f.length > 1 && f.every((i) => list[i].config)).map((f) => streamOfEntry(list[f[0]])),
+    ltsStreams: [...ltsStreams],
     visOff,
     visOn,
     // config (extension) snapshots of pre-releases that the toggle hides (not upcoming)
@@ -1490,7 +1494,7 @@ function coverageFacts() {
     h('dl', { class: 'facts-grid' },
       fact(fmt(V.list.length), 'releases', `${short(first.v)} to ${short(last.v)}${preCount ? `, ${plural(preCount, 'pre-release')} among them` : ''}`),
       fact(fmt(V.configVis.length), 'config snapshots', lastCv
-        ? `${configCoverage(V)}${preSnapshots ? ` and ${plural(preSnapshots, 'pre-release')}` : ''}, up to ${short(lastCv.v)}`
+        ? `${andList([...configCoverage(V), ...(preSnapshots ? [plural(preSnapshots, 'pre-release')] : [])])}, up to ${short(lastCv.v)}`
         : 'none'),
       fact(propsN, 'config properties tracked', propsSub),
       fact(artsN, 'managed artifacts tracked', artsSub),
@@ -1499,7 +1503,23 @@ function coverageFacts() {
 
 /** Where the config snapshots are: at the newest patch of each stream, or in how many streams while some lack one. */
 function configCoverage(V) {
-  return V.configAtNewestFinals ? 'the newest patch of each stream' : `${fmt(V.configStreamCount)} of ${plural(V.finalStreamCount, 'stream')}`;
+  if (V.configAtEveryFinal) return ['every final release'];
+  const parts = [V.configAtNewestFinals ? 'the newest patch of each stream' : `${fmt(V.configStreamCount)} of ${plural(V.finalStreamCount, 'stream')}`];
+  const every = V.configEveryPatch;
+  if (every.length) {
+    // the LTS streams by that name when all of them are covered, the others by name while few, else by number
+    const allLts = V.ltsStreams.length > 0 && V.ltsStreams.every((s) => every.includes(s));
+    const others = allLts ? every.filter((s) => !V.ltsStreams.includes(s)) : every;
+    const named = others.length <= 3 ? others.slice().reverse() : [plural(others.length, allLts ? 'other stream' : 'stream')];
+    parts.push(`every patch of ${andList(allLts ? [...named, 'the LTS streams'] : named, false)}`);
+  }
+  return parts;
+}
+
+/** "a", "a and b", "a, b, and c" (`serial` false: "a, b and c", for a list inside another list item). */
+function andList(items, serial = true) {
+  if (items.length < 3) return items.join(' and ');
+  return `${items.slice(0, -1).join(', ')}${serial ? ',' : ''} and ${items[items.length - 1]}`;
 }
 
 /* ========================================================================== */
@@ -2229,7 +2249,9 @@ function hiddenSnapshotsNote(hist) {
 function presenceStrip(prop, hist, cvs, states) {
   const V = store.V;
   const events = new Map(hist.events.map((e) => [e.vi, e]));
-  const strip = h('ol', { class: 'strip', 'aria-label': 'Presence in each config snapshot' });
+  // past about 40 snapshots the cells get thin: dense cells keep the strip inside a phone's width
+  const dense = cvs.length > 40;
+  const strip = h('ol', { class: dense ? 'strip strip--dense' : 'strip', 'aria-label': 'Presence in each config snapshot' });
   let anyPre = false;
   for (const vi of cvs) {
     const si = core.stateAt(prop.h, vi);
@@ -2254,7 +2276,7 @@ function presenceStrip(prop, hist, cvs, states) {
     h('div', { class: 'strip-wrap', style: `max-width:${Math.max(240, cvs.length * 46)}px` },
       strip,
       h('div', { class: 'strip-axis', 'aria-hidden': 'true' }, h('span', null, short(first.v)), h('span', null, short(last.v)))),
-    h('p', { class: 'legend', 'aria-hidden': 'true' },
+    h('p', { class: dense ? 'legend legend--dense' : 'legend', 'aria-hidden': 'true' },
       h('span', null, h('i', { class: 'lg lg-on' }), 'present'),
       h('span', null, h('i', { class: 'lg lg-dep' }), 'deprecated'),
       h('span', null, h('i', { class: 'lg lg-off' }), 'absent'),
@@ -2493,8 +2515,8 @@ async function renderVersions() {
       h('h1', { class: 'page-title', tabindex: '-1' }, 'All releases'),
       h('p', { class: 'lede' }, `${plural(vis.indices.length, 'release')} in ${plural(V.streams.length, 'stream')}, newest first`,
         vis.hidden ? `, ${plural(vis.hidden, 'pre-release')} hidden` : null, `. ${plural(ltsCount, 'stream')} marked LTS. `,
-        'Releases tagged ', h('span', { class: 'cfg-mark' }, 'config'), ` are the config snapshots, taken ${V.configAtNewestFinals ? 'at' : 'for'} ${configCoverage(V)}`,
-        preSnapshots ? ' and at some pre-releases, which are compared only at their own snapshot' : '', '.',
+        'Releases tagged ', h('span', { class: 'cfg-mark' }, 'config'), ` are the config snapshots, taken ${V.configAtNewestFinals ? 'at' : 'for'} `,
+        andList([...configCoverage(V), ...(preSnapshots ? ['some pre-releases, which are compared only at their own snapshot'] : [])]), '.',
         extOnly ? frag(' Releases tagged ', h('span', { class: 'cfg-mark' }, 'extensions'), ' have extension data but no config snapshot.') : null),
       toggle ? h('div', { class: 'page-tools' }, toggle) : null),
     h('div', { class: 'table-scroll' },

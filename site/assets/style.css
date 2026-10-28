@@ -2819,6 +2819,50 @@ a.dgroup-id:hover {
   background: var(--chg);
 }
 
+/* Over 40 snapshots: the cells shrink to fit and lose their borders (a 1 px border would fill a 2 px cell), so absent
+   cells are filled instead, deprecated ones plain, and the marks above and below sit on the cell. */
+.strip--dense {
+  gap: 1px;
+}
+
+.strip--dense .strip-cell {
+  min-width: 0;
+  background: var(--rule);
+  border: 0;
+  border-radius: 0;
+}
+
+.strip--dense .strip-cell.is-on {
+  background: var(--ink-2);
+}
+
+.strip--dense .strip-cell.is-dep {
+  background: var(--dep);
+}
+
+.strip--dense .strip-cell[class*='ev-']::after,
+.strip--dense .strip-cell.is-pre::before {
+  left: 0;
+  right: 0;
+}
+
+.strip--dense .strip-cell.is-pre::before {
+  background: var(--ink-2);
+}
+
+.legend--dense .lg-off {
+  background: var(--rule);
+  border-color: var(--rule);
+}
+
+.legend--dense .lg-dep {
+  background: var(--dep);
+}
+
+.legend--dense .lg-pre {
+  background: var(--ink-2);
+}
+
 /* timeline */
 
 .tl {
