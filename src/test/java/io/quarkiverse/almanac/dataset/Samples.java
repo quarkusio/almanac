@@ -69,6 +69,16 @@ final class Samples {
     static final BomSnapshot BOM_320 = bom("3.2.0", "2023-07-05", "io.quarkus:quarkus-core", "3.2.0",
             "io.netty:netty-common", "4.1.101.Final", "io.quarkus:quarkus-core:pom:${quarkus.version}", "3.2.0");
 
+    /// Platform BOMs: 3.1.0's manages vertx-core at another version and a Quarkiverse extension that the BOM does not;
+    /// 3.2.0's keeps the extension, leaves out the BOM's pom entry of quarkus-core and manages its own descriptor at
+    /// the release's version. The first came out two days after its BOM; the date of the second is unknown.
+    static final BomSnapshot PLATFORM_310 = bom("3.1.0", "2023-06-02", "io.quarkus:quarkus-core", "3.1.0",
+            "io.vertx:vertx-core", "4.4.2", "io.netty:netty-common", "4.1.100.Final",
+            "io.quarkiverse.vault:quarkus-vault", "3.0.0");
+    static final BomSnapshot PLATFORM_320 = bom("3.2.0", null, "io.quarkus:quarkus-core", "3.2.0",
+            "io.netty:netty-common", "4.1.101.Final", "io.quarkiverse.vault:quarkus-vault", "3.0.0",
+            "io.quarkus.platform:quarkus-bom-quarkus-platform-descriptor:json:${quarkus.version}", "3.2.0");
+
     static final ConfigProperty PORT_8080 = prop("quarkus.http.port", "int", "8080", "RUN_TIME", null, null,
             "The HTTP port.");
     static final ConfigProperty PORT_8081 = prop("quarkus.http.port", "int", "8081", "RUN_TIME", null, null,
@@ -106,6 +116,14 @@ final class Samples {
         return contents;
     }
 
+    /// [#contents()] with the platform BOMs of 3.1.0 and 3.2.0.
+    static Contents contentsWithPlatforms() {
+        Contents contents = contents();
+        contents.put("3.1.0", Kind.PLATFORM, PLATFORM_310);
+        contents.put("3.2.0", Kind.PLATFORM, PLATFORM_320);
+        return contents;
+    }
+
     static void put(Contents contents, BomSnapshot bom, ConfigSnapshot config, ExtensionsSnapshot extensions) {
         contents.put(bom.version(), Kind.BOM, bom);
         if (config != null) {
@@ -123,6 +141,12 @@ final class Samples {
         work.write("3.1.0", SnapshotStore.EXTENSIONS, EXTENSIONS_310);
         work.write("3.2.0", SnapshotStore.CONFIG, CONFIG_320);
         work.write("3.2.0", SnapshotStore.EXTENSIONS, EXTENSIONS_320);
+    }
+
+    /// Writes the platform BOMs of 3.1.0 and 3.2.0 into a work snapshots folder, as `platform` would.
+    static void writePlatformWork(SnapshotStore work) throws IOException {
+        work.write("3.1.0", SnapshotStore.PLATFORM_BOM, PLATFORM_310);
+        work.write("3.2.0", SnapshotStore.PLATFORM_BOM, PLATFORM_320);
     }
 
     /// The lines of each file that `after` added and removed compared with `before` (lines are unique per file).

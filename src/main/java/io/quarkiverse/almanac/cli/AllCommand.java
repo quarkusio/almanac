@@ -13,11 +13,11 @@ import java.nio.file.Path;
 import java.util.List;
 import java.util.concurrent.Callable;
 
-/// `all`: versions → bom (all) → config (streams) → dataset import of what they extracted → assemble (from the
-/// dataset). Releases the dataset has are not extracted again.
-@Command(name = "all", description = "Run versions, bom (all releases), config (newest of each stream) for the "
-        + "releases the dataset does not have, import what they extracted into the dataset, and assemble the site "
-        + "data from the dataset.")
+/// `all`: versions → bom (all) → platform (all) → config (streams) → dataset import of what they extracted →
+/// assemble (from the dataset). Releases the dataset has are not extracted again.
+@Command(name = "all", description = "Run versions, bom (all releases), platform (all releases), config (newest of "
+        + "each stream) for the releases the dataset does not have, import what they extracted into the dataset, and "
+        + "assemble the site data from the dataset.")
 public final class AllCommand implements Callable<Integer> {
 
     @Mixin
@@ -48,11 +48,20 @@ public final class AllCommand implements Callable<Integer> {
             Log.info("versions: %d releases for BOM data, %d for config", all.size(), streams.size());
             List<QuarkusVersion> boms = BomCommand.notInDataset(workspace, all, force);
             boolean bomOk = BomCommand.writeSnapshots(workspace, boms, force);
+            List<QuarkusVersion> platforms = List.of();
+            boolean platformOk;
+            try {
+                platforms = PlatformCommand.toProcess(workspace, all, force);
+                platformOk = PlatformCommand.writeSnapshots(workspace, platforms, force);
+            } catch (IOException e) {
+                Log.error("platform: %s", e.getMessage());
+                platformOk = false;
+            }
             List<QuarkusVersion> configs = ConfigCommand.notInDataset(workspace, streams, source, force);
             boolean configOk = configs.isEmpty() || ConfigCommand.extract(workspace, configs, source, force);
-            boolean importOk = DatasetImportCommand.importExtracted(workspace, boms, configs, force);
+            boolean importOk = DatasetImportCommand.importExtracted(workspace, boms, configs, platforms, force);
             AssembleCommand.assemble(workspace, site, false);
-            return bomOk && configOk && importOk ? 0 : 1;
+            return bomOk && platformOk && configOk && importOk ? 0 : 1;
         }
     }
 }

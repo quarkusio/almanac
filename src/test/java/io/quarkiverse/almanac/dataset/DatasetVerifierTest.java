@@ -8,6 +8,7 @@ import org.junit.jupiter.api.Test;
 
 import java.io.IOException;
 import java.nio.file.Files;
+import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.List;
 import java.util.Map;
@@ -27,10 +28,11 @@ class DatasetVerifierTest {
             Samples.writeWork(work);
             DatasetVerifier.Report report = DatasetVerifier.verify(datasetDir, work);
             assertEquals(List.of(), report.problems());
-            assertTrue(report.summary().contains("5 known releases: 4 with bom, 2 with config, 2 with extensions"),
-                    report.summary().toString());
+            assertTrue(report.summary().contains("5 known releases: 4 with bom, 2 with config, 2 with extensions, "
+                    + "0 with platform"), report.summary().toString());
             assertTrue(report.summary().contains("compared with " + work.root() + ": bom 4 (0 different) config 2 "
-                    + "(0 different) extensions 2 (0 different)"), report.summary().toString());
+                    + "(0 different) extensions 2 (0 different) platform 0 (0 different)"),
+                    report.summary().toString());
 
             // a work snapshot that differs from the dataset's is reported
             work.write("3.0.0.Final", SnapshotStore.BOM, new BomSnapshot("3.0.0.Final", "2023-04-27",
@@ -102,7 +104,7 @@ class DatasetVerifierTest {
             DatasetVerifier.Report report = DatasetVerifier.verify(datasetDir, null);
             assertEquals(List.of("files: " + DatasetFormat.interruptedWrite(marker)), report.problems());
             // the files themselves are still checked: here they are sound
-            assertTrue(report.summary().stream().anyMatch(line -> line.startsWith("round trip: 8 of 8 files")),
+            assertTrue(report.summary().stream().anyMatch(line -> line.startsWith("round trip: 9 of 9 files")),
                     report.summary().toString());
         }
     }
@@ -173,15 +175,40 @@ class DatasetVerifierTest {
             writeFiles(datasetDir, contents);
             DatasetVerifier.Report report = DatasetVerifier.verify(datasetDir, null);
             assertEquals(List.of(), report.problems());
-            assertTrue(report.summary().contains("5 known releases: 4 with bom, 2 with config, 3 with extensions"),
-                    report.summary().toString());
-            assertTrue(report.summary().stream().anyMatch(line -> line.startsWith("round trip: 8 of 8 files")),
+            assertTrue(report.summary().contains("5 known releases: 4 with bom, 2 with config, 3 with extensions, "
+                    + "0 with platform"), report.summary().toString());
+            assertTrue(report.summary().stream().anyMatch(line -> line.startsWith("round trip: 9 of 9 files")),
                     report.summary().toString());
 
             contents.remove("3.0.0.Final", Kind.BOM);
             writeFiles(datasetDir, contents);
             assertEquals(List.of("releases: 3.0.0.Final has extensions but no BOM"),
                     DatasetVerifier.verify(datasetDir, null).problems());
+        }
+    }
+
+    @Test
+    void aPlatformBomRestoresFromItsDifferencesAndNeedsTheBom() throws Exception {
+        try (ScratchDir dir = ScratchDir.create()) {
+            Path datasetDir = dir.resolve("dataset");
+            writeFiles(datasetDir, Samples.contentsWithPlatforms());
+            SnapshotStore work = new SnapshotStore(dir.resolve("work/snapshots"), null);
+            Samples.writeWork(work);
+            Samples.writePlatformWork(work);
+            DatasetVerifier.Report report = DatasetVerifier.verify(datasetDir, work);
+            assertEquals(List.of(), report.problems());
+            assertTrue(report.summary().contains("5 known releases: 4 with bom, 2 with config, 2 with extensions, "
+                    + "2 with platform"), report.summary().toString());
+            assertTrue(report.summary().stream().anyMatch(line -> line.endsWith("platform 2 (0 different)")),
+                    report.summary().toString());
+
+            // a platform BOM whose release lost its BOM: the history files cannot hold it, releases.jsonl can
+            Path releases = datasetDir.resolve(DatasetFormat.RELEASES);
+            AtomicFiles.writeString(releases, Files.readString(releases).replace(
+                    "{\"version\":\"3.2.0\",\"date\":\"2023-07-05\",\"bom\":true,",
+                    "{\"version\":\"3.2.0\",\"date\":\"2023-07-05\","));
+            assertTrue(DatasetVerifier.verify(datasetDir, null).problems().stream().anyMatch(problem ->
+                    problem.startsWith("decode: ")), "the BOM history names a release without BOM");
         }
     }
 

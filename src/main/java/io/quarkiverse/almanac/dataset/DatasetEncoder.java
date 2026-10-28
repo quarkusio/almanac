@@ -3,6 +3,7 @@ package io.quarkiverse.almanac.dataset;
 import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.fasterxml.jackson.databind.node.JsonNodeFactory;
 import com.fasterxml.jackson.databind.node.ObjectNode;
+import io.quarkiverse.almanac.maven.BomDifferences;
 import io.quarkiverse.almanac.model.BomSnapshot;
 import io.quarkiverse.almanac.model.ConfigProperty;
 import io.quarkiverse.almanac.model.ConfigSnapshot;
@@ -41,6 +42,14 @@ final class DatasetEncoder {
         Map<String, String> files = new LinkedHashMap<>();
         files.put(DatasetFormat.RELEASES, releases(contents));
         files.put(DatasetFormat.BOM, histories("id", contents.boms(), DatasetEncoder::bomValues));
+        files.put(DatasetFormat.PLATFORM, histories("id", contents.platforms(), (version, platform) -> {
+            BomSnapshot bom = contents.boms().get(version);
+            if (bom == null) {
+                throw new IllegalArgumentException("platform BOM " + version + ": the release has no BOM to keep its "
+                        + "differences from");
+            }
+            return BomDifferences.of(version, bom.deps(), platform.deps());
+        }));
 
         StateTable configStates = new StateTable();
         files.put(DatasetFormat.CONFIG, histories("key", contents.configs(), (version, config) -> {
@@ -94,6 +103,13 @@ final class DatasetEncoder {
             }
             if (contents.has(version, Kind.EXTENSIONS)) {
                 row.put("extensions", true);
+            }
+            BomSnapshot platform = contents.platforms().get(version);
+            if (platform != null) {
+                ObjectNode info = row.putObject("platform");
+                if (platform.date() != null) {
+                    info.put("date", platform.date());
+                }
             }
             appendLine(out, row);
         }

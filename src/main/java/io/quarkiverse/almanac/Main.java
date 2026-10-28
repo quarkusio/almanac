@@ -6,6 +6,7 @@ import io.quarkiverse.almanac.cli.BomCommand;
 import io.quarkiverse.almanac.cli.ConfigCommand;
 import io.quarkiverse.almanac.cli.DatasetCommand;
 import io.quarkiverse.almanac.cli.ExtensionsCommand;
+import io.quarkiverse.almanac.cli.PlatformCommand;
 import io.quarkiverse.almanac.cli.VersionsCommand;
 import io.quarkiverse.almanac.util.Log;
 import io.quarkiverse.almanac.verify.VerifyCommand;
@@ -16,9 +17,10 @@ import picocli.CommandLine.Spec;
 
 /// Entry point of `quarkus-almanac.jar`.
 @Command(name = "quarkus-almanac", mixinStandardHelpOptions = true, version = "quarkus-almanac 0.1",
-        description = "Extracts Quarkus release data (BOM, config properties, extensions) from Maven Central "
-                + "into a committed dataset and assembles the data files of the Quarkus Almanac site.",
-        subcommands = {VersionsCommand.class, BomCommand.class, ConfigCommand.class, ExtensionsCommand.class,
+        description = "Extracts Quarkus release data (BOM, platform BOM, config properties, extensions) from Maven "
+                + "Central into a committed dataset and assembles the data files of the Quarkus Almanac site.",
+        subcommands = {VersionsCommand.class, BomCommand.class, PlatformCommand.class, ConfigCommand.class,
+                ExtensionsCommand.class,
                 AssembleCommand.class, AllCommand.class, DatasetCommand.class, VerifyCommand.class,
                 CommandLine.HelpCommand.class})
 public final class Main implements Runnable {

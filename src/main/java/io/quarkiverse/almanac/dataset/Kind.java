@@ -17,7 +17,10 @@ public enum Kind {
     /// Config properties: `config.json`, a [ConfigSnapshot].
     CONFIG("config", SnapshotStore.CONFIG, ConfigSnapshot.class),
     /// Extension metadata: `extensions.json`, an [ExtensionsSnapshot].
-    EXTENSIONS("extensions", SnapshotStore.EXTENSIONS, ExtensionsSnapshot.class);
+    EXTENSIONS("extensions", SnapshotStore.EXTENSIONS, ExtensionsSnapshot.class),
+    /// The platform BOM `io.quarkus.platform:quarkus-bom` of the same version: `platform-bom.json`, a [BomSnapshot].
+    /// The dataset keeps how it differs from the release's BOM, which it needs.
+    PLATFORM("platform", SnapshotStore.PLATFORM_BOM, BomSnapshot.class);
 
     private final String label;
     private final String snapshotFile;
@@ -29,7 +32,7 @@ public enum Kind {
         this.recordType = recordType;
     }
 
-    /// The name used on the command line and in `releases.jsonl`: `bom`, `config` or `extensions`.
+    /// The name used on the command line and in `releases.jsonl`: `bom`, `config`, `extensions` or `platform`.
     public String label() {
         return label;
     }
@@ -55,7 +58,7 @@ public enum Kind {
         return Optional.empty();
     }
 
-    /// Parses a comma-separated list of labels such as `bom,config,extensions`, or `all`.
+    /// Parses a comma-separated list of labels such as `bom,config,extensions,platform`, or `all`.
     ///
     /// @throws IllegalArgumentException for an unknown label or an empty list
     public static Set<Kind> parseList(String text) {
@@ -77,12 +80,12 @@ public enum Kind {
             }
             if (match == null) {
                 throw new IllegalArgumentException("unknown kind '" + part.strip() + "': expected bom, config, "
-                        + "extensions or all");
+                        + "extensions, platform or all");
             }
             kinds.add(match);
         }
         if (kinds.isEmpty()) {
-            throw new IllegalArgumentException("no kind given: expected bom, config, extensions or all");
+            throw new IllegalArgumentException("no kind given: expected bom, config, extensions, platform or all");
         }
         return kinds;
     }

@@ -2,6 +2,7 @@ package io.quarkiverse.almanac.dataset;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.JsonNode;
+import io.quarkiverse.almanac.maven.BomDifferences;
 import io.quarkiverse.almanac.model.BomSnapshot;
 import io.quarkiverse.almanac.model.ConfigProperty;
 import io.quarkiverse.almanac.model.ConfigSnapshot;
@@ -28,7 +29,7 @@ import java.util.SortedMap;
 import java.util.TreeMap;
 import java.util.TreeSet;
 
-/// Read access to the committed dataset: the known releases, and the BOM, config and extension
+/// Read access to the committed dataset: the known releases, and the BOM, config, extension and platform BOM
 /// snapshot of any release that holds them, restored exactly from the change-point histories.
 ///
 /// `releases.jsonl` is read when the dataset is opened; the other files only when a snapshot of their kind is first
@@ -49,7 +50,9 @@ public final class Dataset {
     /// @param bom        whether the dataset holds the release's BOM snapshot
     /// @param config     what `releases.jsonl` says about the config snapshot, null when the dataset has none
     /// @param extensions whether the dataset holds the release's extensions snapshot
-    public record Release(String version, String date, boolean bom, ConfigInfo config, boolean extensions) {
+    /// @param platform   what `releases.jsonl` says about the platform BOM snapshot, null when the dataset has none
+    public record Release(String version, String date, boolean bom, ConfigInfo config, boolean extensions,
+            PlatformInfo platform) {
 
         /// Whether the dataset holds this release's snapshot of the given kind.
         public boolean has(Kind kind) {
@@ -57,6 +60,7 @@ public final class Dataset {
                 case BOM -> bom;
                 case CONFIG -> config != null;
                 case EXTENSIONS -> extensions;
+                case PLATFORM -> platform != null;
             };
         }
     }
@@ -67,6 +71,12 @@ public final class Dataset {
     /// @param extractor the reader and its version, e.g. `model-json/1`
     /// @param roots     number of config roots
     public record ConfigInfo(String source, String extractor, int roots) {
+    }
+
+    /// The platform BOM summary of a `releases.jsonl` line.
+    ///
+    /// @param date UTC day of the platform BOM's `Last-Modified`, null when unknown
+    public record PlatformInfo(String date) {
     }
 
     /// Where the files come from: a folder or, for checks before writing, the encoder's output.
@@ -146,6 +156,7 @@ public final class Dataset {
     private final Lazy<Table> bomTable;
     private final Lazy<Table> configTable;
     private final Lazy<Table> extensionTable;
+    private final Lazy<Table> platformTable;
     private final Lazy<Map<String, ConfigProperty>> configStates;
     private final Lazy<Map<String, ExtensionInfo>> extensionStates;
     private final Lazy<Map<String, DatasetEncoder.ConfigMeta>> configMeta;
@@ -159,6 +170,7 @@ public final class Dataset {
         this.bomTable = new Lazy<>(() -> readTable(DatasetFormat.BOM, "id", Kind.BOM));
         this.configTable = new Lazy<>(() -> readTable(DatasetFormat.CONFIG, "key", Kind.CONFIG));
         this.extensionTable = new Lazy<>(() -> readTable(DatasetFormat.EXTENSIONS, "id", Kind.EXTENSIONS));
+        this.platformTable = new Lazy<>(() -> readTable(DatasetFormat.PLATFORM, "id", Kind.PLATFORM));
         this.configStates = new Lazy<>(() -> readStates(DatasetFormat.CONFIG_STATES, ConfigProperty.class,
                 DatasetFormat.CONFIG, configTable.get()));
         this.extensionStates = new Lazy<>(() -> readStates(DatasetFormat.EXTENSION_STATES, ExtensionInfo.class,
@@ -245,7 +257,8 @@ public final class Dataset {
         return releases.stream().filter(release -> release.has(kind)).map(Release::version).toList();
     }
 
-    /// Restores a snapshot of the given kind: a [BomSnapshot], [ConfigSnapshot] or [ExtensionsSnapshot].
+    /// Restores a snapshot of the given kind: a [BomSnapshot] (of the BOM or the platform BOM), [ConfigSnapshot] or
+    /// [ExtensionsSnapshot].
     ///
     /// @throws IOException when the dataset does not hold it or is inconsistent
     public Object snapshot(String version, Kind kind) throws IOException {
@@ -253,6 +266,7 @@ public final class Dataset {
             case BOM -> bom(version);
             case CONFIG -> config(version);
             case EXTENSIONS -> extensions(version);
+            case PLATFORM -> platform(version);
         };
     }
 
@@ -269,6 +283,32 @@ public final class Dataset {
             }
         }
         return new BomSnapshot(version, release.date(), Collections.unmodifiableList(deps));
+    }
+
+    /// Restores the platform BOM snapshot of a release: its BOM with the differences of `platform-bom.jsonl` at the
+    /// release applied ([BomDifferences#apply]), sorted by id.
+    public BomSnapshot platform(String version) throws IOException {
+        Release release = require(version, Kind.PLATFORM);
+        if (!release.bom()) {
+            throw new IOException(files.describe(DatasetFormat.RELEASES) + ": " + version + " has a platform BOM but "
+                    + "no BOM, which the dataset keeps it as differences from");
+        }
+        BomSnapshot bom = bom(version);
+        Table table = platformTable.get();
+        int ordinal = table.ordinals().get(version);
+        Map<String, String> differences = new HashMap<>();
+        for (Map.Entry<String, Points> row : table.rows().entrySet()) {
+            String value = row.getValue().at(ordinal);
+            if (value != null) {
+                differences.put(row.getKey(), value);
+            }
+        }
+        try {
+            return new BomSnapshot(version, release.platform().date(),
+                    BomDifferences.apply(version, bom.deps(), differences));
+        } catch (IllegalArgumentException e) {
+            throw new IOException(files.describe(DatasetFormat.PLATFORM) + ": " + e.getMessage(), e);
+        }
     }
 
     /// Restores the config snapshot of a release: its `config-meta.jsonl` line and the state of every key at the
@@ -381,8 +421,16 @@ public final class Dataset {
                 info = new ConfigInfo(optionalText(config, "source"), optionalText(config, "extractor"),
                         config.path("roots").asInt());
             }
+            JsonNode platform = row.get("platform");
+            PlatformInfo platformInfo = null;
+            if (platform != null && !platform.isNull()) {
+                if (!platform.isObject()) {
+                    throw error(DatasetFormat.RELEASES, i + 1, "platform is not an object");
+                }
+                platformInfo = new PlatformInfo(optionalText(platform, "date"));
+            }
             Release release = new Release(version, optionalText(row, "date"), row.path("bom").asBoolean(false), info,
-                    row.path("extensions").asBoolean(false));
+                    row.path("extensions").asBoolean(false), platformInfo);
             if (releases.put(version, release) != null) {
                 throw error(DatasetFormat.RELEASES, i + 1, version + " is listed twice");
             }

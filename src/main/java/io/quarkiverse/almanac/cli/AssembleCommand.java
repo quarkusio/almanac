@@ -64,9 +64,9 @@ public final class AssembleCommand implements Callable<Integer> {
         }
         HistoryBuilder.assemble(source, workspace.selectForSite(withBom), site.resolve("data"), Instant.now());
         if (includeWork) {
-            Log.info("assemble: --include-work used %d BOM, %d config and %d extensions snapshots from %s that the "
-                    + "dataset does not have", source.workBoms(), source.workConfigs(), source.workExtensions(),
-                    work.root());
+            Log.info("assemble: --include-work used %d BOM, %d config, %d extensions and %d platform BOM snapshots "
+                    + "from %s that the dataset does not have", source.workBoms(), source.workConfigs(),
+                    source.workExtensions(), source.workPlatforms(), work.root());
         }
     }
 
@@ -82,8 +82,8 @@ public final class AssembleCommand implements Callable<Integer> {
             if (!missing.isEmpty()) {
                 missing.sort(ReleaseOrder.COMPARATOR);
                 Log.info("assemble: %d %s snapshots in %s are not in the dataset and are left out (%s); dataset import "
-                        + "adds them, --include-work uses them as they are", missing.size(), kind.snapshotFile(),
-                        work.root(), abbreviated(missing));
+                        + "--kinds %s adds them, --include-work uses them as they are", missing.size(),
+                        kind.snapshotFile(), work.root(), abbreviated(missing), kind.label());
             }
         }
     }

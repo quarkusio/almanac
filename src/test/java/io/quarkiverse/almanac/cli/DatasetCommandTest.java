@@ -148,12 +148,93 @@ class DatasetCommandTest {
                     "--site", site.toString(), "--include-work");
             assertEquals(0, withWork.exitCode(), withWork.log());
             assertEquals(List.of("3.0.0.Final", "3.1.0", "3.2.0"), published(site));
-            assertTrue(withWork.log().contains("--include-work used 1 BOM, 2 config and 2 extensions snapshots"),
-                    withWork.log());
+            assertTrue(withWork.log().contains("--include-work used 1 BOM, 2 config, 2 extensions and 0 platform BOM "
+                    + "snapshots"), withWork.log());
 
             Run noDataset = run("assemble", "--offline", "--work", work.toString(), "--dataset",
                     dir.resolve("missing").toString(), "--site", site.toString());
             assertEquals(1, noDataset.exitCode());
+        }
+    }
+
+    @Test
+    void platformKeepsWhatThePlatformBomOfAReleaseManagesOtherwise() throws Exception {
+        try (ScratchDir dir = ScratchDir.create()) {
+            Path work = dir.resolve("work");
+            SnapshotStore snapshots = workSnapshots(work, false);
+            writeMetadata(work);
+            Path dataset = dir.resolve("dataset");
+            String[] common = {"--offline", "--work", work.toString(), "--dataset", dataset.toString()};
+            assertEquals(0, run(concat(new String[] {"dataset", "import", "--versions", "all"}, common)).exitCode());
+            // the platform releases 3.1.0 and 3.2.0, and 3.2.0.1 of no Quarkus release
+            cachePlatformBom(work, "3.1.0", "4.4.2", "2023-06-02T10:00:00Z");
+            cachePlatformBom(work, "3.2.0", "4.4.4", null);
+            AtomicFiles.writeString(work.resolve("cache/io/quarkus/platform/quarkus-bom/maven-metadata.xml"),
+                    "<metadata><versioning><versions><version>3.1.0</version><version>3.2.0</version>"
+                            + "<version>3.2.0.1</version></versions></versioning></metadata>\n");
+
+            Run missing = run(concat(new String[] {"platform", "--missing"}, common));
+            assertEquals(0, missing.exitCode(), missing.log());
+            assertEquals("3.1.0\n3.2.0\n", missing.out());
+            assertTrue(missing.log().contains("platform: 1 of 3 selected releases have no platform release of the "
+                    + "same version (3.0.0.Final)"), missing.log());
+            assertFalse(Files.exists(snapshots.file("3.1.0", SnapshotStore.PLATFORM_BOM)));
+
+            Run platform = run(concat(new String[] {"platform"}, common));
+            assertEquals(0, platform.exitCode(), platform.log());
+            assertTrue(platform.log().contains("platform 3.1.0: 3 managed dependencies (1 io.quarkus), released "
+                    + "2023-06-02"), platform.log());
+            assertEquals("4.4.2", snapshots.read("3.1.0", SnapshotStore.PLATFORM_BOM, BomSnapshot.class).deps()
+                    .get(2).v());
+
+            Run imported = run(concat(new String[] {"dataset", "import", "--versions", "all", "--kinds", "platform"},
+                    common));
+            assertEquals(0, imported.exitCode(), imported.log());
+            assertTrue(imported.log().contains("dataset import: added 2 (platform 2)"), imported.log());
+            assertEquals("""
+                    {"id":"io.quarkiverse.vault:quarkus-vault","h":[["3.1.0","4.7.0"]]}
+                    {"id":"io.vertx:vertx-core","h":[["3.1.0","4.4.2"],["3.2.0",null]]}
+                    """, Files.readString(dataset.resolve("platform-bom.jsonl")));
+            Run verified = run(concat(new String[] {"dataset", "verify", "--compare-work"}, common));
+            assertEquals(0, verified.exitCode(), verified.out() + verified.log());
+            assertTrue(verified.out().contains("platform 2 (0 different)"), verified.out());
+            assertEquals("", run(concat(new String[] {"platform", "--missing"}, common)).out());
+
+            Path site = dir.resolve("site");
+            Run assembled = run(concat(new String[] {"assemble", "--site", site.toString()}, common));
+            assertEquals(0, assembled.exitCode(), assembled.log());
+            assertEquals(Json.readTree(("""
+                    {"versions":[1,2],"artifacts":[{"id":"io.quarkiverse.vault:quarkus-vault","h":[[1,"4.7.0"]]},
+                                                   {"id":"io.vertx:vertx-core","h":[[1,"4.4.2"],[2,null]]}]}
+                    """).getBytes(StandardCharsets.UTF_8)),
+                    Json.readTree(Files.readAllBytes(site.resolve("data/platform.json"))));
+        }
+    }
+
+    /// The platform BOM of a release in the repository cache: quarkus-core at the release, vertx-core at `vertx`,
+    /// quarkus-vault 4.7.0; with a `Last-Modified` time when `lastModified` is not null.
+    private static void cachePlatformBom(Path work, String version, String vertx, String lastModified)
+            throws IOException {
+        Path pom = work.resolve("cache/io/quarkus/platform/quarkus-bom/" + version + "/quarkus-bom-" + version
+                + ".pom");
+        AtomicFiles.writeString(pom, """
+                <project xmlns="http://maven.apache.org/POM/4.0.0">
+                  <modelVersion>4.0.0</modelVersion>
+                  <groupId>io.quarkus.platform</groupId>
+                  <artifactId>quarkus-bom</artifactId>
+                  <version>%1$s</version>
+                  <packaging>pom</packaging>
+                  <dependencyManagement>
+                    <dependencies>
+                      <dependency><groupId>io.quarkus</groupId><artifactId>quarkus-core</artifactId><version>%1$s</version></dependency>
+                      <dependency><groupId>io.vertx</groupId><artifactId>vertx-core</artifactId><version>%2$s</version></dependency>
+                      <dependency><groupId>io.quarkiverse.vault</groupId><artifactId>quarkus-vault</artifactId><version>4.7.0</version></dependency>
+                    </dependencies>
+                  </dependencyManagement>
+                </project>
+                """.formatted(version, vertx));
+        if (lastModified != null) {
+            AtomicFiles.writeString(pom.resolveSibling(pom.getFileName() + ".last-modified"), lastModified + "\n");
         }
     }
 

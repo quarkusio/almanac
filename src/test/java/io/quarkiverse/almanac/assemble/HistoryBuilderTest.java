@@ -157,6 +157,30 @@ class HistoryBuilderTest {
     }
 
     @Test
+    void platformDataKeepsWhereThePlatformBomManagesOtherwise() throws IOException {
+        String descriptor = "io.quarkus.platform:quarkus-bom-quarkus-platform-descriptor:json:${quarkus.version}";
+        HistoryBuilder builder = new HistoryBuilder();
+        builder.add(RELEASES.get(0));
+        HistoryBuilder.Release r1 = RELEASES.get(1);
+        builder.add(new HistoryBuilder.Release(r1.bom(), r1.config(), r1.extensions(), bom("3.2.0.Final",
+                "2023-07-07", dep(descriptor, "3.2.0.Final"), dep("io.quarkus:quarkus-core", "3.2.0.Final"),
+                dep("io.vertx:vertx-core", "4.4.2"))));
+        HistoryBuilder.Release r2 = RELEASES.get(2);
+        builder.add(new HistoryBuilder.Release(r2.bom(), r2.config(), r2.extensions(), bom("3.3.0", null,
+                dep(descriptor, "3.3.0"), dep("io.quarkus:quarkus-core", "3.3.0"), dep("io.vertx:vertx-core",
+                        "4.4.4"))));
+        builder.add(RELEASES.get(3));
+        // over 3.2.0.Final and 3.3.0 alone: vertx-core managed alike at 3.3.0, netty-common by the BOM only
+        assertEquals(json("""
+                {"versions":[1,2],
+                 "artifacts":[{"id":"io.netty:netty-common","h":[[2,"-"]]},
+                              {"id":"io.quarkus.platform:quarkus-bom-quarkus-platform-descriptor:json:${quarkus.version}","h":[[1,"="]]},
+                              {"id":"io.vertx:vertx-core","h":[[1,"4.4.2"],[2,null]]}]}
+                """), builder.build(NOW).platform());
+        assertEquals(json("{\"versions\":[],\"artifacts\":[]}"), build().platform());
+    }
+
+    @Test
     void configHistoriesInternStatesAndFoldUnnamedKeys() throws IOException {
         JsonNode config = build().config();
         assertEquals(json("[1,2,3]"), config.get("versions"));

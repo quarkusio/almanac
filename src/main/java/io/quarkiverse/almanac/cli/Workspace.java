@@ -25,6 +25,7 @@ final class Workspace implements AutoCloseable {
     private final Path datasetDir;
     private final SnapshotStore snapshots;
     private final BomSnapshots boms;
+    private final BomSnapshots platformBoms;
     private final QuarkusVersion since;
     private final VersionSelector.PreReleases preReleases;
     private final long startNanos = System.nanoTime();
@@ -39,6 +40,7 @@ final class Workspace implements AutoCloseable {
         this.repo = new MavenRepo(options.repo, cacheDir(), http, jarOptions);
         this.snapshots = new SnapshotStore(work.resolve("snapshots"), datasetDir);
         this.boms = new BomSnapshots(repo, snapshots);
+        this.platformBoms = BomSnapshots.platform(repo, snapshots);
     }
 
     static Workspace open(CommonOptions options) {
@@ -80,6 +82,11 @@ final class Workspace implements AutoCloseable {
 
     BomSnapshots boms() {
         return boms;
+    }
+
+    /// The `platform-bom.json` snapshots, of `io.quarkus.platform:quarkus-bom`.
+    BomSnapshots platformBoms() {
+        return platformBoms;
     }
 
     int concurrency() {

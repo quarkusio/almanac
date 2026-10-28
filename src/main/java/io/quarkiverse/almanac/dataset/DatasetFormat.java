@@ -30,6 +30,7 @@ public final class DatasetFormat {
     public static final String README = "README.md";
     public static final String RELEASES = "releases.jsonl";
     public static final String BOM = "bom.jsonl";
+    public static final String PLATFORM = "platform-bom.jsonl";
     public static final String CONFIG = "config.jsonl";
     public static final String CONFIG_STATES = "config-states.jsonl";
     public static final String CONFIG_META = "config-meta.jsonl";
@@ -37,8 +38,8 @@ public final class DatasetFormat {
     public static final String EXTENSION_STATES = "extension-states.jsonl";
 
     /// Every file of the dataset, in writing order.
-    public static final List<String> FILES = List.of(RELEASES, BOM, CONFIG, CONFIG_STATES, CONFIG_META, EXTENSIONS,
-            EXTENSION_STATES, README);
+    public static final List<String> FILES = List.of(RELEASES, BOM, PLATFORM, CONFIG, CONFIG_STATES, CONFIG_META,
+            EXTENSIONS, EXTENSION_STATES, README);
 
     /// Exists in the dataset folder only while [DatasetEditor#write()] replaces files. The files change one after the
     /// other and may not belong together until the last one is written (a release added to `releases.jsonl` before
@@ -148,8 +149,9 @@ public final class DatasetFormat {
 
                 | File | One line per | Fields |
                 |---|---|---|
-                | `releases.jsonl` | known release (all versions of `io.quarkus:quarkus-bom`), in version order | `version`; `date` (UTC day of the BOM's `Last-Modified`, when known); `bom: true`, `config: {source, extractor, roots}` and `extensions: true` for the kinds this dataset holds |
+                | `releases.jsonl` | known release (all versions of `io.quarkus:quarkus-bom`), in version order | `version`; `date` (UTC day of the BOM's `Last-Modified`, when known); `bom: true`, `config: {source, extractor, roots}`, `extensions: true` and `platform: {date}` (the UTC day of the platform BOM's `Last-Modified`, when known) for the kinds this dataset holds |
                 | `bom.jsonl` | managed artifact (`groupId:artifactId[:type][:classifier]`), by id | `id`, `h` |
+                | `platform-bom.jsonl` | artifact that the platform BOM `io.quarkus.platform:quarkus-bom` of the same version manages otherwise than the release's BOM, by id | `id`, `h` |
                 | `config.jsonl` | canonical config key, by key | `key`, `h` (values are config state ids) |
                 | `config-states.jsonl` | distinct config property, by id | `id`, `state` (every `ConfigProperty` field, as in `config.json`) |
                 | `config-meta.jsonl` | release with config, in version order | `version`, `source`, `extractor`, `roots`, `warnings` |
@@ -160,6 +162,9 @@ public final class DatasetFormat {
                   `releases.jsonl`: a value holds from its release until the next point, `null` means absent, nothing is
                   recorded before the first point and only changes are. A line therefore changes only when its history does.
                 - **BOM values**: the managed version, or `"="` for "the release's own version".
+                - **Platform BOM values** say how the platform BOM differs from the release's BOM, over the releases
+                  with `platform`: its managed version (`"="` for the release's own), `"-"` when only the release's
+                  BOM manages the id, `null` when both manage it alike (or neither does).
                 - **State ids**: the first 16 hex digits of the SHA-256 of the state's compact JSON, exactly as the line
                   holds it.
                 - **Order**: versions by numeric parts, then Alpha < Beta < CR < Final; ids and keys by
@@ -171,6 +176,9 @@ public final class DatasetFormat {
 
                 - `bom.json` = `{version: R, date: <date of R>, deps}`: every id whose value at R is not null, sorted by id,
                   `"="` read as R.
+                - `platform-bom.json` = `{version: R, date: <platform date of R>, deps}`: the deps of `bom.json` with
+                  every value of `platform-bom.jsonl` at R that is not null applied (a version replaces or adds the id,
+                  `"="` read as R, `"-"` removes it), sorted by id.
                 - `config.json` = the `config-meta.jsonl` line of R plus `properties`: the state at R of every key, sorted by
                   key.
                 - `extensions.json` = `{version: R, extensions}`: the state at R of every id, sorted by id.

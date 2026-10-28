@@ -113,27 +113,28 @@ public final class BomCommand implements Callable<Integer> {
         return writeSnapshots(workspace, workspace.boms(), versions, force);
     }
 
-    /// Writes the BOM snapshots of the given releases in parallel, until requests stop ([ReleaseRun]); false when any
-    /// release failed or was not attempted.
+    /// Writes the snapshots of `boms` (of the BOM or of the platform BOM) of the given releases in parallel, until
+    /// requests stop ([ReleaseRun]); false when any release failed or was not attempted.
     static boolean writeSnapshots(Workspace workspace, BomSnapshots boms, List<QuarkusVersion> versions, boolean force)
             throws IOException {
         if (versions.isEmpty()) {
             return true;
         }
-        Log.info("bom: %d releases", versions.size());
-        ReleaseRun run = new ReleaseRun("bom", workspace.repo().http(), versions.size());
+        String label = boms.label();
+        Log.info("%s: %d releases", label, versions.size());
+        ReleaseRun run = new ReleaseRun(label, workspace.repo().http(), versions.size());
         AtomicInteger failed = new AtomicInteger();
         Parallel.<QuarkusVersion, Void>map(versions, workspace.concurrency(), version -> {
             if (run.mayStart()) {
                 try {
                     boms.load(version.text(), force);
                 } catch (IOException e) {
-                    Log.error("bom %s: %s", version, e.getMessage());
+                    Log.error("%s %s: %s", label, version, e.getMessage());
                     run.failed(e);
                     failed.incrementAndGet();
                 } catch (RuntimeException e) {
                     // one broken release must not stop the others
-                    Log.error("bom %s: %s", version, e);
+                    Log.error("%s %s: %s", label, version, e);
                     run.failed(e);
                     failed.incrementAndGet();
                 }
@@ -141,7 +142,7 @@ public final class BomCommand implements Callable<Integer> {
             return null;
         });
         if (failed.get() > 0) {
-            Log.error("bom: %d of %d releases failed", failed.get(), versions.size());
+            Log.error("%s: %d of %d releases failed", label, failed.get(), versions.size());
         }
         return run.finish() && failed.get() == 0;
     }

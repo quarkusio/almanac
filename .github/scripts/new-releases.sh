@@ -3,7 +3,9 @@
 # least 6 hours ago (or of REQUESTED, a comma-separated list) that Maven Central serves for the almanac's selection
 # (3.0 and later, pre-releases included) and that the site data does not have yet. The 6 hours let every jar of a
 # release reach Maven Central before it is read: a jar missing then would be missing from the dataset for good.
-# Prints, in the format of $GITHUB_OUTPUT, versions=<JSON array> and count=<n>. Needs java, node and gh (with GH_TOKEN).
+# Prints, in the format of $GITHUB_OUTPUT, versions=<JSON array> and count=<n>, and platforms=<n>: how many releases of
+# the dataset lack a platform BOM that Maven Central now serves (it often comes out days after the release). Needs
+# java, node and gh (with GH_TOKEN).
 set -euo pipefail
 
 JAR=${JAR:-target/quarkus-almanac.jar}
@@ -37,6 +39,16 @@ fi
 json=$(node -e 'process.stdout.write(JSON.stringify(require("fs").readFileSync(0, "utf8").split("\n").filter(Boolean)))' <<< "$new")
 count=$(grep -c . <<< "$new" || true)
 
+# a platform list that cannot be read only warns: the new releases go ahead, and a later run adds the platform BOMs
+if ! platforms=$(java -jar "$JAR" platform --missing --versions all --pre-releases all --pause "$PAUSE" --work "$WORK" \
+    | tr -d '\r'); then
+    echo "::warning::the platform BOMs to add could not be listed; a later run adds them" >&2
+    platforms=
+fi
+platform_count=$(grep -c . <<< "$platforms" || true)
+
 echo "new releases: $count${new:+ ($(paste -sd' ' - <<< "$new"))}" >&2
+echo "platform BOMs to add to releases of the dataset: $platform_count${platforms:+ ($(paste -sd' ' - <<< "$platforms"))}" >&2
 echo "versions=$json"
 echo "count=$count"
+echo "platforms=$platform_count"

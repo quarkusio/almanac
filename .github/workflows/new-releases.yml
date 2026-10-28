@@ -2,7 +2,8 @@ name: Add new Quarkus releases
 
 # Looks for releases of quarkusio/quarkus that Maven Central serves and the dataset lacks, extracts them on up to four
 # runners at once (each sends its requests to Maven Central one at a time, 1 ms apart), adds them to the dataset,
-# rebuilds the site data, commits both to main and starts the Pages deploy.
+# rebuilds the site data, commits both to main and starts the Pages deploy. It also adds the platform BOM
+# (io.quarkus.platform:quarkus-bom) of each release, including those that come out after their release.
 on:
   schedule:
     - cron: '17 */3 * * *'
@@ -37,6 +38,7 @@ jobs:
     outputs:
       versions: ${{ steps.new.outputs.versions }}
       count: ${{ steps.new.outputs.count }}
+      platforms: ${{ steps.new.outputs.platforms }}
       built: ${{ steps.built.outputs.sha }}
     steps:
       # main as it is when the job starts: a run that waited in the queue sees what the previous run added
@@ -62,7 +64,7 @@ jobs:
           REQUESTED: ${{ inputs.versions }}
         run: bash .github/scripts/new-releases.sh >> "$GITHUB_OUTPUT"
       - uses: actions/upload-artifact@v7
-        if: steps.new.outputs.count != '0'
+        if: steps.new.outputs.count != '0' || steps.new.outputs.platforms != '0'
         with:
           name: almanac-jar
           path: target/quarkus-almanac.jar
@@ -91,9 +93,12 @@ jobs:
         with:
           name: almanac-jar
           path: target
-      - name: Extract the BOM, config and extensions
+      - name: Extract the BOM, platform BOM, config and extensions
         run: |
           java -jar target/quarkus-almanac.jar bom --versions "$VERSION" --pause "$PAUSE"
+          # often published days after the release: when it is missing or fails, a later run adds it
+          java -jar target/quarkus-almanac.jar platform --versions "$VERSION" --pause "$PAUSE" \
+            || echo "::warning::no platform BOM of $VERSION this time; a later run adds it"
           java -jar target/quarkus-almanac.jar config --versions "$VERSION" --pause "$PAUSE"
           for f in bom.json config.json extensions.json; do test -f "work/snapshots/$VERSION/$f"; done
       # the snapshots, and the BOM pom whose Last-Modified dates the release
@@ -108,8 +113,11 @@ jobs:
 
   publish:
     needs: [check, extract]
-    # also when some extractions failed: the others are added, and the next run retries the rest
-    if: ${{ !cancelled() && needs.check.result == 'success' && needs.check.outputs.count != '0' }}
+    # also when some extractions failed: the others are added, and the next run retries the rest; and with no new
+    # release, when a platform BOM of a release came out since
+    if: >-
+      ${{ !cancelled() && needs.check.result == 'success'
+      && (needs.check.outputs.count != '0' || needs.check.outputs.platforms != '0') }}
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -130,6 +138,7 @@ jobs:
           name: almanac-jar
           path: target
       - uses: actions/download-artifact@v8
+        if: needs.check.outputs.count != '0'
         with:
           pattern: release-*
           path: work
@@ -138,4 +147,5 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
           BUILT: ${{ needs.check.outputs.built }}
+          EXPECTED: ${{ needs.check.outputs.count }}
         run: bash .github/scripts/publish-releases.sh

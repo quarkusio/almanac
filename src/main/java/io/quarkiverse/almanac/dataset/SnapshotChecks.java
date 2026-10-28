@@ -1,5 +1,6 @@
 package io.quarkiverse.almanac.dataset;
 
+import io.quarkiverse.almanac.maven.BomDifferences;
 import io.quarkiverse.almanac.maven.BomSnapshots;
 import io.quarkiverse.almanac.model.BomSnapshot;
 import io.quarkiverse.almanac.model.ConfigProperty;
@@ -36,6 +37,7 @@ final class SnapshotChecks {
             case BOM -> bom(release, (BomSnapshot) snapshot, problems);
             case CONFIG -> config(release, (ConfigSnapshot) snapshot, problems);
             case EXTENSIONS -> extensions(release, (ExtensionsSnapshot) snapshot, problems);
+            case PLATFORM -> platform(release, (BomSnapshot) snapshot, problems);
         }
         return problems.size() > MAX_PROBLEMS
                 ? List.copyOf(problems.subList(0, MAX_PROBLEMS)) : List.copyOf(problems);
@@ -90,6 +92,18 @@ final class SnapshotChecks {
                 problems.add(dep.id() + " has the version \"" + DatasetFormat.SAME_AS_RELEASE + "\"");
             }
             previous = ascending(previous, dep.id(), "managed dependency", problems);
+        }
+    }
+
+    /// A BOM whose versions never read as [BomDifferences#NOT_MANAGED], the mark of its differences from the BOM.
+    private static void platform(String release, BomSnapshot platform, List<String> problems) {
+        bom(release, platform, problems);
+        if (platform.deps() != null) {
+            for (ManagedDep dep : platform.deps()) {
+                if (dep != null && BomDifferences.NOT_MANAGED.equals(dep.v())) {
+                    problems.add(dep.id() + " has the version \"" + BomDifferences.NOT_MANAGED + "\"");
+                }
+            }
         }
     }
 

@@ -89,7 +89,7 @@ class SnapshotStoreTest {
         sourceStore.write("3.40.1", SnapshotStore.CONFIG, CONFIG);
         sourceStore.write("3.40.1", SnapshotStore.EXTENSIONS, EXTENSIONS);
         List<DatasetEditor.Candidate> candidates = new ArrayList<>();
-        for (Kind kind : Kind.values()) {
+        for (Kind kind : List.of(Kind.BOM, Kind.CONFIG, Kind.EXTENSIONS)) {
             candidates.add(new DatasetEditor.Candidate("3.40.1", kind, sourceStore.file("3.40.1", kind.snapshotFile())));
         }
         DatasetEditor editor = DatasetEditor.open(dir.resolve("dataset"));

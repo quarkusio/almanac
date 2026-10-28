@@ -167,6 +167,56 @@ class DatasetCodecTest {
     }
 
     @Test
+    void platformBomsKeepOnlyTheirDifferencesFromTheBom() throws IOException {
+        Contents contents = Samples.contentsWithPlatforms();
+        Map<String, String> files = DatasetEncoder.encode(contents);
+        // vertx-core: another version at 3.1.0, managed by neither at 3.2.0; the extension holds from 3.1.0 on
+        assertEquals("""
+                {"id":"io.quarkiverse.vault:quarkus-vault","h":[["3.1.0","3.0.0"]]}
+                {"id":"io.quarkus.platform:quarkus-bom-quarkus-platform-descriptor:json:${quarkus.version}","h":[["3.2.0","="]]}
+                {"id":"io.quarkus:quarkus-core:pom:${quarkus.version}","h":[["3.2.0","-"]]}
+                {"id":"io.vertx:vertx-core","h":[["3.1.0","4.4.2"],["3.2.0",null]]}
+                """, files.get(DatasetFormat.PLATFORM));
+        List<String> releases = DatasetFormat.lines(files.get(DatasetFormat.RELEASES));
+        assertTrue(releases.get(2).endsWith(",\"extensions\":true,\"platform\":{\"date\":\"2023-06-02\"}}"),
+                releases.get(2));
+        assertTrue(releases.get(4).endsWith(",\"extensions\":true,\"platform\":{}}"), releases.get(4));
+        // the other files are those of the same releases without platform BOMs
+        Map<String, String> without = DatasetEncoder.encode(Samples.contents());
+        assertEquals(Map.of(DatasetFormat.RELEASES, "+2 -2", DatasetFormat.PLATFORM, "+4 -0"),
+                Samples.lineChanges(without, files));
+
+        Dataset dataset = Dataset.of(files);
+        assertEquals(List.of("3.1.0", "3.2.0"), dataset.versionsWith(Kind.PLATFORM));
+        assertEquals(Samples.PLATFORM_310, dataset.platform("3.1.0"));
+        assertEquals(Samples.PLATFORM_320, dataset.platform("3.2.0"));
+        assertEquals(contents, dataset.contents());
+        assertEquals(files, DatasetEncoder.encode(dataset.contents()));
+        assertFalse(dataset.has("3.0.0.Final", Kind.PLATFORM));
+        assertThrows(IOException.class, () -> dataset.platform("3.0.0.Final"));
+    }
+
+    @Test
+    void decodingRefusesPlatformDifferencesThatDoNotApply() {
+        Map<String, String> encoded = DatasetEncoder.encode(Samples.contentsWithPlatforms());
+        // "-" where the release's BOM does not manage the id either
+        assertRefused(encoded, DatasetFormat.PLATFORM, encoded.get(DatasetFormat.PLATFORM).replace(
+                "[[\"3.2.0\",\"-\"]]", "[[\"3.1.0\",\"-\"]]"), "platform-bom.jsonl: platform BOM 3.1.0: "
+                + "io.quarkus:quarkus-core:pom:${quarkus.version} is marked as not managed, but the release's BOM does "
+                + "not manage it either");
+        // a change point at a release without platform BOM
+        assertRefused(encoded, DatasetFormat.PLATFORM, encoded.get(DatasetFormat.PLATFORM).replace(
+                "[[\"3.2.0\",\"=\"]]", "[[\"3.0.0.Final\",\"=\"]]"), "has a change point at 3.0.0.Final, which "
+                + "has no platform");
+        // a platform BOM needs the BOM of its release
+        Contents noBom = Samples.contentsWithPlatforms();
+        noBom.remove("3.2.0", Kind.CONFIG);
+        noBom.remove("3.2.0", Kind.EXTENSIONS);
+        noBom.remove("3.2.0", Kind.BOM);
+        assertThrows(IllegalArgumentException.class, () -> DatasetEncoder.encode(noBom));
+    }
+
+    @Test
     void decodingRejectsInconsistentFiles() throws IOException {
         Map<String, String> files = new HashMap<>(DatasetEncoder.encode(Samples.contents()));
         files.put(DatasetFormat.BOM, files.get(DatasetFormat.BOM).replace("[\"3.2.0.CR1\",\"4.4.4\"]",

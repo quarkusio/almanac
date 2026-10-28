@@ -20,6 +20,7 @@ final class Contents {
     private final SortedMap<String, BomSnapshot> boms = new TreeMap<>(ReleaseOrder.COMPARATOR);
     private final SortedMap<String, ConfigSnapshot> configs = new TreeMap<>(ReleaseOrder.COMPARATOR);
     private final SortedMap<String, ExtensionsSnapshot> extensions = new TreeMap<>(ReleaseOrder.COMPARATOR);
+    private final SortedMap<String, BomSnapshot> platforms = new TreeMap<>(ReleaseOrder.COMPARATOR);
 
     /// Every known release, in release order.
     SortedSet<String> releases() {
@@ -28,6 +29,7 @@ final class Contents {
         all.addAll(boms.keySet());
         all.addAll(configs.keySet());
         all.addAll(extensions.keySet());
+        all.addAll(platforms.keySet());
         return all;
     }
 
@@ -50,8 +52,10 @@ final class Contents {
 
     /// Forgets a release; it must hold no data.
     void forgetRelease(String version) {
-        if (has(version, Kind.BOM) || has(version, Kind.CONFIG) || has(version, Kind.EXTENSIONS)) {
-            throw new IllegalStateException(version + " still holds data");
+        for (Kind kind : Kind.values()) {
+            if (has(version, kind)) {
+                throw new IllegalStateException(version + " still holds data");
+            }
         }
         dates.remove(version);
     }
@@ -66,6 +70,11 @@ final class Contents {
 
     SortedMap<String, ExtensionsSnapshot> extensions() {
         return extensions;
+    }
+
+    /// The platform BOMs; the BOM of the same release is in [#boms()] (the dataset keeps how they differ).
+    SortedMap<String, BomSnapshot> platforms() {
+        return platforms;
     }
 
     SortedMap<String, String> dates() {
@@ -98,6 +107,10 @@ final class Contents {
                 extensions.put(version, (ExtensionsSnapshot) snapshot);
                 addRelease(version, null);
             }
+            case PLATFORM -> {
+                platforms.put(version, (BomSnapshot) snapshot);
+                addRelease(version, null);
+            }
         }
     }
 
@@ -111,6 +124,7 @@ final class Contents {
             case BOM -> boms;
             case CONFIG -> configs;
             case EXTENSIONS -> extensions;
+            case PLATFORM -> platforms;
         };
     }
 
@@ -127,11 +141,12 @@ final class Contents {
                 return false;
             }
         }
-        return boms.equals(that.boms) && configs.equals(that.configs) && extensions.equals(that.extensions);
+        return boms.equals(that.boms) && configs.equals(that.configs) && extensions.equals(that.extensions)
+                && platforms.equals(that.platforms);
     }
 
     @Override
     public int hashCode() {
-        return Objects.hash(releases(), boms, configs, extensions);
+        return Objects.hash(releases(), boms, configs, extensions, platforms);
     }
 }

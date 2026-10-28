@@ -86,6 +86,7 @@ public final class DatasetVerifier {
         }
         checkReleaseLines();
         checkHistoryLines(DatasetFormat.BOM, "id");
+        checkHistoryLines(DatasetFormat.PLATFORM, "id");
         Set<String> configIds = checkHistoryLines(DatasetFormat.CONFIG, "key");
         Set<String> extensionIds = checkHistoryLines(DatasetFormat.EXTENSIONS, "id");
         checkStateLines(DatasetFormat.CONFIG_STATES, ConfigProperty.class, configIds);
@@ -276,8 +277,8 @@ public final class DatasetVerifier {
         }
     }
 
-    /// The release rules: config only with extensions (extensions need no config), both only with a BOM, every
-    /// restored snapshot consistent and from a validated extractor.
+    /// The release rules: config only with extensions (extensions need no config), both only with a BOM (a platform
+    /// BOM without its BOM does not even decode), every restored snapshot consistent and from a validated extractor.
     private void checkReleases(Dataset dataset, Contents contents) {
         Map<Kind, Integer> counts = new EnumMap<>(Kind.class);
         for (Dataset.Release release : dataset.releases()) {
@@ -303,9 +304,10 @@ public final class DatasetVerifier {
                 SnapshotChecks.unvalidated(config).ifPresent(why -> problem("releases", version + ": " + why));
             }
         }
-        summary.add(String.format(Locale.ROOT, "%d known releases: %d with bom, %d with config, %d with extensions",
-                dataset.releases().size(), counts.getOrDefault(Kind.BOM, 0), counts.getOrDefault(Kind.CONFIG, 0),
-                counts.getOrDefault(Kind.EXTENSIONS, 0)));
+        summary.add(String.format(Locale.ROOT, "%d known releases: %d with bom, %d with config, %d with extensions, "
+                        + "%d with platform", dataset.releases().size(), counts.getOrDefault(Kind.BOM, 0),
+                counts.getOrDefault(Kind.CONFIG, 0), counts.getOrDefault(Kind.EXTENSIONS, 0),
+                counts.getOrDefault(Kind.PLATFORM, 0)));
     }
 
     /// `config-meta.jsonl` against `releases.jsonl`, line by line (decoding stops at the first disagreement): one line

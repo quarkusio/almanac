@@ -209,6 +209,38 @@ class DatasetEditorTest {
     }
 
     @Test
+    void aPlatformBomNeedsTheBomOfItsReleaseAndGoesWithIt() throws Exception {
+        try (ScratchDir dir = ScratchDir.create()) {
+            SnapshotStore work = work(dir);
+            Samples.writePlatformWork(work);
+            // the platform BOM of a release whose BOM is neither in the dataset nor in this import
+            work.write("2.16.12.Final", SnapshotStore.PLATFORM_BOM, Samples.bom("2.16.12.Final", null,
+                    "io.quarkus:quarkus-core", "2.16.12.Final"));
+            Path datasetDir = dir.resolve("dataset");
+            DatasetEditor editor = DatasetEditor.open(datasetDir);
+            DatasetEditor.ImportReport report = editor.importSnapshots(all(work), false);
+            assertEquals(List.of("platform 2.16.12.Final: the platform BOM, kept as differences from the release's "
+                    + "BOM, needs the BOM snapshot, which is neither in the dataset nor in this import"),
+                    report.refusals().stream().map(Object::toString).toList());
+            assertEquals(10, report.added().size());
+            editor.write();
+            assertEquals(Samples.PLATFORM_310, Dataset.open(datasetDir).platform("3.1.0"));
+            assertEquals(List.of(), DatasetVerifier.verify(datasetDir, work).problems());
+
+            DatasetEditor removing = DatasetEditor.open(datasetDir);
+            assertEquals(List.of("bom 3.1.0", "config 3.1.0", "extensions 3.1.0", "platform 3.1.0"),
+                    removing.remove(List.of("3.1.0"), Set.of(Kind.BOM)));
+            assertEquals(List.of("platform 3.2.0"), removing.remove(List.of("3.2.0"), Set.of(Kind.PLATFORM)));
+            removing.write();
+            Dataset dataset = Dataset.open(datasetDir);
+            assertEquals(List.of(), dataset.versionsWith(Kind.PLATFORM));
+            assertEquals(Samples.BOM_320, dataset.bom("3.2.0"));
+            assertEquals("", Files.readString(datasetDir.resolve(DatasetFormat.PLATFORM)));
+            assertEquals(List.of(), DatasetVerifier.verify(datasetDir, null).problems());
+        }
+    }
+
+    @Test
     void importsABomThatKeepsReferencesAsWrittenWithAWarning() throws Exception {
         try (ScratchDir dir = ScratchDir.create()) {
             SnapshotStore work = work(dir);

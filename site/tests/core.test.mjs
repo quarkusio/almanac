@@ -565,6 +565,147 @@ describe('headline libraries', () => {
 });
 
 /* -------------------------------------------------------------------------- */
+describe('platform BOM', () => {
+  const { hasPlatformBom, platformBomAt, platformArtifactKey, platformDifferences, platformChangeSummary, platformArtifactRuns } = core;
+  // 3.33.3.1 has no platform BOM; 3.33.4 overrides Jackson, as the real one does
+  const versions = V('3.33.3', '3.33.3.1', '3.33.4', '3.33.4.1');
+  const bom = {
+    artifacts: [
+      { id: 'com.fasterxml.jackson.core:jackson-core', h: [[0, '2.21.6']] },
+      { id: 'com.fasterxml.jackson.core:jackson-databind', h: [[0, '2.21.6']] },
+      { id: 'com.fasterxml.jackson.dataformat:jackson-dataformat-yaml', h: [[0, '2.21.6']] },
+      { id: 'io.agroal:agroal-api', h: [[0, '2.7.1']] },
+      { id: 'io.fabric8:crd-generator-maven-plugin:maven-plugin', h: [[0, '7.5.2']] },
+      { id: 'io.quarkus.gizmo:gizmo:test-jar', h: [[0, '1.10.1']] },
+      { id: 'io.quarkus:quarkus-bom-quarkus-platform-descriptor:json:${quarkus.version}', h: [[0, '=']] },
+      { id: 'io.quarkus:quarkus-core', h: [[0, '=']] },
+      { id: 'io.quarkus:quarkus-pinned', h: [[0, '3.33.2']] },
+      { id: 'io.vertx:vertx-core:test-jar', h: [[0, '4.5.34']] },
+      { id: 'io.vertx:vertx-core:test-jar:tests', h: [[0, '4.5.34']] },
+      { id: 'org.graalvm.polyglot:js', h: [[0, '23.1.2']] },
+    ],
+  };
+  const platform = {
+    versions: [0, 2, 3],
+    artifacts: [
+      { id: 'com.fasterxml.jackson.core:jackson-core', h: [[2, '2.21.7'], [3, null]] },
+      { id: 'com.fasterxml.jackson.core:jackson-databind', h: [[2, '2.21.7'], [3, null]] },
+      { id: 'com.fasterxml.jackson.dataformat:jackson-dataformat-yaml', h: [[2, '2.21.7'], [3, null]] },
+      { id: 'io.agroal:agroal-api', h: [[0, '2.7.2'], [2, null]] },
+      { id: 'io.fabric8:crd-generator-maven-plugin', h: [[0, '7.5.2']] },
+      { id: 'io.fabric8:crd-generator-maven-plugin:maven-plugin', h: [[0, '-']] },
+      { id: 'io.quarkiverse.vault:quarkus-vault', h: [[0, '4.7.0']] },
+      { id: 'io.quarkus.gizmo:gizmo:test-jar', h: [[0, '-']] },
+      { id: 'io.quarkus.gizmo:gizmo:tests', h: [[0, '1.11.0']] },
+      { id: 'io.quarkus.platform:quarkus-bom-quarkus-platform-descriptor:json:${quarkus.version}', h: [[0, '=']] },
+      { id: 'io.quarkus:quarkus-bom-quarkus-platform-descriptor:json:${quarkus.version}', h: [[0, '-']] },
+      { id: 'io.quarkus:quarkus-pinned', h: [[0, '=']] },
+      { id: 'io.vertx:vertx-core:test-jar', h: [[0, '-']] },
+      { id: 'io.vertx:vertx-core:test-jar:tests', h: [[0, '-']] },
+      { id: 'io.vertx:vertx-core:tests', h: [[0, '4.5.34']] },
+      { id: 'org.graalvm.polyglot:js', h: [[0, '-']] },
+    ],
+  };
+
+  test('hasPlatformBom reads the versions list', () => {
+    assert.deepEqual([0, 1, 2, 3].map((i) => hasPlatformBom(platform, i)), [true, false, true, true]);
+    assert.equal(hasPlatformBom(null, 0), false);
+    assert.equal(hasPlatformBom({ artifacts: [] }, 0), false);
+  });
+
+  test('platformArtifactKey: one artifact written differently', () => {
+    assert.equal(platformArtifactKey('io.vertx:vertx-core:test-jar'), 'io.vertx:vertx-core:tests');
+    assert.equal(platformArtifactKey('io.vertx:vertx-core:test-jar:tests'), 'io.vertx:vertx-core:tests');
+    assert.equal(platformArtifactKey('io.vertx:vertx-core:tests'), 'io.vertx:vertx-core:tests');
+    assert.equal(platformArtifactKey('org.infinispan:infinispan-core:test-jar:jakarta'), 'org.infinispan:infinispan-core:jakarta');
+    assert.equal(platformArtifactKey('io.fabric8:crd-generator-maven-plugin:maven-plugin'), 'io.fabric8:crd-generator-maven-plugin');
+    assert.equal(platformArtifactKey('io.quarkus.platform:quarkus-bom-quarkus-platform-properties:properties'),
+      'io.quarkus:quarkus-bom-quarkus-platform-properties:properties');
+    assert.equal(platformArtifactKey('io.quarkus.platform:quarkus-camel-bom'), 'io.quarkus.platform:quarkus-camel-bom');
+    assert.equal(platformArtifactKey('org.acme:lib:pom'), 'org.acme:lib:pom');
+  });
+
+  test('platformDifferences: versions, only one BOM, and entries written differently', () => {
+    const d = platformDifferences(bom, platform, versions, 2);
+    assert.deepEqual(d.changed, [
+      { id: 'com.fasterxml.jackson.core:jackson-core', core: '2.21.6', platform: '2.21.7' },
+      { id: 'com.fasterxml.jackson.core:jackson-databind', core: '2.21.6', platform: '2.21.7' },
+      { id: 'com.fasterxml.jackson.dataformat:jackson-dataformat-yaml', core: '2.21.6', platform: '2.21.7' },
+      // written differently and at another version: a change, named by the core BOM's id too
+      { id: 'io.quarkus.gizmo:gizmo:tests', coreId: 'io.quarkus.gizmo:gizmo:test-jar', core: '1.10.1', platform: '1.11.0' },
+      // "=" reads as the release: 3.33.4 instead of 3.33.2
+      { id: 'io.quarkus:quarkus-pinned', core: '3.33.2', platform: '3.33.4' },
+    ]);
+    assert.deepEqual(d.added, [{ id: 'io.quarkiverse.vault:quarkus-vault', platform: '4.7.0' }]);
+    assert.deepEqual(d.removed, [{ id: 'org.graalvm.polyglot:js', core: '23.1.2' }]);
+    // the maven-plugin type, the test-jar classifier and the platform's own descriptor, each at the same version
+    assert.equal(d.structural, 3);
+    // the override of agroal ends at 3.33.4; at 3.33.3 it is a change
+    assert.deepEqual(platformDifferences(bom, platform, versions, 0).changed.map((r) => r.id),
+      ['io.agroal:agroal-api', 'io.quarkus.gizmo:gizmo:tests', 'io.quarkus:quarkus-pinned']);
+    assert.deepEqual(platformDifferences(bom, platform, versions, 3).changed.map((r) => r.id),
+      ['io.quarkus.gizmo:gizmo:tests', 'io.quarkus:quarkus-pinned']);
+  });
+
+  test('platformChangeSummary groups by pair of versions and names the groupIds', () => {
+    const changed = [
+      { id: 'com.fasterxml.jackson.core:jackson-core', core: '2.21.6', platform: '2.21.7' },
+      { id: 'com.fasterxml.jackson.core:jackson-databind', core: '2.21.6', platform: '2.21.7' },
+      { id: 'com.fasterxml.jackson.dataformat:jackson-dataformat-yaml', core: '2.21.6', platform: '2.21.7' },
+      { id: 'io.agroal:agroal-api', core: '2.8', platform: '2.8.1' },
+      { id: 'io.agroal:agroal-pool', core: '2.8', platform: '2.8.1' },
+      { id: 'org.acme:a', core: '1', platform: '2' },
+      { id: 'net.acme:b', core: '1', platform: '2' },
+      { id: 'net.other:c', core: '1', platform: '2' },
+    ];
+    assert.deepEqual(platformChangeSummary(changed).map((s) => [s.label, s.core, s.platform, s.count]), [
+      ['com.fasterxml.jackson…', '2.21.6', '2.21.7', 3],
+      ['net.acme and 2 other groups', '1', '2', 3],
+      ['io.agroal', '2.8', '2.8.1', 2],
+    ]);
+    assert.deepEqual(platformChangeSummary([]), []);
+  });
+
+  test('platformBomAt: diffBom and headlineLibraries compare platform BOMs', () => {
+    const pb = platformBomAt(bom, platform, [2, 0]);
+    // ascending release indices, sorted ids, artifacts it never manages left out
+    assert.deepEqual(pb.artifacts.find((a) => a.id === 'io.quarkus:quarkus-pinned').h, [[0, '='], [2, '=']]);
+    assert.ok(!pb.artifacts.some((a) => a.id === 'org.graalvm.polyglot:js'));
+    assert.ok(!pb.artifacts.some((a) => a.id === 'io.vertx:vertx-core:test-jar'));
+    const ids = pb.artifacts.map((a) => a.id);
+    assert.deepEqual(ids, [...ids].sort());
+    // 3.33.3 to 3.33.4: the core BOM keeps Jackson, the platform BOM upgrades it
+    assert.equal(diffBom(bom, versions, 0, 2).rows.length, 0);
+    const d = diffBom(pb, versions, 0, 2);
+    assert.deepEqual(d.rows.map((r) => [r.id, r.from, r.to, r.kind]), [
+      ['com.fasterxml.jackson.core:jackson-core', '2.21.6', '2.21.7', 'patch'],
+      ['com.fasterxml.jackson.core:jackson-databind', '2.21.6', '2.21.7', 'patch'],
+      ['com.fasterxml.jackson.dataformat:jackson-dataformat-yaml', '2.21.6', '2.21.7', 'patch'],
+      ['io.agroal:agroal-api', '2.7.2', '2.7.1', 'downgrade'],
+    ]);
+    // "=" in both releases: quarkus-core, the pinned module the platform aligns, and the platform's own descriptor
+    assert.equal(d.modules, 3);
+    const jackson = headlineLibraries(pb, versions, 0, 2).find((r) => r.label === 'Jackson');
+    assert.deepEqual([jackson.from, jackson.to, jackson.kind], ['2.21.6', '2.21.7', 'patch']);
+  });
+
+  test('platformArtifactRuns: runs over the shown releases with a platform BOM', () => {
+    const all = [0, 1, 2, 3];
+    assert.deepEqual(platformArtifactRuns(bom, platform, 'com.fasterxml.jackson.core:jackson-databind', all),
+      [{ from: 2, to: 2, count: 1, platform: '2.21.7', core: '2.21.6' }]);
+    // a release without a platform BOM ends a run; a hidden one does not
+    assert.deepEqual(platformArtifactRuns(bom, platform, 'io.quarkus:quarkus-pinned', all).map((r) => [r.from, r.to, r.count]),
+      [[0, 0, 1], [2, 3, 2]]);
+    assert.deepEqual(platformArtifactRuns(bom, platform, 'io.quarkus:quarkus-pinned', [0, 2, 3]).map((r) => [r.from, r.to, r.count, r.platform, r.core]),
+      [[0, 3, 3, '=', '3.33.2']]);
+    // only one of the BOMs manages it: the other value is null
+    assert.deepEqual(platformArtifactRuns(bom, platform, 'org.graalvm.polyglot:js', all).map((r) => [r.from, r.to, r.platform, r.core]),
+      [[0, 0, null, '23.1.2'], [2, 3, null, '23.1.2']]);
+    assert.deepEqual(platformArtifactRuns(bom, platform, 'io.quarkus:quarkus-core', all), []);
+  });
+});
+
+/* -------------------------------------------------------------------------- */
 describe('extension diff', () => {
   const extensions = {
     states: [

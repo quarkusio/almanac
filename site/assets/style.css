@@ -2516,6 +2516,108 @@ a.dgroup-id:hover {
   color: var(--accent);
 }
 
+/* platform BOM: how io.quarkus.platform:quarkus-bom differs from io.quarkus:quarkus-bom */
+
+.cmp-tools {
+  margin-top: 14px;
+}
+
+p.cmp-tools {
+  margin-bottom: 0;
+  font-size: 13.5px;
+}
+
+.platform-note {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px 18px;
+  margin: 0 0 16px;
+  border-left-color: var(--chg);
+}
+
+.platform-note-text {
+  flex: 1 1 32ch;
+  min-width: 0;
+}
+
+.platform-note-text p {
+  margin: 0;
+}
+
+.platform-note-text p + p {
+  margin-top: 6px;
+}
+
+.platform-note .mono,
+.pbom-list {
+  overflow-wrap: anywhere;
+}
+
+.pbom-lead {
+  margin: 0 0 4px;
+  font-size: 14px;
+  color: var(--ink-2);
+}
+
+.pbom-h {
+  margin: 26px 0 0;
+  font-size: 15px;
+  font-weight: 700;
+}
+
+.pbom-more {
+  margin-top: 18px;
+  font-size: 14px;
+}
+
+.pbom-more > summary {
+  padding: 4px 0;
+  font-weight: 600;
+  color: var(--accent);
+  cursor: pointer;
+}
+
+.pbom-more > summary:hover {
+  color: var(--link-hover);
+}
+
+.pbom-more > summary:focus-visible {
+  outline: 2px solid var(--focus);
+  outline-offset: 2px;
+}
+
+.pbom-more .pbom-h {
+  margin-top: 14px;
+  font-size: 14px;
+}
+
+.pbom-list {
+  display: grid;
+  gap: 2px;
+  margin: 6px 0 0;
+  padding: 0;
+  list-style: none;
+  font: 13px/1.6 var(--font-mono);
+}
+
+.pbom-list a {
+  color: var(--ink-2);
+}
+
+.pbom-list a:hover {
+  color: var(--accent);
+}
+
+.pbom-foot {
+  margin-top: 14px;
+}
+
+.tbl-pbom {
+  margin-top: 10px;
+}
+
 /* extensions */
 
 .eblocks {

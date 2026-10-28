@@ -7,6 +7,7 @@ import com.fasterxml.jackson.databind.node.JsonNodeFactory;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.fasterxml.jackson.databind.node.TextNode;
 import io.quarkiverse.almanac.config.ConfigProperties;
+import io.quarkiverse.almanac.maven.BomDifferences;
 import io.quarkiverse.almanac.maven.QuarkusVersion;
 import io.quarkiverse.almanac.maven.VersionSelector;
 import io.quarkiverse.almanac.model.BomSnapshot;
@@ -41,22 +42,30 @@ import java.util.stream.Collectors;
 
 /// Turns per-version snapshots into the compact site data: `versions.json`, `bom.json`
 /// (change points, `"="` for "the release's own version"), `config.json` (interned states, change points
-/// over config versions, latest descriptions) and `extensions.json` (change points over extension versions: the
-/// releases with an extensions snapshot, flagged `ext` in `versions.json`).
+/// over config versions, latest descriptions), `extensions.json` (change points over extension versions: the
+/// releases with an extensions snapshot, flagged `ext` in `versions.json`) and `platform.json` (how the platform BOM
+/// differs from the BOM, over the releases with a platform BOM snapshot; see [#build]).
 ///
 /// Releases are [added][#add] in ascending version order, then [#build] produces the documents.
 /// Before building config histories, each snapshot is normalised by [unnamed-key folding][#foldUnnamedKeys].
 public final class HistoryBuilder {
 
     /// The snapshots of one release. A release with config also has extensions; one with extensions may have no
-    /// config (extensions read from the release's extension catalog, before config was extracted).
-    public record Release(BomSnapshot bom, ConfigSnapshot config, ExtensionsSnapshot extensions) {
+    /// config (extensions read from the release's extension catalog, before config was extracted). The platform BOM,
+    /// of the same version, may be missing.
+    public record Release(BomSnapshot bom, ConfigSnapshot config, ExtensionsSnapshot extensions,
+            BomSnapshot platform) {
 
         public Release {
             Objects.requireNonNull(bom, "bom");
             if (config != null && extensions == null) {
                 throw new IllegalArgumentException("a config snapshot needs the release's extensions snapshot");
             }
+        }
+
+        /// A release without platform BOM snapshot.
+        public Release(BomSnapshot bom, ConfigSnapshot config, ExtensionsSnapshot extensions) {
+            this(bom, config, extensions, null);
         }
 
         boolean hasConfig() {
@@ -66,10 +75,15 @@ public final class HistoryBuilder {
         boolean hasExtensions() {
             return extensions != null;
         }
+
+        boolean hasPlatform() {
+            return platform != null;
+        }
     }
 
     /// The site data documents.
-    public record SiteData(ObjectNode versions, ObjectNode bom, ObjectNode config, ObjectNode extensions) {
+    public record SiteData(ObjectNode versions, ObjectNode bom, ObjectNode config, ObjectNode extensions,
+            ObjectNode platform) {
 
         /// File name → document, in writing order.
         public Map<String, ObjectNode> files() {
@@ -78,6 +92,7 @@ public final class HistoryBuilder {
             files.put("bom.json", bom);
             files.put("config.json", config);
             files.put("extensions.json", extensions);
+            files.put("platform.json", platform);
             return files;
         }
     }
@@ -93,6 +108,8 @@ public final class HistoryBuilder {
     private final ChangePoints bomHistory = new ChangePoints();
     private final ChangePoints configHistory = new ChangePoints();
     private final ChangePoints extensionHistory = new ChangePoints();
+    private final ChangePoints platformHistory = new ChangePoints();
+    private final ArrayNode platformVersions = NODES.arrayNode();
     private final Interner configStates = new Interner();
     private final Interner extensionStates = new Interner();
     private final ArrayNode configVersions = NODES.arrayNode();
@@ -148,11 +165,13 @@ public final class HistoryBuilder {
             Json.writeCompact(path, file.getValue());
             Log.info("assemble: wrote %s (%,d bytes)", path, Files.size(path));
         }
-        Log.info("assemble: %d releases (%d pre-release, %d with config, %d with extensions), %d BOM artifacts, %d "
-                        + "config keys in %d states, %d extensions in %d states", builder.versionRows.size(),
+        Log.info("assemble: %d releases (%d pre-release, %d with config, %d with extensions, %d with a platform BOM), "
+                        + "%d BOM artifacts, %d ids that a platform BOM manages otherwise, %d config keys in %d "
+                        + "states, %d extensions in %d states", builder.versionRows.size(),
                 versions.stream().filter(version -> !version.isFinal()).count(), builder.configVersions.size(),
-                builder.extensionVersions, builder.bomHistory.size(), builder.configHistory.size(),
-                builder.configStates.size(), builder.extensionHistory.size(), builder.extensionStates.size());
+                builder.extensionVersions, builder.platformVersions.size(), builder.bomHistory.size(),
+                builder.platformHistory.size(), builder.configHistory.size(), builder.configStates.size(),
+                builder.extensionHistory.size(), builder.extensionStates.size());
     }
 
     /// The first five names, then `...` when there are more.
@@ -206,9 +225,20 @@ public final class HistoryBuilder {
             }
             extensionHistory.observe(vi, extensions);
         }
+        if (release.hasPlatform()) {
+            platformVersions.add(vi);
+            Map<String, JsonNode> differences = new HashMap<>();
+            BomDifferences.of(bom.version(), bom.deps(), release.platform().deps())
+                    .forEach((id, value) -> differences.put(id, TextNode.valueOf(value)));
+            platformHistory.observe(vi, differences);
+        }
     }
 
-    /// The site documents for the releases added so far.
+    /// The site documents for the releases added so far. `platform.json` has `versions`, the release indices with a
+    /// platform BOM snapshot, and `artifacts`, the ids that a platform BOM manages otherwise than the BOM of the same
+    /// release, with change points over those releases alone: the platform BOM's version (`"="` for the release's
+    /// own), `"-"` ([BomDifferences#NOT_MANAGED]) when only the BOM manages the id, `null` when both manage it alike or
+    /// neither does.
     public SiteData build(Instant generatedAt) {
         ObjectNode versions = NODES.objectNode().put("generatedAt", generatedAt.truncatedTo(ChronoUnit.SECONDS)
                 .toString());
@@ -229,7 +259,11 @@ public final class HistoryBuilder {
         ObjectNode extensions = NODES.objectNode();
         extensions.set("states", extensionStates.states().deepCopy());
         extensions.set("exts", extensionHistory.toJson("id"));
-        return new SiteData(versions, bom, config, extensions);
+
+        ObjectNode platform = NODES.objectNode();
+        platform.set("versions", platformVersions.deepCopy());
+        platform.set("artifacts", platformHistory.toJson("id"));
+        return new SiteData(versions, bom, config, extensions, platform);
     }
 
     /// Unnamed-key folding: a property whose key has an inner `*` segment is dropped when removing
