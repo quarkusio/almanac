@@ -30,6 +30,7 @@
   --link-hover: #cc0000;
   --sub-title: #205894;
   --mark: #fbe6a2;
+  --mark-ink: #121212;
   --add: #0f6b3c;
   --add-bg: #e0f1e7;
   --add-line: #9fcfb3;
@@ -111,6 +112,7 @@
     --link-hover: #ff6b6b;
     --sub-title: #9bcafa;
     --mark: #5a4b0c;
+    --mark-ink: #e6e6e6;
     --add: #63d397;
     --add-bg: #0f2a1b;
     --add-line: #25583b;
@@ -161,6 +163,7 @@
     --link-hover: #ff6b6b;
     --sub-title: #9bcafa;
     --mark: #5a4b0c;
+    --mark-ink: #e6e6e6;
     --add: #63d397;
     --add-bg: #0f2a1b;
     --add-line: #25583b;
@@ -543,6 +546,13 @@ a.ver:hover {
   right: 0;
   min-width: 275px;
   background: var(--nav-panel);
+}
+
+/* the first menu opens rightwards: from its item at the left of the bar, a panel opening leftwards would run off the
+   window below about 1200 px */
+.gnav-item:first-child > .gnav-menu {
+  left: 0;
+  right: auto;
 }
 
 .gnav-item.is-open > .gnav-menu {
@@ -1748,7 +1758,7 @@ a.ver:hover {
 
 mark {
   padding: 0 1px;
-  color: inherit;
+  color: var(--mark-ink);
   background: var(--mark);
   border-radius: 1px;
 }

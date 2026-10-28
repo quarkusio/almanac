@@ -688,8 +688,13 @@ function globalNav() {
     if (open && pin) pinned.add(li);
     else pinned.delete(li);
   };
+  // a menu that closes around the focus hands it to its button, so that the focus never falls back to the page
+  const close = (li) => {
+    if (li.contains(document.activeElement)) li.firstElementChild.focus();
+    setOpen(li, false);
+  };
   const closeAll = (except) => {
-    for (const li of menus) if (li !== except && isOpen(li)) setOpen(li, false);
+    for (const li of menus) if (li !== except && isOpen(li)) close(li);
   };
   const link = (href) => (href.startsWith('/') ? QUARKUS_IO + href : href);
   const menu = (id, label, groups) => {
@@ -740,6 +745,7 @@ function globalNav() {
       burger, list));
   const panelOpen = () => bar.classList.contains('is-open');
   const setPanel = (open) => {
+    if (!open && list.contains(document.activeElement)) burger.focus();
     bar.classList.toggle('is-open', open);
     burger.setAttribute('aria-expanded', String(open));
     if (!open) closeAll();
@@ -751,26 +757,26 @@ function globalNav() {
   };
   shell.closeNav = closeNav;
   burger.addEventListener('click', () => setPanel(!panelOpen()));
-  // a link followed from the menu, even to the page already shown, leaves it closed
+  // a link followed from the menu, even to the page already shown, leaves it closed (not one opened in another tab)
   list.addEventListener('click', (e) => {
+    if (e.button !== 0 || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return;
     if (e.target instanceof Element && e.target.closest('a')) closeNav();
   });
   bar.addEventListener('focusout', (e) => {
     if (panelOpen() && e.relatedTarget instanceof Node && !bar.contains(e.relatedTarget)) setPanel(false);
   });
+  // in the capture phase, so that a control that stops its clicks (the copy buttons) still closes the menus, and before
+  // a control replaces what was clicked (the theme's icon)
   document.addEventListener('click', (e) => {
-    for (const li of menus) if (isOpen(li) && !li.contains(e.target)) setOpen(li, false);
-    if (panelOpen() && !list.contains(e.target) && !burger.contains(e.target)) setPanel(false);
-  });
+    const path = e.composedPath();
+    for (const li of menus) if (isOpen(li) && !path.includes(li)) close(li);
+    if (panelOpen() && !path.includes(list) && !path.includes(burger)) setPanel(false);
+  }, true);
   document.addEventListener('keydown', (e) => {
     if (e.key !== 'Escape' || e.defaultPrevented) return;
     const open = menus.find(isOpen);
-    const scope = open ?? (panelOpen() ? bar : null);
-    if (!scope) return;
-    const focusWasIn = scope.contains(document.activeElement);
-    if (open) setOpen(open, false);
-    else setPanel(false);
-    if (focusWasIn) (open ? open.firstElementChild : burger).focus();
+    if (open) close(open);
+    else if (panelOpen()) setPanel(false);
   });
   // the menu moves between the bar and the folded panel: start closed in either
   wide?.addEventListener?.('change', closeNav);
@@ -822,13 +828,12 @@ function themeToggle() {
   const glyphs = { light: 'sun', dark: 'moon', system: 'theme' };
   const root = document.documentElement;
   let mode = modes.includes(root.dataset.theme) ? root.dataset.theme : 'light';
-  const btn = h('button', { type: 'button', class: 'gnav-theme' });
+  // one name; the title (also its description) says the scheme and the next one, and a change is announced once
+  const btn = h('button', { type: 'button', class: 'gnav-theme', 'aria-label': 'Colour scheme' });
   const apply = () => {
     root.dataset.theme = mode;
-    const next = names[modes[(modes.indexOf(mode) + 1) % modes.length]];
     btn.replaceChildren(icon(glyphs[mode]));
-    btn.setAttribute('aria-label', `Colour scheme: ${names[mode]}. Activate for ${next}.`);
-    btn.title = `Colour scheme: ${names[mode]}; next: ${next}`;
+    btn.title = `Colour scheme: ${names[mode]}; next: ${names[modes[(modes.indexOf(mode) + 1) % modes.length]]}`;
   };
   btn.addEventListener('click', () => {
     mode = modes[(modes.indexOf(mode) + 1) % modes.length];
@@ -1361,13 +1366,15 @@ function errorView(err) {
     retry);
 }
 
-function notFoundView(title, message, extra) {
+/** A not-found page: `extra` goes in the title band, `below` after it (a search box: the band would clip its results). */
+function notFoundView(title, message, extra, below) {
   return frag(
     h('header', { class: 'page-head band' },
       h('p', { class: 'kicker' }, 'Not found'),
       h('h1', { class: 'page-title', tabindex: '-1' }, title),
       message ? h('p', { class: 'lede' }, message) : null,
       extra ?? null),
+    below ?? null,
     h('p', null, h('a', { href: '#/' }, 'Compare two releases'), ' · ', h('a', { href: '#/versions' }, 'All releases')));
 }
 
@@ -2151,7 +2158,7 @@ async function renderProperty(r) {
   const prop = findProperty(cfg, r.key);
   if (!prop) {
     return notFoundView('Unknown config property', `No property named ${r.key} appears in any config snapshot of this dataset.`,
-      h('div', { class: 'nf-search' }, searchBox({ id: nextId('qs-nf') })));
+      null, h('div', { class: 'nf-search' }, searchBox({ id: nextId('qs-nf') })));
   }
   if (prop.k !== r.key) canonicalize({ page: 'property', key: prop.k });
   const hist = core.propertyHistory(cfg.raw, prop, { vis: currentVis() });
@@ -2301,7 +2308,7 @@ async function renderArtifact(r) {
   if (!art && !extEntry) {
     if (!bom) return errorView(new Error(bomData.errors.bom));
     return notFoundView('Unknown artifact', `${id} is not managed by quarkus-bom in any release of this dataset.`,
-      h('div', { class: 'nf-search' }, searchBox({ id: nextId('qs-nf') })));
+      null, h('div', { class: 'nf-search' }, searchBox({ id: nextId('qs-nf') })));
   }
   const vis = currentVis();
   const hist = art ? core.artifactHistory(bom.raw, id, V.list, { vis }) : null;
