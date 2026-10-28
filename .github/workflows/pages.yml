@@ -32,6 +32,14 @@ jobs:
         run: |
           mkdir -p _site
           cp -r site/index.html site/assets site/data _site/
+      # browsers keep scripts and styles for hours: an address of their own per commit makes a deploy load the new ones
+      - name: Version the asset URLs with the commit
+        run: |
+          v=${GITHUB_SHA::12}
+          sed -i -E "s#\"assets/(app\.js|theme\.js|style\.css)\"#\"assets/\1?v=$v\"#" _site/index.html
+          sed -i "s#from './core.js'#from './core.js?v=$v'#" _site/assets/app.js
+          test "$(grep -c "?v=$v" _site/index.html)" = 3
+          grep -q "from './core.js?v=$v'" _site/assets/app.js
       - uses: actions/configure-pages@v6
       - uses: actions/upload-pages-artifact@v5
         with:
