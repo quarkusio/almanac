@@ -1654,8 +1654,8 @@ async function renderHome() {
 
   return frag(
     hero,
-    h('div', { class: 'home-grid' }, h('div', { class: 'home-main' }, search), h('aside', { class: 'home-side', 'aria-label': 'Quick comparisons' }, quick)),
-    coverageFacts());
+    coverageFacts(),
+    h('div', { class: 'home-grid' }, h('div', { class: 'home-main' }, search), h('aside', { class: 'home-side', 'aria-label': 'Quick comparisons' }, quick)));
 }
 
 /**
