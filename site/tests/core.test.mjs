@@ -2419,12 +2419,12 @@ describe('API: dating across jars and lines, change kinds, members across jars',
       [null, 'unremoval', []],
       ['m()V', 'unremoval', []],
       ['K:Lio/quarkus/Old;', 'modifiers', ['became final', 'became static', 'became an enum constant']],
-      ['s()V', 'modifiers', ['since 3.1 → 3.2']],
-      ['t()V', 'modifiers', ['since 3.2 declared']],
+      ['s()V', 'modifiers', ['since = "3.1" → "3.2" in @Deprecated']],
+      ['t()V', 'modifiers', ['since = "3.2" added to @Deprecated']],
     ]);
     const [, ev] = classApiHistory(rows, [0, 1]);
     assert.deepEqual([ev.changes, ev.changed], [['no longer marked for removal'], 4]);
-    assert.deepEqual(modifierChanges(parseApiValue('+D since 3.1', true), parseApiValue('+D', true)), ['since 3.1 dropped']);
+    assert.deepEqual(modifierChanges(parseApiValue('+D since 3.1', true), parseApiValue('+D', true)), ['since = "3.1" dropped from @Deprecated']);
     assert.deepEqual(modifierChanges(parseApiValue('+', true), parseApiValue('+D since 3.1', true)), [], 'a new deprecation is its own row');
   });
 

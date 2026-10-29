@@ -1931,7 +1931,7 @@ const KIND_MODIFIERS = new Set(['abstract', 'final', 'static']);
 
 /**
  * The modifier changes of a class or member between two parsed values, in words: "became final", "no longer static",
- * "public → protected", "class → record", "since 3.1 → 3.2" (of a deprecation kept). A class whose kind changed has no
+ * "public → protected", "class → record", 'since = "3.1" → "3.2" in @Deprecated' (of a deprecation kept). A class whose kind changed has no
  * abstract, final or static changes: the grammar writes them for classes of no kind only, the others imply theirs.
  */
 export function modifierChanges(from, to) {
@@ -1947,7 +1947,8 @@ export function modifierChanges(from, to) {
   }
   if (from.varargs !== undefined && from.varargs !== to.varargs) out.push(to.varargs ? 'became varargs' : 'no longer varargs');
   if (from.deprecated && to.deprecated && from.since !== to.since) {
-    out.push(from.since == null ? `since ${to.since} declared` : to.since == null ? `since ${from.since} dropped` : `since ${from.since} → ${to.since}`);
+    out.push(from.since == null ? `since = "${to.since}" added to @Deprecated`
+      : to.since == null ? `since = "${from.since}" dropped from @Deprecated` : `since = "${from.since}" → "${to.since}" in @Deprecated`);
   }
   return out;
 }

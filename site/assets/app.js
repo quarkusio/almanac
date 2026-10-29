@@ -2937,14 +2937,15 @@ function jarsAtBoth(cmp, classes) {
  * §4: the API of the io.quarkus jars between the two releases. From the classes files: the deprecation changes and the
  * classes that moved to another jar. With member data: every change of the classes whose API revision differs, whose
  * shard files load after the page when they are small (API_AUTO_BYTES, estimated), else when the section opens or on
- * request (always on request under Save-Data). Classes are compared by name across jars.
+ * request (always on request under Save-Data). Classes are compared by name across jars. A release page shows it
+ * under its own `title`, with `since` (the release it compares with) leading the note, and `open`: it never collapses.
  */
-function apiSection(cmp) {
+function apiSection(cmp, { title = 'API', since = null, open = false } = {}) {
   const V = store.V;
   const at = comparedAt(cmp, 'api');
-  const note = h('p', { class: 'sec-note' }, 'The public and protected classes and members of the ', h('code', null, 'io.quarkus'), ' jars',
-    at ? frag(',', at) : null, '. A class is compared by name, whichever jar has it, and one that moved to another jar says so.');
-  const sec = h('section', { class: 'sec', id: 'sec-api', 'aria-labelledby': 'sec-api-h' }, sectionHead(4, 'API', 'sec-api-h', note));
+  const note = h('p', { class: 'sec-note' }, since ? frag(since, ': the public') : 'The public', ' and protected classes and members of the ',
+    h('code', null, 'io.quarkus'), ' jars', at ? frag(',', at) : null, '. A class is compared by name, whichever jar has it, and one that moved to another jar says so.');
+  const sec = h('section', { class: 'sec', id: 'sec-api', 'aria-labelledby': 'sec-api-h' }, sectionHead(4, title, 'sec-api-h', note));
   const gap = gapText(cmp, 'api');
   if (gap) return add(sec, [emptyNote(gap)]);
   if (cmp.aa === cmp.ab) return add(sec, [emptyNote(sameSnapshotText(cmp, 'api'))]);
@@ -3019,7 +3020,7 @@ function apiSection(cmp) {
       sec.addEventListener('sectiontoggle', () => {
         if (isSectionOpen(sec)) load();
       });
-      if (isSectionOpen(sec)) load();
+      if (open || isSectionOpen(sec)) load();
     }
   }).catch((e) => slot.replaceChildren(missingData('the API data', e?.message)));
   return sec;
@@ -3066,11 +3067,11 @@ function deprecationChanges(deps, moved = [], memory = null) {
     groupsEl);
 }
 
-/** What a deprecation change says: "for removal since 3.35 (declared); marked from …", "removed after deprecation"; or a move. */
+/** What a deprecation change says: "for removal", "removed after deprecation"… with its deprecationNote; or a move. */
 function deprecationRow(r) {
   if (r.change === 'moved') return apiRow(r);
   const what = r.member ? memberSignature(r.name, r.member, r.value) : h('span', { class: 'muted' }, 'the class');
-  const since = r.since || r.from != null ? h('span', { class: 'msince' }, deprecationSince(r)) : null;
+  const since = r.since || r.from != null ? h('span', { class: 'msince' }, deprecationNote(r)) : null;
   const change = r.change === 'removal' ? deprecationChip('removal', 'Newly marked for removal')
     : r.change === 'deprecated' ? deprecationChip('deprecated', 'Newly deprecated')
       : r.change === 'removed' ? chip('removed', 'removed after deprecation', 'Gone, and deprecated the last time it was there')
@@ -3757,12 +3758,16 @@ function deprecationChip(kind, title) {
     : chip('deprecated', 'deprecated', title ?? 'Deprecated: @Deprecated or a javadoc @deprecated tag');
 }
 
-/** "since 3.35 (declared); marked from 3.35.0.CR1": a deprecation's declared since and the release it is marked from. */
-function deprecationSince(d) {
+/** `@Deprecated(since = "3.35", forRemoval = true)` as code: the annotation of a deprecation that declares its since; else null. */
+function deprecatedAnnotation(since, forRemoval) {
+  return since ? h('code', { class: 'val' }, `@Deprecated(since = "${since}"${forRemoval ? ', forRemoval = true' : ''})`) : null;
+}
+
+/** "@Deprecated(since = "3.35", forRemoval = true); marked from 3.35.0.CR1": a deprecation's annotation and the release it is marked from. */
+function deprecationNote(d) {
   const V = store.V;
-  return frag(
-    d.since ? frag('since ', h('code', { class: 'val' }, d.since), ' (declared)') : null,
-    d.from != null ? frag(d.since ? '; ' : '', 'marked from ', verLink(V.list[d.from].v)) : null);
+  const annotation = deprecatedAnnotation(d.since, core.deprecationOf(d.value) === 'removal');
+  return frag(annotation, d.from != null ? frag(annotation ? '; ' : '', 'marked from ', verLink(V.list[d.from].v)) : null);
 }
 
 /**
@@ -3815,13 +3820,14 @@ function classDeprecationLine(info) {
   if (!info) return null;
   const V = store.V;
   if (info.now) {
-    const kind = info.now.kind === 'removal' ? 'Deprecated for removal' : 'Deprecated';
-    const since = info.now.since || info.now.from != null;
-    // a class gone since: as it was the last time it was API
+    const removal = info.now.kind === 'removal';
+    const from = info.now.from != null ? frag(' from ', verLink(V.list[info.now.from].v)) : null;
+    // a class gone since: up to the last time it was API
+    const at = `${short(V.list[info.at].v)}, ${apiAtWhat(info)}`;
+    const run = info.gone ? (from ? frag(from, ` to ${at}`) : ` in ${at}`) : from ? frag(from, ' on') : null;
+    const annotation = deprecatedAnnotation(info.now.since, removal);
     return h('p', { class: 'status-line' }, deprecationChip(info.now.kind),
-      info.gone
-        ? h('span', null, `${kind} in ${short(V.list[info.at].v)}, ${apiAtWhat(info)}`, since ? ': ' : '', deprecationSince(info.now), '.')
-        : h('span', null, kind, since ? ' ' : '', deprecationSince(info.now), '.'));
+      h('span', null, removal ? 'Deprecated for removal' : 'Deprecated', run, annotation ? ': ' : '', annotation, '.'));
   }
   if (info.outer) {
     return h('p', { class: 'status-line' }, chip('deprecated', 'in a deprecated class', 'The class it is nested in is deprecated'),
@@ -3853,7 +3859,7 @@ function deprecatedMembersSection(name, info) {
     cappedList('mlist', info.members, (m) => h('li', { class: 'mrow' },
       memberSignature(name, m.key, m.now.value),
       h('span', { class: 'mchips' }, deprecationChip(m.now.kind)),
-      h('span', { class: 'msince' }, deprecationSince(m.now)))));
+      h('span', { class: 'msince' }, deprecationNote(m.now)))));
 }
 
 /** The chips of a member value: static, abstract, final, default, protected, experimental, deprecated, for removal. */
@@ -4026,12 +4032,13 @@ function membersView(name, m, parsed, target, at) {
     inherited);
 }
 
-/** "last in 3.27.4" or "was deprecated since 3.15 (declared); last in 3.27.4" for a member gone since. */
+/** "last in 3.27.4", "was deprecated; last in 3.27.4" or "was @Deprecated(since = "3.15"); last in 3.27.4" for a member gone since. */
 function removedNote(x) {
   const V = store.V;
   const last = frag('last in ', verLink(V.list[x.last].v));
   if (!x.parsed?.deprecated) return last;
-  return frag(x.parsed.forRemoval ? 'was deprecated for removal' : 'was deprecated', x.parsed.since ? frag(' since ', h('code', { class: 'val' }, x.parsed.since)) : null, '; ', last);
+  const was = deprecatedAnnotation(x.parsed.since, x.parsed.forRemoval) ?? (x.parsed.forRemoval ? 'deprecated for removal' : 'deprecated');
+  return frag('was ', was, '; ', last);
 }
 
 /** Marks a member of the Members section, and unless `move` is false scrolls to it (a removed one opens its list first). */
@@ -4125,11 +4132,12 @@ function classRuns(hist, jarNames) {
 function classEventBody(ev, jarNames, first = true) {
   const jars = (list) => jarLinks(jarNames(list));
   if (ev.dep) {
-    const since = ev.since ? frag(' since ', h('code', { class: 'val' }, ev.since), ' (declared)') : null;
-    if (ev.type === 'removal') return h('p', { class: 'tl-text' }, deprecationChip('removal'), h('span', null, ev.first ? 'Already marked for removal' : 'Marked for removal', since, '.'));
+    const annotation = deprecatedAnnotation(ev.since, ev.type === 'removal');
+    const end = annotation ? frag(': ', annotation, '.') : '.';
+    if (ev.type === 'removal') return h('p', { class: 'tl-text' }, deprecationChip('removal'), h('span', null, ev.first ? 'Already marked for removal' : 'Marked for removal', end));
     if (ev.type === 'deprecated') {
       return h('p', { class: 'tl-text' }, deprecationChip('deprecated'),
-        h('span', null, ev.from === 'removal' ? 'No longer marked for removal, still deprecated' : ev.first ? 'Already deprecated' : 'Deprecated', since, '.'));
+        h('span', null, ev.from === 'removal' ? 'No longer marked for removal, still deprecated' : ev.first ? 'Already deprecated' : 'Deprecated', end));
     }
     return h('p', { class: 'tl-text' }, chip('undeprecated'), h('span', null, 'No longer deprecated.'));
   }
@@ -4283,26 +4291,31 @@ async function renderVersion(r) {
       extsN.textContent = 'extensions.json unavailable';
     });
   }
-  // the deprecated API, when the data has API: a fact, and a section listing it by jar
-  const depSec = h('section', { class: 'sec', id: 'sec-deprecated', 'aria-labelledby': 'vd-h', hidden: true });
+  // the deprecated API, when the data has API: a fact, all of it, with a page of its own
+  const av = V.apiVis.length ? core.apiVersionFor(i, V.list, V.apiVis) : null;
+  const [baseLabel, base] = compares[0] ?? [];
+  const avBase = base == null ? null : core.apiVersionFor(base, V.list, V.apiVis);
   if (V.apiVis.length) {
     const depN = h('span', null, '…');
     kv.append(h('dt', null, 'Deprecated API'), h('dd', null, depN));
-    const av = core.apiVersionFor(i, V.list, V.apiVis);
     if (av == null) {
       depN.replaceChildren(h('em', { class: 'none' }, 'no API data for this release'));
     } else {
-      loadClasses(apiLinesFor(av)).then((classes) => {
+      // the lines that the API section loads too, which have this release's own
+      loadClasses(avBase == null ? apiLinesFor(av) : linesSpanning(core.classLinesOf(V.list, [avBase, av]))).then((classes) => {
         const items = core.deprecationsAt(classes.raw, av);
         depN.replaceChildren(items.length ? frag(deprecatedCounts(items), av === i ? null : h('span', { class: 'muted' }, ` (API data of ${short(V.list[av].v)})`),
           h('span', { class: 'kv-sub' }, h('a', { href: link.deprecated(x.v) }, 'The deprecated API on a page of its own'))) : 'none');
-        if (!items.length) return;
-        add(depSec, [sectionHead(0, 'Deprecated API', 'vd-h', h('p', { class: 'sec-note' }, `The classes and members of the io.quarkus jars deprecated in ${short(x.v)}, by jar.`)), deprecatedList(items, `deprecated:${x.v}`)]);
-        depSec.hidden = false;
-        numberSections([...depSec.parentNode?.children ?? []].filter((el) => el.classList.contains('sec')));
       }).catch(() => depN.replaceChildren('the API data is unavailable'));
     }
   }
+  // what changed in the API since the release this one is first compared with: a comparison's API section, the
+  // deprecation changes and the moves at once, every change when the member files load
+  const apiSec = av != null && base != null
+    ? apiSection({ ia: base, ib: i, A: V.list[base], B: x, aa: avBase, ab: av }, {
+      title: 'API changes', since: frag('Since ', verLink(V.list[base].v), ` (${baseLabel.charAt(0).toLowerCase()}${baseLabel.slice(1)})`), open: true,
+    })
+    : null;
   // the platform BOM, when platform.json is there: a fact, and a section on how it differs from the core BOM
   const platformN = h('span', null, '…');
   const platformFact = [h('dt', null, 'Platform BOM'), h('dd', null, platformN)];
@@ -4328,17 +4341,22 @@ async function renderVersion(r) {
     platformFact.forEach((el) => el.remove());
   });
 
-  return frag(
-    h('header', { class: 'page-head band' },
-      h('p', { class: 'kicker' }, isPre ? 'Pre-release' : 'Release', ' · stream ', x.stream || core.stream(x.v)),
-      h('h1', { class: 'page-title page-title--ver', tabindex: '-1' }, short(x.v)),
-      h('div', { class: 'badges' }, dateEl(x.date), versionChips(x), V.visOff.upcoming[i] ? upcomingChip() : null)),
+  // numbered now, without the platform BOM until it shows
+  const sections = [
     h('section', { class: 'sec', 'aria-labelledby': 'vq-h' },
       sectionHead(1, 'Compare with', 'vq-h', h('p', { class: 'sec-note' }, `What changed on the way to ${short(x.v)}.`)),
       quick, forward),
     h('section', { class: 'sec', 'aria-labelledby': 'vf-h' }, sectionHead(2, 'Facts', 'vf-h'), kv),
     platformSec,
-    depSec,
+    apiSec,
+  ];
+  numberSections(sections);
+  return frag(
+    h('header', { class: 'page-head band' },
+      h('p', { class: 'kicker' }, isPre ? 'Pre-release' : 'Release', ' · stream ', x.stream || core.stream(x.v)),
+      h('h1', { class: 'page-title page-title--ver', tabindex: '-1' }, short(x.v)),
+      h('div', { class: 'badges' }, dateEl(x.date), versionChips(x), V.visOff.upcoming[i] ? upcomingChip() : null)),
+    ...sections,
     h('nav', { class: 'pager', 'aria-label': 'Neighbouring releases' },
       nb.older >= 0 ? h('a', { class: 'pager-link', href: link.version(V.list[nb.older].v) }, h('span', { class: 'pager-k' }, 'Older'), h('span', { class: 'ver' }, short(V.list[nb.older].v))) : h('span'),
       nb.newer >= 0 ? h('a', { class: 'pager-link pager-link--next', href: link.version(V.list[nb.newer].v) }, h('span', { class: 'pager-k' }, 'Newer'), h('span', { class: 'ver' }, short(V.list[nb.newer].v))) : h('span')));
@@ -4424,7 +4442,7 @@ function deprecatedRow(x) {
   return h('li', { class: 'mrow' },
     deprecationChip(x.kind),
     x.member ? memberSignature(x.name, x.member, x.value) : h('span', { class: 'muted' }, 'the class'),
-    x.since || x.from != null ? h('span', { class: 'msince' }, deprecationSince(x)) : null);
+    x.since || x.from != null ? h('span', { class: 'msince' }, deprecationNote(x)) : null);
 }
 
 /** #/deprecated/<version>: every class and member of the io.quarkus jars deprecated in a release. */
@@ -4446,7 +4464,7 @@ async function renderDeprecated(r) {
     h('p', { class: 'lede' }, `The public and protected classes and members of the io.quarkus jars deprecated in ${short(x.v)}`,
       av === i ? '' : `, from the API data of ${short(V.list[av].v)}`, `: ${deprecatedCounts(items)}.`),
     h('section', { class: 'sec', 'aria-labelledby': 'dep-h' }, sectionHead(1, 'By jar', 'dep-h',
-      h('p', { class: 'sec-note' }, '“Since” is what the @Deprecated annotation declares; “marked from” is the first release, of those in a row up to this one, that marks it deprecated.')),
+      h('p', { class: 'sec-note' }, '@Deprecated(since = …) is the annotation as the code declares it; “marked from” is the first release, of those in a row up to this one, that marks it deprecated.')),
     deprecatedList(items, `deprecated:${x.v}`)));
 }
 
