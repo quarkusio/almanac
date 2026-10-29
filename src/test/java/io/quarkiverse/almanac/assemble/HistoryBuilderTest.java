@@ -216,6 +216,34 @@ class HistoryBuilderTest {
     }
 
     @Test
+    void onlyQuarkusOwnArtifactsAreWrittenAsTheReleasesOwnVersion() throws IOException {
+        // the Mutiny Vert.x bindings were at 3.14.0 in Quarkus 3.14.0: a third-party version that happens to be the
+        // release's, which the site must not take for a Quarkus module
+        String bindings = "io.smallrye.reactive:smallrye-mutiny-vertx-core";
+        HistoryBuilder builder = new HistoryBuilder();
+        builder.add(new HistoryBuilder.Release(bom("3.14.0", "2024-08-28", dep("io.quarkus.arc:arc", "3.14.0"),
+                dep("io.quarkus:quarkus-core", "3.14.0"), dep(bindings, "3.13.0")), null, null, null,
+                bom("3.14.0", "2024-08-29", dep("io.quarkus.arc:arc", "3.14.0"),
+                        dep("io.quarkus:quarkus-core", "3.14.0"), dep(bindings, "3.14.0"))));
+        builder.add(new HistoryBuilder.Release(bom("3.15.0", "2024-09-25", dep("io.quarkus.arc:arc", "3.15.0"),
+                dep("io.quarkus:quarkus-core", "3.15.0"), dep(bindings, "3.15.0")), null, null));
+        HistoryBuilder.SiteData data = builder.build(NOW);
+        assertEquals(json("""
+                [{"id":"io.quarkus.arc:arc","h":[[0,"="]]},
+                 {"id":"io.quarkus:quarkus-core","h":[[0,"="]]},
+                 {"id":"io.smallrye.reactive:smallrye-mutiny-vertx-core","h":[[0,"3.13.0"],[1,"3.15.0"]]}]
+                """), data.bom().get("artifacts"));
+        // the platform BOM's version of it too
+        assertEquals(json("""
+                {"versions":[0],
+                 "artifacts":[{"id":"io.smallrye.reactive:smallrye-mutiny-vertx-core","h":[[0,"3.14.0"]]}]}
+                """), data.platform());
+        assertTrue(HistoryBuilder.isQuarkusOwn("io.quarkus.platform:quarkus-bom-quarkus-platform-properties:properties"));
+        assertTrue(HistoryBuilder.isQuarkusOwn("org.jboss.shamrock:shamrock-core"));
+        assertFalse(HistoryBuilder.isQuarkusOwn("io.quarkusio:quarkus-not-ours"));
+    }
+
+    @Test
     void platformDataKeepsWhereThePlatformBomManagesOtherwise() throws IOException {
         String descriptor = "io.quarkus.platform:quarkus-bom-quarkus-platform-descriptor:json:${quarkus.version}";
         HistoryBuilder builder = new HistoryBuilder();

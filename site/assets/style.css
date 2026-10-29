@@ -2720,6 +2720,15 @@ a.prop:hover {
   font: 700 18px/1 var(--font-mono);
 }
 
+/* the project's own artifacts and the third-party ones, each a block of the Dependencies section */
+.dblocks {
+  margin-top: 18px;
+}
+
+.dblock .modules-line {
+  margin: 12px 0 4px;
+}
+
 .dgroup {
   padding: 11px 0 12px;
   border-bottom: 1px solid var(--rule);

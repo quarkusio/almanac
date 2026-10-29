@@ -54,8 +54,8 @@ import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
-/// Turns per-version snapshots into the compact site data: `versions.json`, `bom.json`
-/// (change points, `"="` for "the release's own version"), `config.json` (interned states, change points
+/// Turns per-version snapshots into the compact site data: `versions.json`, `bom.json` (change points, `"="` for "the
+/// release's own version" of Quarkus's own artifacts), `config.json` (interned states, change points
 /// over config versions, latest descriptions), `extensions.json` (change points over extension versions: the
 /// releases with an extensions snapshot, flagged `ext` in `versions.json`), `platform.json` (how the platform BOM
 /// differs from the BOM, over the releases with a platform BOM snapshot; see [#build]) and, per major version line,
@@ -199,7 +199,8 @@ public final class HistoryBuilder {
     /// Any API shard file name, for the shards that a new assembly no longer has.
     private static final Pattern API_SHARD_FILE = Pattern.compile("api-(\\d+)-\\d+\\.json");
 
-    /// Value written for a managed version equal to the release's own version.
+    /// Value written for a managed version equal to the release's own version, of Quarkus's own artifacts only
+    /// ([#isQuarkusOwn]).
     public static final String SAME_AS_RELEASE = "=";
 
     private static final JsonNodeFactory NODES = JsonNodeFactory.instance;
@@ -362,7 +363,8 @@ public final class HistoryBuilder {
 
         Map<String, JsonNode> managed = new HashMap<>();
         for (ManagedDep dep : bom.deps()) {
-            managed.put(dep.id(), TextNode.valueOf(dep.v().equals(bom.version()) ? SAME_AS_RELEASE : dep.v()));
+            managed.put(dep.id(), TextNode.valueOf(
+                    dep.v().equals(bom.version()) && isQuarkusOwn(dep.id()) ? SAME_AS_RELEASE : dep.v()));
         }
         bomHistory.observe(vi, managed);
 
@@ -388,8 +390,10 @@ public final class HistoryBuilder {
         if (release.hasPlatform()) {
             platformVersions.add(vi);
             Map<String, JsonNode> differences = new HashMap<>();
+            // "=" for Quarkus's own artifacts only, as in bom.json
             BomDifferences.of(bom.version(), bom.deps(), release.platform().deps())
-                    .forEach((id, value) -> differences.put(id, TextNode.valueOf(value)));
+                    .forEach((id, value) -> differences.put(id, TextNode.valueOf(
+                            value.equals(BomDifferences.SAME_AS_RELEASE) && !isQuarkusOwn(id) ? bom.version() : value)));
             platformHistory.observe(vi, differences);
         }
         if (release.hasClasses()) {
@@ -464,8 +468,8 @@ public final class HistoryBuilder {
     /// The site documents for the releases added so far. `platform.json` has `versions`, the release indices with a
     /// platform BOM snapshot, and `artifacts`, the ids that a platform BOM manages otherwise than the BOM of the same
     /// release, with change points over those releases alone: the platform BOM's version (`"="` for the release's
-    /// own), `"-"` ([BomDifferences#NOT_MANAGED]) when only the BOM manages the id, `null` when both manage it alike or
-    /// neither does.
+    /// own, of Quarkus's own artifacts), `"-"` ([BomDifferences#NOT_MANAGED]) when only the BOM manages the id, `null`
+    /// when both manage it alike or neither does.
     public SiteData build(Instant generatedAt) {
         ObjectNode versions = NODES.objectNode().put("generatedAt", generatedAt.truncatedTo(ChronoUnit.SECONDS)
                 .toString());
@@ -732,6 +736,16 @@ public final class HistoryBuilder {
     /// A binary class name without its package (`QuarkusUnitTest$Builder`).
     static String simpleNameOf(String binaryName) {
         return binaryName.substring(binaryName.lastIndexOf('.') + 1);
+    }
+
+    /// Whether an artifact (`groupId:artifactId…`) is Quarkus's own, by its groupId: `io.quarkus` and its subgroups
+    /// (`io.quarkus.arc`, `io.quarkus.platform`, …), and `org.jboss.shamrock` before 0.10.0. Only these are written
+    /// [#SAME_AS_RELEASE]: a third-party artifact whose version happens to be the release's keeps its version (the
+    /// Mutiny Vert.x bindings 3.14.0 of Quarkus 3.14.0), so that the site does not take it for a Quarkus module.
+    static boolean isQuarkusOwn(String id) {
+        int colon = id.indexOf(':');
+        String group = colon < 0 ? id : id.substring(0, colon);
+        return group.equals("io.quarkus") || group.startsWith("io.quarkus.") || group.equals("org.jboss.shamrock");
     }
 
     /// Each name → its position in the (sorted) set.

@@ -661,8 +661,28 @@ export function resolveBomValue(raw, releaseVersion) {
 export const BOM_KIND_ORDER = ['downgrade', 'major', 'minor', 'patch', 'other', 'added', 'removed'];
 
 /**
+ * Whether a groupId is Quarkus's own: `io.quarkus` and its subgroups (`io.quarkus.arc`, `io.quarkus.platform`, …), and
+ * `org.jboss.shamrock` before 0.10.0. bom.json writes `"="` for these alone.
+ */
+export function isQuarkusGroup(group) {
+  return group === 'io.quarkus' || group.startsWith('io.quarkus.') || group === 'org.jboss.shamrock';
+}
+
+/** Rows of a BOM diff by kind, with `changed` for those of neither 'added' nor 'removed'. */
+function bomCounts(rows) {
+  const counts = { changed: 0 };
+  for (const kind of BOM_KIND_ORDER) counts[kind] = 0;
+  for (const r of rows) {
+    counts[r.kind]++;
+    if (r.kind !== 'added' && r.kind !== 'removed') counts.changed++;
+  }
+  return counts;
+}
+
+/**
  * BOM diff between releases `a` and `b` (indices into versions). `"="` resolves to the release version;
- * artifacts that are `"="` in both releases are only counted (`modules`), not listed.
+ * artifacts that are `"="` in both releases are only counted (`modules`), not listed. Each row says whether it is
+ * Quarkus's own (`own`, isQuarkusGroup); `counts` are of all rows, `ownCounts` and `thirdPartyCounts` of each kind.
  */
 export function diffBom(bom, versions, a, b) {
   const va = versions[a].v;
@@ -690,21 +710,19 @@ export function diffBom(bom, versions, a, b) {
       continue;
     } else kind = bomChangeKind(from, to);
     const { group, artifact, extra } = splitId(art.id);
-    rows.push({ id: art.id, group, artifact, extra, from, to, kind, follows: ra === '=' || rb === '=' });
+    rows.push({ id: art.id, group, artifact, extra, from, to, kind, follows: ra === '=' || rb === '=', own: isQuarkusGroup(group) });
   }
   rows.sort((x, y) => (x.id < y.id ? -1 : x.id > y.id ? 1 : 0));
-  const counts = { changed: 0 };
-  for (const kind of BOM_KIND_ORDER) counts[kind] = 0;
-  for (const r of rows) {
-    counts[r.kind]++;
-    if (r.kind !== 'added' && r.kind !== 'removed') counts.changed++;
-  }
-  return { a, b, from: va, to: vb, modules, unchanged, rows, groups: groupBomRows(rows), counts };
+  return {
+    a, b, from: va, to: vb, modules, unchanged, rows, groups: groupBomRows(rows),
+    counts: bomCounts(rows), ownCounts: bomCounts(rows.filter((r) => r.own)), thirdPartyCounts: bomCounts(rows.filter((r) => !r.own)),
+  };
 }
 
 /**
  * Groups BOM rows sharing (groupId, from, to); ordered by severity
- * (downgrade, major, minor, patch, other, added, removed), then groupId, then versions.
+ * (downgrade, major, minor, patch, other, added, removed), then groupId, then versions. A group is Quarkus's own
+ * (`own`) when its groupId is (isQuarkusGroup).
  */
 export function groupBomRows(rows) {
   const map = new Map();
@@ -712,7 +730,7 @@ export function groupBomRows(rows) {
     const key = `${r.group}\u0000${r.from ?? ''}\u0000${r.to ?? ''}`;
     let g = map.get(key);
     if (!g) {
-      g = { key, group: r.group, from: r.from, to: r.to, kind: r.kind, items: [], text: '' };
+      g = { key, group: r.group, own: isQuarkusGroup(r.group), from: r.from, to: r.to, kind: r.kind, items: [], text: '' };
       map.set(key, g);
     }
     g.items.push(r);

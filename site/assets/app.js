@@ -1291,9 +1291,24 @@ function bomIdOf(x) {
   return x.git?.bom ?? 'io.quarkus:quarkus-bom';
 }
 
-/** What the modules that follow the release version are called in a comparison: Shamrock ones before 0.10.0. */
+/** Whether a release's BOM is Shamrock's, before 0.10.0. */
+function isShamrock(x) {
+  return bomIdOf(x).startsWith('org.jboss.shamrock:');
+}
+
+/** What the project's own artifacts are called in a comparison: Shamrock's when both releases are before 0.10.0. */
 function moduleWord(cmp) {
-  return bomIdOf(cmp.A).startsWith('org.jboss.shamrock:') ? 'Shamrock' : 'Quarkus';
+  return isShamrock(cmp.A) && isShamrock(cmp.B) ? 'Shamrock' : 'Quarkus';
+}
+
+/**
+ * The groupIds of the project's own artifacts in a comparison (core.isQuarkusGroup), for the Dependencies section's
+ * note: `io.quarkus` or one of its subgroups, `org.jboss.shamrock` before 0.10.0.
+ */
+function ownGroupsText(cmp) {
+  const shamrock = [cmp.A, cmp.B].filter(isShamrock).length;
+  if (shamrock === 2) return frag('groupId ', h('code', null, 'org.jboss.shamrock'));
+  return frag('groupId ', h('code', null, 'io.quarkus'), shamrock ? frag(', one of its subgroups or ', h('code', null, 'org.jboss.shamrock')) : ' or one of its subgroups');
 }
 
 /** "0.10.0 (f260571)", a link to the commit that a pre-launch release's git tag names. */
@@ -2357,10 +2372,17 @@ function summaryLedger(cmp, data) {
     cells.push(cell('Configuration', 'sec-config', [], data.config ? gapText(cmp, 'config') ?? 'No config data for this pair of releases.' : 'config.json is unavailable.'));
   }
   if (cmp.bom) {
-    const b = cmp.bom.counts;
-    const kinds = ['downgrade', 'major', 'minor', 'patch', 'other'].filter((k) => b[k]).map((k) => `${fmt(b[k])} ${KIND_LABEL[k]}`);
-    cells.push(cell('Dependencies', 'sec-deps', [[b.changed, 'changed', 'chg'], [b.added, 'added', 'add'], [b.removed, 'removed', 'rem']],
-      [cmp.platform?.used ? 'Platform BOM' : null, kinds.length ? kinds.join(' · ') : null, cmp.bom.modules ? `plus ${plural(cmp.bom.modules, `${moduleWord(cmp)} module`)}` : null].filter(Boolean).join('; ')));
+    // the numbers count the third-party dependencies; Quarkus's own artifacts (core.isQuarkusGroup) are a line apart
+    const d = cmp.bom;
+    const t = d.thirdPartyCounts;
+    const o = d.ownCounts;
+    const kinds = ['downgrade', 'major', 'minor', 'patch', 'other'].filter((k) => t[k]).map((k) => `${fmt(t[k])} ${KIND_LABEL[k]}`);
+    const third = kinds.length ? `third-party: ${kinds.join(' · ')}` : t.added || t.removed ? 'third-party dependencies' : 'no third-party change';
+    const own = [d.modules ? `${plural(d.modules, 'module')} versioned with the release` : null,
+      o.changed ? `${fmt(o.changed)} changed` : null, o.added ? `${fmt(o.added)} added` : null, o.removed ? `${fmt(o.removed)} removed` : null].filter(Boolean);
+    cells.push(cell('Dependencies', 'sec-deps', [[t.changed, 'changed', 'chg'], [t.added, 'added', 'add'], [t.removed, 'removed', 'rem']], [
+      cmp.platform?.used ? `Platform BOM; ${third}` : `${third.charAt(0).toUpperCase()}${third.slice(1)}`,
+      own.length ? h('span', { class: 'muted' }, `${moduleWord(cmp)}: ${own.join(', ')}`) : null]));
   } else {
     cells.push(cell('Dependencies', 'sec-deps', [], 'bom.json is unavailable.'));
   }
@@ -2726,46 +2748,64 @@ function rowDetails(r) {
 const BOM_CHIPS = [['downgrade', 'downgrade'], ['major', 'major'], ['minor', 'minor'], ['patch', 'patch'], ['other', 'qualifier'], ['added', 'added'], ['removed', 'removed']];
 
 function depsSection(cmp, data) {
+  const word = moduleWord(cmp);
   const sec = h('section', { class: 'sec', id: 'sec-deps', 'aria-labelledby': 'sec-deps-h' },
     sectionHead(2, 'Dependencies', 'sec-deps-h',
       h('p', { class: 'sec-note' }, 'Versions managed by ',
         cmp.platform?.used ? frag('the platform BOM, ', h('code', null, 'io.quarkus.platform:quarkus-bom'))
           : [...new Set([cmp.A, cmp.B].map(bomIdOf))].flatMap((id, k) => [k ? ' and ' : null, h('code', null, id)]),
-        '. Artifacts that share a groupId and the same version change are listed together.')));
+        `. Artifacts that share a groupId and the same version change are listed together, ${word}'s own (`, ownGroupsText(cmp),
+        ') apart from the third-party ones.')));
   if (!cmp.bom) return add(sec, [missingData('bom.json', data.errors.bom)]);
   const pnote = platformNote(cmp);
   if (pnote) sec.append(pnote);
   const d = cmp.bom;
-  if (d.modules) {
-    sec.append(h('p', { class: 'modules-line' },
-      h('span', { class: 'modules-n' }, fmt(d.modules)),
-      h('span', null, ` ${moduleWord(cmp)} module${d.modules === 1 ? '' : 's'} `), h('span', { class: 'ver' }, versionText(cmp.A.v)), h('span', { class: 'arrow', 'aria-hidden': 'true' }, ' → '), h('span', { class: 'sr-only' }, ' to '),
-      h('span', { class: 'ver' }, versionText(cmp.B.v)), '.',
-      h('span', { class: 'muted' }, d.modules === 1
-        ? ` This ${bomIdOf(cmp.A).split(':')[0]} artifact follows the platform version in both releases and is not listed below.`
-        : ` These ${bomIdOf(cmp.A).split(':')[0]} artifacts follow the platform version in both releases and are not listed below.`)));
-  }
-  if (!d.groups.length) return add(sec, [emptyNote('No other managed dependency changed version.')]);
+  const modulesLine = d.modules ? h('p', { class: 'modules-line' },
+    h('span', { class: 'modules-n' }, fmt(d.modules)),
+    h('span', null, ` ${word} module${d.modules === 1 ? '' : 's'} `), h('span', { class: 'ver' }, versionText(cmp.A.v)), h('span', { class: 'arrow', 'aria-hidden': 'true' }, ' → '), h('span', { class: 'sr-only' }, ' to '),
+    h('span', { class: 'ver' }, versionText(cmp.B.v)), '.',
+    h('span', { class: 'muted' }, ` Versioned with the release in both, ${d.modules === 1 ? 'it is' : 'they are'} not listed.`)) : null;
+  if (!d.groups.length) return add(sec, [modulesLine, emptyNote('No other managed dependency changed version.')]);
   const state = { tags: new Set(), text: '' };
   const status = h('p', { class: 'filter-status', 'aria-live': 'polite' });
-  const list = h('div', { class: 'dgroups' });
+  // the project's own artifacts first, with the modules versioned with the release, then the third-party ones
+  const block = (title, lead, groups) => {
+    const n = h('span', { class: 'eblock-n' });
+    const list = h('div', { class: 'dgroups' });
+    const total = groups.reduce((sum, g) => sum + g.items.length, 0);
+    return { el: h('div', { class: 'eblock dblock' }, h('h3', { class: 'eblock-title' }, title, n), lead, list), n, list, groups, total };
+  };
+  const own = block(word, modulesLine, d.groups.filter((g) => g.own));
+  const third = block('Third-party', null, d.groups.filter((g) => !g.own));
+  const none = emptyNote('No dependency change matches these filters.');
   const total = d.rows.length;
   const update = () => {
     const words = state.text.toLowerCase().split(/\s+/).filter(Boolean);
-    const shown = [];
+    const filtering = state.tags.size > 0 || words.length > 0;
     let n = 0;
-    for (const g of d.groups) {
-      if (state.tags.size && !state.tags.has(g.kind)) continue;
-      let items = g.items;
-      if (words.length) {
-        const base = `${g.group}\n${g.from ?? ''}\n${g.to ?? ''}\n`.toLowerCase();
-        items = g.items.filter((it) => words.every((w) => (base + it.id.toLowerCase()).includes(w)));
-        if (!items.length) continue;
+    for (const b of [own, third]) {
+      const shown = [];
+      let k = 0;
+      for (const g of b.groups) {
+        if (state.tags.size && !state.tags.has(g.kind)) continue;
+        let items = g.items;
+        if (words.length) {
+          const base = `${g.group}\n${g.from ?? ''}\n${g.to ?? ''}\n`.toLowerCase();
+          items = g.items.filter((it) => words.every((w) => (base + it.id.toLowerCase()).includes(w)));
+          if (!items.length) continue;
+        }
+        shown.push([g, items]);
+        k += items.length;
       }
-      shown.push([g, items]);
-      n += items.length;
+      n += k;
+      b.n.textContent = !b.total ? '' : k === b.total ? fmt(b.total) : `${fmt(k)} of ${fmt(b.total)}`;
+      // a filter shows the blocks it matches in; without one, the own block shows with modules alone too
+      b.el.hidden = filtering ? !shown.length : b === own && !d.modules && !b.total;
+      if (shown.length) renderDepGroups(b.list, shown);
+      else if (b === third && !filtering) b.list.replaceChildren(emptyNote('No third-party dependency changed version.'));
+      else b.list.replaceChildren();
     }
-    renderDepGroups(list, shown);
+    none.hidden = !filtering || n > 0;
     status.textContent = n === total ? `${plural(total, 'artifact')} in ${plural(d.groups.length, 'group')}.` : `Showing ${fmt(n)} of ${plural(total, 'artifact')}.`;
   };
   sec.append(
@@ -2776,7 +2816,7 @@ function depsSection(cmp, data) {
         update();
       })),
     status,
-    list);
+    h('div', { class: 'eblocks dblocks' }, own.el, third.el, none));
   update();
   return sec;
 }

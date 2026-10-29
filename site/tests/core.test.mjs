@@ -10,7 +10,7 @@ const {
   parseVersion, compareVersions, sortVersions, isFinal, stream, versionText, findVersionIndex,
   parseLibVersion, compareLibVersions, bomChangeKind, splitId, canonicalKey, envVar, lastSegment,
   stateAt, latestValue, configVersionsOf, configVersionFor, phaseInfo, typeLabel, configChangeKinds, enumDelta,
-  diffConfig, configRows, tagCounts, filterRows, groupBy, resolveBomValue, diffBom, groupBomRows,
+  diffConfig, configRows, tagCounts, filterRows, groupBy, resolveBomValue, diffBom, groupBomRows, isQuarkusGroup,
   extensionChangeKinds, diffExtensions, matchTier, buildSearchIndex, search,
   propertyHistory, extensionHistory, artifactHistory, newestFinalIndex, newestInStream, ltsStreamsPresent,
   defaultPair, quickPicks, versionNeighbours, formatDate, spanLabel, CONFIG_FILTER_TAGS, BOM_KIND_ORDER,
@@ -422,7 +422,7 @@ describe('BOM diff', () => {
   });
   test('"=" resolves to the release version', () => {
     assert.deepEqual(d.rows.find((r) => r.id === 'io.quarkus:quarkus-new'), {
-      id: 'io.quarkus:quarkus-new', group: 'io.quarkus', artifact: 'quarkus-new', extra: '', from: null, to: '3.20.6', kind: 'added', follows: true,
+      id: 'io.quarkus:quarkus-new', group: 'io.quarkus', artifact: 'quarkus-new', extra: '', from: null, to: '3.20.6', kind: 'added', follows: true, own: true,
     });
     assert.equal(d.rows.find((r) => r.id === 'io.quarkus:quarkus-old').from, '3.15.7');
     const pinned = d.rows.find((r) => r.id === 'io.quarkus:quarkus-pinned');
@@ -445,6 +445,19 @@ describe('BOM diff', () => {
       { changed: d.counts.changed, added: d.counts.added, removed: d.counts.removed, downgrade: d.counts.downgrade, major: d.counts.major, minor: d.counts.minor, patch: d.counts.patch, other: d.counts.other },
       { changed: 7, added: 1, removed: 1, downgrade: 1, major: 1, minor: 1, patch: 3, other: 1 },
     );
+  });
+  test('Quarkus\'s own artifacts, by groupId, are counted apart from the third-party ones', () => {
+    for (const g of ['io.quarkus', 'io.quarkus.gizmo', 'io.quarkus.platform', 'org.jboss.shamrock']) assert.ok(isQuarkusGroup(g), g);
+    for (const g of ['io.quarkusio', 'io.smallrye.reactive', 'org.jboss']) assert.ok(!isQuarkusGroup(g), g);
+    assert.deepEqual(d.rows.filter((r) => r.own).map((r) => r.id),
+      ['io.quarkus.gizmo:gizmo2', 'io.quarkus:quarkus-new', 'io.quarkus:quarkus-old', 'io.quarkus:quarkus-pinned']);
+    const pick = (c) => ({ changed: c.changed, added: c.added, removed: c.removed, downgrade: c.downgrade, major: c.major, minor: c.minor, patch: c.patch, other: c.other });
+    assert.deepEqual(pick(d.ownCounts), { changed: 2, added: 1, removed: 1, downgrade: 0, major: 0, minor: 1, patch: 0, other: 1 });
+    assert.deepEqual(pick(d.thirdPartyCounts), { changed: 5, added: 0, removed: 0, downgrade: 1, major: 1, minor: 0, patch: 3, other: 0 });
+    // together, the counts of all rows, which the filter chips show
+    for (const k of Object.keys(d.counts)) assert.equal(d.ownCounts[k] + d.thirdPartyCounts[k], d.counts[k], k);
+    assert.deepEqual(d.groups.filter((g) => g.own).map((g) => g.group), ['io.quarkus', 'io.quarkus.gizmo', 'io.quarkus', 'io.quarkus']);
+    assert.ok(d.groups.every((g) => g.own === isQuarkusGroup(g.group)));
   });
   test('groups share (groupId, from, to) and are ordered by severity', () => {
     const netty = d.groups.filter((g) => g.group === 'io.netty');
