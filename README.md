@@ -1,24 +1,20 @@
 # Quarkus Almanac
 
-Pick two Quarkus releases and see what changed between them: config properties (added, removed, new default, type,
-phase, deprecation), dependency versions managed by `quarkus-bom` (the core BOM `io.quarkus:quarkus-bom`, or the platform
-BOM `io.quarkus.platform:quarkus-bom` that projects from code.quarkus.io import), extensions, and the classes of the
-Quarkus jars (added, removed, moved to another jar). Every config property, managed artifact and class has a page with
-its history.
+Pick two Quarkus releases and see what changed between them: config properties, managed dependencies (of the core BOM,
+or of the platform BOM that code.quarkus.io projects import), extensions, and the classes of the Quarkus jars with
+their API and deprecations. Every config property, managed artifact and class also has a page with its history.
 
 **Site:** https://quarkus.io/almanac/
 
-It covers every Quarkus release from 3.0 on, pre-releases included, with its config, extensions and classes.
+It covers every Quarkus release from 0.11.0 on, pre-releases included. Releases before 3.8 are listed with the "Show
+old releases" switch.
 
 ## How it works
 
-- `src/`: a Java 21 command-line tool that reads published Quarkus artifacts from Maven Central: the BOM and the
-  platform BOM of every release, and the config and extension metadata of the releases it covers (from the config model
-  Quarkus ships from 3.25 on, reconstructed from bytecode before that), with the class list of each of their jars.
+- `src/`: a Java 21 command-line tool that reads the published Quarkus artifacts from Maven Central: the BOMs, the
+  config and extension metadata, and the class files of the jars.
 - `dataset/`: every extracted release, kept losslessly as sorted JSON Lines (`dataset/README.md` describes the
-  format), so a published release never has to be downloaded again. A platform BOM is kept as its few differences from
-  the core BOM of the same version. The classes have one file per major version line (`dataset/classes/3.x.jsonl`), and
-  so does the site (`site/data/classes-3.json`), which loads only the lines a page shows.
+  format), so a published release never has to be downloaded again.
 - `site/`: a static site without a build step. `site/data/` is assembled from the dataset, and every comparison is
   computed in the browser.
 
@@ -36,10 +32,17 @@ To browse the site locally, serve the `site` folder with any static web server, 
 
 ## Adding a release
 
+New releases come in on their own: every twelve hours, the workflow `.github/workflows/new-releases.yml` adds the
+releases published on GitHub at least 6 hours earlier and the platform BOMs that came out since, commits them to
+`main` and deploys the site. Run it from the Actions tab to add given releases.
+
+By hand:
+
 ```sh
 java -jar target/quarkus-almanac.jar bom --versions 3.40.2
 java -jar target/quarkus-almanac.jar config --versions 3.40.2
-java -jar target/quarkus-almanac.jar dataset import --versions 3.40.2 --offline
+java -jar target/quarkus-almanac.jar api --versions 3.40.2
+java -jar target/quarkus-almanac.jar dataset import --versions 3.40.2 --kinds bom,config,extensions,classes,api --offline
 java -jar target/quarkus-almanac.jar dataset refresh-releases --offline
 java -jar target/quarkus-almanac.jar dataset verify --offline
 java -jar target/quarkus-almanac.jar assemble --offline --pre-releases all
@@ -48,39 +51,20 @@ java -jar target/quarkus-almanac.jar assemble --offline --pre-releases all
 Then commit `dataset/` and `site/data/`. `all` runs the whole pipeline for the releases the dataset does not have yet,
 and `--help` lists every command and option.
 
-The platform BOM of a release often comes out days after it. `platform --missing --pre-releases all` lists the releases
-of the dataset whose platform BOM is out and not in the dataset yet; `platform --pre-releases all` downloads them, and
-`dataset import --versions all --kinds platform --offline` adds them.
-
-`config` writes each release's `classes.json` from the same reads of its jars. For releases extracted before it did,
-`classes --offline` writes it from what the cache holds; `--cache` adds the caches of other work folders, which it only
-reads:
-
-```sh
-java -jar target/quarkus-almanac.jar classes --offline --pre-releases all --cache ../other-work/cache
-java -jar target/quarkus-almanac.jar dataset import --versions all --kinds classes --offline
-```
-
-New releases come in on their own: every twelve hours, the workflow `.github/workflows/new-releases.yml` looks for
-GitHub releases of quarkusio/quarkus published at least 6 hours earlier that Maven Central serves and the dataset lacks,
-extracts them on up to four runners at once, adds them to the dataset together with the platform BOMs that came out
-since the last run, rebuilds `site/data/`, commits both to `main` and starts the Pages deploy. Run it by hand from the
-Actions tab to add given releases.
-
 ## Limitations
 
-- Only core extensions: the `io.quarkus` artifacts managed by `quarkus-bom`.
-- Config before 3.25 is reconstructed from bytecode with the 3.25 documentation rules, so some display details differ
-  from the documentation pages of older streams.
+- Only core extensions: the `io.quarkus` artifacts that `quarkus-bom` manages. The classes are those of the
+  `io.quarkus` jars, not of subgroups such as `io.quarkus.arc`.
+- Config before 3.25 is reconstructed from bytecode, so some details differ from the documentation of older streams.
 - Descriptions are the first sentence of each property's documentation.
-- Classes are the class files of the `io.quarkus` jars that `quarkus-bom` manages (groupId `io.quarkus` only, not
-  subgroups such as `io.quarkus.arc`), top-level and nested, read from each jar's file list: classes a jar bundles from
-  its dependencies count as its own (`quarkus-grpc-cli`, `quarkus-bootstrap-gradle-resolver`), and nothing tells
-  whether a class is deprecated. That could come from the `-javadoc` jars, whose `deprecated-list.html` lists the
-  deprecated classes: one more read per jar, and a value other than `"+"` in the classes files of the dataset.
+- Extensions start at 0.27, platform BOMs at 2.0. The platform BOM of a release is the platform release of the same
+  version, and some releases have none (3.4.0, for example).
+- The classes include those that some jars bundle from other libraries (`quarkus-grpc-cli`, for one); the API leaves
+  them out. The API is everything public or protected in the class files, Quarkus internals included. Signatures are
+  erased, so a change of generics alone does not show, and `throws` clauses and javadoc are not read.
+- Deprecation comes from `@Deprecated` or a javadoc `@deprecated`. Its `since` is often missing, so the site also shows
+  the first release with the mark. The members of a deprecated class are not marked one by one.
 - Release dates are the upload times of the BOMs on Maven Central.
-- The platform BOM shown for a release is the platform release of the same version; some releases have none (3.4.0,
-  for example).
 
 Data extracted from artifacts published on Maven Central. Problems and ideas go to
 https://github.com/quarkusio/almanac/issues.
