@@ -2881,17 +2881,18 @@ const API_KINDS = [['class', 'classes'], ['method', 'methods'], ['field', 'field
 
 /**
  * The API cell of a comparison's summary: the classes and members added, removed and changed, as the API section lists
- * them by default (core.apiRowCounts, nested classes left out), with a count per kind of element, and the deprecation
- * changes (core.diffDeprecations). Until the section has the members, the classes alone (core.apiClassCounts), or
- * "Loading" while it loads them unasked.
+ * them by default (core.apiRowCounts, nested classes left out), with a count per kind of element, and the new
+ * deprecations (core.diffDeprecations), the other deprecation changes in its note. Until the section has the members,
+ * the classes alone (core.apiClassCounts), or "Loading" while it loads them unasked.
  */
 function apiCell(cmp, classes) {
   const c = apiDeprecations(cmp, classes).counts;
   const dep = (k) => c.classes[k] + c.members[k];
-  const deprecations = [[dep('deprecated'), 'deprecated', 'dep'], [dep('removal'), 'for removal', 'rem'], [dep('undeprecated'), 'undeprecated', 'dep-o']];
+  const deprecations = [[dep('deprecated'), 'deprecated', 'dep'], [dep('removal'), 'for removal', 'rem']];
   const changed = apiChangedOf(cmp, classes);
   const movedTop = changed ? apiMovedOf(cmp, classes).filter((r) => !r.nested).length : 0;
   const more = [
+    dep('undeprecated') ? `${fmt(dep('undeprecated'))} undeprecated` : null,
     dep('unremoval') ? `${fmt(dep('unremoval'))} no longer for removal` : null,
     dep('removed') ? `${fmt(dep('removed'))} removed after deprecation` : null,
     movedTop ? `${plural(movedTop, 'class', 'classes')} moved to another jar` : null,
