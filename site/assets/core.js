@@ -1220,43 +1220,28 @@ export function diffClasses(classes, a, b) {
   };
 }
 
-/** Filter tags shown as chips in the Classes section of the compare page. */
-export const CLASS_FILTER_TAGS = ['added', 'removed', 'moved'];
-
-const CLASS_CHANGE_ORDER = { removed: 0, 'moved-out': 1, 'moved-in': 2, added: 3 };
-
 /**
- * Flattens a class diff into rows per jar, for groups by artifact. A class that a jar has at B and not at A is
- * `added` there, or `moved-in` when some jar had it at A; one that a jar has at A and not at B is `removed` from it, or
- * `moved-out` when some jar has it at B. So a class that moved has a row in each jar it left and in each jar it reached.
- * A row has `artifact`, `change`, `name`, `other` (its jars at A for moved-in, at B for moved-out: artifactIds),
- * `nested`, `tags` for the filter chips (added, removed, moved) and a lower-case `text`. Sorted by artifact, then
- * removed → moved-out → moved-in → added, then name.
+ * The classes that are API at both releases `a` and `b` (release indices with api data, by the classes' API
+ * revisions) but in other jars at B than at A, as rows of the compare page's API changes (diffApi): `{name, nested,
+ * member: null, change: 'moved', artifact, fromJars, toJars, ...}`, `fromJars` and `toJars` the jars at A and B
+ * (artifactIds) and `artifact` the first one at B. From the classes files alone: no member data is needed. A class
+ * that is API at one of the releases only is added or removed there, which diffApi says.
  */
-export function classRows(diff, classes) {
-  const rows = [];
-  const push = (artifact, change, x, other) => rows.push({
-    artifact,
-    change,
-    name: x.name,
-    other,
-    nested: isNestedClass(x.name),
-    tags: [change.startsWith('moved') ? 'moved' : change],
-    text: [x.name, artifact, ...other].join('\n').toLowerCase(),
-  });
-  for (const x of [...diff.removed, ...diff.moved, ...diff.added]) {
-    const from = x.from.map((j) => classes.artifacts[j]);
-    const to = x.to.map((j) => classes.artifacts[j]);
-    for (const jar of from) if (!to.includes(jar)) push(jar, to.length ? 'moved-out' : 'removed', x, to);
-    for (const jar of to) if (!from.includes(jar)) push(jar, from.length ? 'moved-in' : 'added', x, from);
+export function movedApiClasses(classes, a, b) {
+  const out = [];
+  for (const row of classes.classes) {
+    if (!Array.isArray(row[3]) || apiRevisionAt(row, a) == null || apiRevisionAt(row, b) == null) continue;
+    const from = jarsOf(stateAt(row[2], a));
+    const to = jarsOf(stateAt(row[2], b));
+    if (!from.length || !to.length || sameJars(from, to)) continue;
+    const name = className(classes, row);
+    const jars = (list) => list.map((j) => classes.artifacts[j]);
+    out.push({
+      name, nested: isNestedClass(name), member: null, change: 'moved', artifact: classes.artifacts[to[0]], fromJars: jars(from), toJars: jars(to),
+      details: [], previous: null, protected: false, constructor: false, text: [name, '', ...jars(to), ...jars(from)].join('\n').toLowerCase(),
+    });
   }
-  rows.sort(
-    (x, y) =>
-      (x.artifact < y.artifact ? -1 : x.artifact > y.artifact ? 1 : 0) ||
-      CLASS_CHANGE_ORDER[x.change] - CLASS_CHANGE_ORDER[y.change] ||
-      (x.name < y.name ? -1 : x.name > y.name ? 1 : 0),
-  );
-  return rows;
+  return out;
 }
 
 /* ========================================================================== */
@@ -1636,7 +1621,7 @@ export function diffDeprecations(classes, a, b) {
       let change = null;
       let d = null;
       if (vb == null) {
-        // there at A, as diffApi and §4 have it: an item that came after A and went before B is no change of the pair
+        // there at A, as diffApi has it: an item that came after A and went before B is no change of the pair
         d = va == null ? null : deprecationBeforeRemoval(group, lines, a, b, !!member);
         if (d) change = 'removed';
       } else if (db === 'removal' && da !== 'removal') change = 'removal';
@@ -1925,8 +1910,16 @@ function deprecationChange(from, to) {
 
 /** API change kinds in their order on the compare page. */
 export const API_CHANGE_ORDER = [
-  'removed', 'inherited', 'removal', 'deprecated', 'unremoval', 'undeprecated', 'return type', 'signature', 'modifiers', 'supertype', 'added',
+  'removed', 'inherited', 'moved', 'removal', 'deprecated', 'unremoval', 'undeprecated', 'return type', 'signature', 'modifiers', 'supertype',
+  'added',
 ];
+
+/** API change rows (diffApi, movedApiClasses) in their order on the compare page: by jar, class, then kind and member. */
+export function sortApiRows(rows) {
+  const order = (c) => API_CHANGE_ORDER.indexOf(c);
+  return rows.sort((x, y) => cmpText(x.artifact, y.artifact) || cmpText(x.name, y.name) || (x.member == null ? -1 : 0) - (y.member == null ? -1 : 0)
+    || order(x.change) - order(y.change) || cmpText(x.member ?? '', y.member ?? ''));
+}
 
 /**
  * The value that a class or member last had before release `b` seen from `a`, from its histories `hs` (one per jar):
@@ -2045,9 +2038,7 @@ export function diffApi(rowsByName, a, b, prefer = () => [[], []], enclosing = (
       if (m.length) memberRow(key, 'modifiers', vb, { details: m });
     }
   }
-  const order = (c) => API_CHANGE_ORDER.indexOf(c);
-  return out.sort((x, y) => cmpText(x.artifact, y.artifact) || cmpText(x.name, y.name) || (x.member == null ? -1 : 0) - (y.member == null ? -1 : 0)
-    || order(x.change) - order(y.change) || cmpText(x.member ?? '', y.member ?? ''));
+  return sortApiRows(out);
 }
 
 /** "extends Foo → Bar", "implements +Baz −Qux" for the supertype change of a class. */

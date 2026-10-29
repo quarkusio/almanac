@@ -17,7 +17,7 @@ const {
   isPreRelease, preQualifier, releaseVisibility, visibleOnly, streamStartIndex, streamSpan, releasedApart, spanApart,
   extensionVersionsOf, extensionVersionFor, snapshotVersionFor,
   classVersionsOf, classesVersionFor, className, findClass, jarsOf, simpleClassName, classPackage, isNestedClass,
-  isAnonymousClass, topLevelClass, diffClasses, classRows, CLASS_FILTER_TAGS, classHistory, majorOf, classLinesOf,
+  isAnonymousClass, topLevelClass, diffClasses, classHistory, majorOf, classLinesOf,
   mergeClasses,
 } = core;
 
@@ -784,25 +784,36 @@ describe('classes', () => {
     assert.deepEqual([back.counts.added, back.counts.removed, back.counts.moved], [3, 4, 1]);
   });
 
-  test('classRows: a row per jar, a move in the jar it left and in the jar it reached', () => {
-    const rows = classRows(diffClasses(classes, 0, 2), classes);
-    assert.deepEqual(rows.map((r) => [r.artifact, r.change, r.name, r.other]), [
-      ['quarkus-amazon-lambda-http', 'added', 'io.quarkus.amazon.lambda.http.Handler', []],
-      ['quarkus-amazon-lambda-rest', 'added', 'io.quarkus.amazon.lambda.http.Handler', []],
-      ['quarkus-core', 'removed', 'io.quarkus.runtime.Gone', []],
-      ['quarkus-core', 'removed', 'io.quarkus.runtime.Old', []],
-      ['quarkus-core', 'added', 'Main', []],
-      ['quarkus-junit-internal', 'moved-in', 'io.quarkus.test.QuarkusUnitTest', ['quarkus-junit5-internal']],
-      ['quarkus-junit-internal', 'added', 'io.quarkus.test.QuarkusExtensionTest', []],
-      ['quarkus-junit-internal', 'added', 'io.quarkus.test.QuarkusUnitTest$Builder', []],
-      ['quarkus-junit5-internal', 'removed', 'io.quarkus.test.QuarkusUnitTest$1', []],
-      ['quarkus-junit5-internal', 'moved-out', 'io.quarkus.test.QuarkusUnitTest', ['quarkus-junit-internal']],
+  test('movedApiClasses: the API classes in other jars, for the API section of the compare page', () => {
+    const c = {
+      packages: ['io.quarkus.test'],
+      artifacts: ['quarkus-junit-internal', 'quarkus-junit5-internal', 'quarkus-other'],
+      classes: [
+        [0, 'QuarkusUnitTest', [[0, 1], [2, 0]], [[0, 1]]],
+        [0, 'QuarkusUnitTest$Builder', [[0, 1], [2, 0]], [[0, 2]]],
+        [0, 'Internal', [[0, 1], [2, 0]]], // no revisions: never API
+        [0, 'NowPublic', [[0, 1], [2, 0]], [[2, 3]]], // API at B only: added, as diffApi says
+        [0, 'Copied', [[0, 1], [2, [0, 1]]], [[0, 4]]],
+        [0, 'Stays', [[0, 2]], [[0, 5]]],
+      ],
+    };
+    const rows = core.movedApiClasses(c, 0, 2);
+    assert.deepEqual(rows.map((r) => [r.name, r.change, r.artifact, r.fromJars, r.toJars, r.nested, r.member]), [
+      ['io.quarkus.test.QuarkusUnitTest', 'moved', 'quarkus-junit-internal', ['quarkus-junit5-internal'], ['quarkus-junit-internal'], false, null],
+      ['io.quarkus.test.QuarkusUnitTest$Builder', 'moved', 'quarkus-junit-internal', ['quarkus-junit5-internal'], ['quarkus-junit-internal'], true, null],
+      ['io.quarkus.test.Copied', 'moved', 'quarkus-junit-internal', ['quarkus-junit5-internal'], ['quarkus-junit-internal', 'quarkus-junit5-internal'], false, null],
     ]);
-    assert.deepEqual(rows.filter((r) => r.nested).map((r) => r.name), ['io.quarkus.test.QuarkusUnitTest$Builder', 'io.quarkus.test.QuarkusUnitTest$1']);
-    assert.deepEqual([...new Set(rows.flatMap((r) => r.tags))].sort(), [...CLASS_FILTER_TAGS].sort());
-    // the chips and the text filter of the compare page
-    assert.deepEqual(filterRows(rows, { tags: new Set(['moved']) }).map((r) => r.artifact), ['quarkus-junit-internal', 'quarkus-junit5-internal']);
-    assert.deepEqual(filterRows(rows, { text: 'junit5 unittest' }).map((r) => r.change), ['moved-in', 'removed', 'moved-out']);
+    assert.ok(rows[0].text.includes('quarkus-junit5-internal'), 'the text filter finds a class by the jar it left');
+    assert.deepEqual(core.movedApiClasses(c, 0, 1), []);
+    assert.deepEqual(core.movedApiClasses(c, 2, 0).map((r) => [r.name, r.artifact]).slice(0, 1), [['io.quarkus.test.QuarkusUnitTest', 'quarkus-junit5-internal']]);
+    // with the rows of diffApi: by jar, class, the class's own rows first, then kind and member
+    const merged = core.sortApiRows([
+      { artifact: 'b', name: 'x.A', member: null, change: 'added' },
+      { artifact: 'a', name: 'x.B', member: 'm()V', change: 'removed' },
+      { artifact: 'a', name: 'x.B', member: null, change: 'supertype' },
+      { artifact: 'a', name: 'x.B', member: null, change: 'moved' },
+    ]);
+    assert.deepEqual(merged.map((r) => [r.artifact, r.member, r.change]), [['a', null, 'moved'], ['a', null, 'supertype'], ['a', 'm()V', 'removed'], ['b', null, 'added']]);
   });
 
   test('classHistory: runs of jars, moves, removals and the switches', () => {
@@ -1334,7 +1345,7 @@ describe('sample dataset (dev/sample) follows the site data format', () => {
         diffExtensions(extensions, ca, cb);
         // classes too have snapshots of their own, here at the config snapshots
         assert.equal(classesVersionFor(a, list), ca);
-        classRows(diffClasses(classes, ca, cb), classes);
+        diffClasses(classes, ca, cb);
       }
     }
     assert.ok(skipped > 0, 'some pairs involve a pre-release without a snapshot');

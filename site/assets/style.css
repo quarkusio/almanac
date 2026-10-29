@@ -2191,7 +2191,7 @@ mark {
   gap: 6px;
 }
 
-/* the Classes section: the kind chips, then the switch for nested classes */
+/* the API section: the kind chips, then the switches for nested classes, protected members and constructors */
 .cls-filters {
   display: flex;
   flex-wrap: wrap;
@@ -2624,13 +2624,6 @@ a.prop:hover {
 
 .st-member {
   color: var(--accent);
-}
-
-/* five summary cells (with the API one): one row where five fit */
-@media (min-width: 1100px) {
-  .ledger--5 {
-    grid-template-columns: repeat(5, minmax(0, 1fr));
-  }
 }
 
 .delta {

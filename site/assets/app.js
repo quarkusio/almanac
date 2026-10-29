@@ -2048,9 +2048,6 @@ function comparison(ia, ib, data) {
   // the API data: from the classes files too (core.apiVersionFor)
   out.aa = core.apiVersionFor(ia, V.list, V.apiVis);
   out.ab = core.apiVersionFor(ib, V.list, V.apiVis);
-  // classes have snapshots of their own too; their diff waits for the classes files (see classDiff)
-  out.la = core.classesVersionFor(ia, V.list, V.clsVis);
-  out.lb = core.classesVersionFor(ib, V.list, V.clsVis);
   if (!Object.keys(data.errors).length) {
     if (store.diffs.size >= 12) store.diffs.delete(store.diffs.keys().next().value);
     store.diffs.set(key, out);
@@ -2070,9 +2067,9 @@ async function renderCompare(r) {
   }
   const canonical = { page: 'compare', from: short(V.list[ia].v), to: short(V.list[ib].v) };
   if (hrefFor(canonical) !== hrefFor(r)) canonicalize(canonical);
-  // the classes files of §4 and §5 start loading with the rest, though the page does not wait for them
+  // the classes files of the API section start loading with the rest, though the page does not wait for them
   const classLines = linesSpanning(core.classLinesOf(V.list, [ia, ib]));
-  if (classLines.length && ia !== ib) loadClasses(classLines).catch(() => {});
+  if (classLines.length && ia !== ib && V.apiVis.length) loadClasses(classLines).catch(() => {});
   const [data, platform] = await Promise.all([loadSettled(['bom', 'config', 'extensions']), loadOptional('platform')]);
   data.platform = platform;
   const cmp = comparison(ia, ib, data);
@@ -2080,7 +2077,7 @@ async function renderCompare(r) {
   if (ia === ib) return frag(head, emptyNote('From and To are the same release, so there is nothing to compare. Change one of them above.'));
   // the sections start collapsed (the summary above says what each holds), except those the reader left open in
   // this pair earlier in the visit, so that Back from a property or an artifact finds them as they were
-  const sections = [configSection(cmp, data), depsSection(cmp, data), extSection(cmp, data), classesSection(cmp), V.apiVis.length ? apiSection(cmp) : null]
+  const sections = [configSection(cmp, data), depsSection(cmp, data), extSection(cmp, data), V.apiVis.length ? apiSection(cmp) : null]
     .filter(Boolean).map(collapsible);
   const pair = `${ia}:${ib}`;
   const all = h('button', { type: 'button', class: 'btn jump-all', 'aria-controls': sections.map((s) => `${s.id}-body`).join(' ') });
@@ -2106,7 +2103,7 @@ async function renderCompare(r) {
     h('nav', { class: 'jump', 'aria-label': 'Sections of this comparison' },
       h('span', { class: 'jump-k' }, 'On this page'),
       [['sec-config', 'Configuration'], ['sec-deps', 'Dependencies'], ['sec-ext', 'Extensions'],
-        ['sec-classes', 'Classes'], V.apiVis.length ? ['sec-api', 'API'] : null].filter(Boolean).map(([id, label]) =>
+        V.apiVis.length ? ['sec-api', 'API'] : null].filter(Boolean).map(([id, label]) =>
         h('button', { type: 'button', class: 'jump-link', onclick: () => jumpTo(id) }, label)),
       all),
     sections);
@@ -2218,12 +2215,11 @@ function compareHeader(cmp) {
 
 /**
  * The releases whose data of one kind a comparison uses: config, extensions (which also exist for releases without
- * config) or classes. `a` and `b` are those of From and To: themselves, or, in a data set where a release has no data
+ * config) or the API. `a` and `b` are those of From and To: themselves, or, in a data set where a release has no data
  * of that kind, the release whose data stands in for it (core.snapshotVersionFor); null when there is none. `what`
  * names the data.
  */
 function snapshotsOf(cmp, kind) {
-  if (kind === 'classes') return { a: cmp.la, b: cmp.lb, all: store.V.clsVis, what: 'class data', title: 'Classes' };
   if (kind === 'api') return { a: cmp.aa, b: cmp.ab, all: store.V.apiVis, what: 'API data', title: 'The API' };
   return kind === 'config'
     ? { a: cmp.ca, b: cmp.cb, all: store.V.configVis, what: 'config data', title: 'Config' }
@@ -2231,7 +2227,7 @@ function snapshotsOf(cmp, kind) {
 }
 
 /**
- * Why a comparison has no diff of one kind ('config', 'extension' or 'classes'), or null when both releases have such
+ * Why a comparison has no diff of one kind ('config', 'extension' or 'api'), or null when both releases have such
  * data. A pre-release only uses its own data, so one without says so plainly: "No config data for 3.33.0.CR1:
  * dependency changes only." The end names what the comparison still shows (for config and extensions, which the rest
  * of the page depends on).
@@ -2252,13 +2248,13 @@ function gapText(cmp, kind) {
     const first = s.all.length ? short(V.list[s.all[0]].v) : null;
     parts.push(`${pre.length ? 'no' : 'No'} ${s.what} for ${names(fin)}${first ? ` (the ${s.what} starts at ${first})` : ''}`);
   }
-  if (kind === 'classes' || kind === 'api') return `${parts.join(', and ')}.`;
+  if (kind === 'api') return `${parts.join(', and ')}.`;
   // config needs extensions, so only a config gap can leave an extension diff to show
   const shown = kind === 'config' && cmp.ext ? 'dependency and extension changes only' : 'dependency changes only';
   return `${parts.join(', and ')}: ${shown}.`;
 }
 
-/** Both releases use the data of one release for a kind ('config', 'extension' or 'classes'), so there is no diff of it to show. */
+/** Both releases use the data of one release for a kind ('config', 'extension' or 'api'), so there is no diff of it to show. */
 function sameSnapshotText(cmp, kind) {
   const V = store.V;
   const { A, B } = cmp;
@@ -2307,25 +2303,8 @@ function summaryLedger(cmp, data) {
   } else {
     cells.push(cell('Extensions', 'sec-ext', [], data.extensions ? gapText(cmp, 'extension') ?? 'No extension data for this pair of releases.' : 'extensions.json is unavailable.'));
   }
-  // classes: the page does not wait for the classes files, so the cell fills in when they arrive
-  const gap = gapText(cmp, 'classes');
-  if (gap) {
-    cells.push(cell('Classes', 'sec-classes', [], gap));
-  } else if (cmp.la === cmp.lb) {
-    cells.push(cell('Classes', 'sec-classes', [], sameSnapshotText(cmp, 'classes')));
-  } else {
-    const pending = cell('Classes', 'sec-classes', [], 'Loading the classes…');
-    cells.push(pending);
-    loadClasses(linesSpanning(core.classLinesOf(store.V.list, [cmp.la, cmp.lb]))).then((classes) => {
-      const d = classDiff(cmp, classes);
-      const t = d.top;
-      const c = d.counts;
-      const nested = c.added + c.removed + c.moved - t.added - t.removed - t.moved;
-      pending.replaceWith(cell('Classes', 'sec-classes', [[t.added, 'added', 'add'], [t.removed, 'removed', 'rem'], [t.moved, 'moved', 'chg']],
-        nested ? `Top-level classes. With nested ones: ${fmt(c.added)} added, ${fmt(c.removed)} removed, ${fmt(c.moved)} moved.` : 'No nested class changed.'));
-    }).catch(() => pending.replaceWith(cell('Classes', 'sec-classes', [], 'The classes data is unavailable.')));
-  }
-  // the API, with API data only: deprecations from the classes files, and with revisions how many classes changed
+  // the API, with API data only: deprecations from the classes files, and with revisions how many classes changed or
+  // moved to another jar; the page does not wait for the classes files, so the cell fills in when they arrive
   if (store.V.apiVis.length) {
     const gapApi = gapText(cmp, 'api');
     if (gapApi) {
@@ -2338,10 +2317,11 @@ function summaryLedger(cmp, data) {
       loadClasses(linesSpanning(core.classLinesOf(store.V.list, [cmp.aa, cmp.ab]))).then((classes) => {
         const c = apiDeprecations(cmp, classes).counts;
         const changed = apiChangedOf(cmp, classes);
+        const movedTop = apiMovedOf(cmp, classes).filter((r) => !r.nested).length;
         const total = (k) => c.classes[k] + c.members[k];
         const classCount = Object.values(c.classes).reduce((x, y) => x + y, 0);
         const memberCount = Object.values(c.members).reduce((x, y) => x + y, 0);
-        // as §5 lists them by default: top-level classes, the nested ones on request
+        // as the API section lists them by default: top-level classes, the nested ones on request
         const top = changed?.filter((name) => !core.isNestedClass(name)).length;
         const note = [
           classCount + memberCount ? `${plural(classCount, 'class', 'classes')} and ${plural(memberCount, 'member')}` : null,
@@ -2349,12 +2329,13 @@ function summaryLedger(cmp, data) {
           total('removed') ? `${fmt(total('removed'))} removed after deprecation` : null,
           !changed ? null : top === changed.length ? `${plural(top, 'class', 'classes')} with API changes`
             : `${plural(top, 'class', 'classes')} with API changes, ${fmt(changed.length)} with nested ones`,
+          movedTop ? `${plural(movedTop, 'class', 'classes')} moved to another jar` : null,
         ].filter(Boolean).join(' · ');
         pendingApi.replaceWith(cell('API', 'sec-api', [[total('deprecated'), 'deprecated', 'dep'], [total('removal'), 'for removal', 'rem'], [total('undeprecated'), 'undeprecated', 'dep-o']], note || null));
       }).catch(() => pendingApi.replaceWith(cell('API', 'sec-api', [], 'The API data is unavailable.')));
     }
   }
-  return h('section', { class: `ledger${store.V.apiVis.length ? ' ledger--5' : ''}`, 'aria-label': 'Summary of changes' }, cells);
+  return h('section', { class: 'ledger', 'aria-label': 'Summary of changes' }, cells);
 }
 
 /* ---------- §1 configuration ---------- */
@@ -2845,30 +2826,6 @@ function extSection(cmp, data) {
   return sec;
 }
 
-/* ---------- §4 classes ---------- */
-
-const CLASS_CHIPS = [['added', 'added'], ['removed', 'removed'], ['moved', 'moved']];
-
-/** The class diff of a comparison and its rows per jar, computed once (the comparison keeps them). */
-function classDiff(cmp, classes) {
-  if (!cmp.classes) {
-    cmp.classes = core.diffClasses(classes.raw, cmp.la, cmp.lb);
-    cmp.classRows = core.classRows(cmp.classes, classes.raw);
-    const lines = core.apiLinesOf(classes.raw);
-    if (lines.length && cmp.aa != null && cmp.ab != null) {
-      // a class gone at B: deprecated the last time it was there (as §5 has it), or removed without deprecation
-      for (const r of cmp.classRows) {
-        if (r.change !== 'removed') continue;
-        const row = classes.byName.get(r.name);
-        const d = core.deprecationBeforeRemoval(core.depRowsOf(classes.raw, classes.index.get(row)), lines, cmp.aa, cmp.ab);
-        if (d) r.removedApi = d;
-        else if (core.apiRevisionAt(row, cmp.aa) != null) r.removedApi = 'none';
-      }
-    }
-  }
-  return cmp.classes;
-}
-
 /** Links to the artifact pages of jars (artifactIds), separated by commas. */
 function jarLinks(artifactIds) {
   return frag(artifactIds.map((a, i) => frag(i ? ', ' : null, h('a', { class: 'mono', href: link.extension(a) }, a))));
@@ -2880,31 +2837,7 @@ function classNameEl(name) {
   return frag(pkg ? h('span', { class: 'cls-pkg' }, `${pkg}.`) : null, core.simpleClassName(name));
 }
 
-/**
- * §4: the classes added, removed and moved, grouped by jar. The section is in the page at once and fills in when the
- * classes files of the two releases' major lines arrive: the comparison does not wait for them.
- */
-function classesSection(cmp) {
-  const V = store.V;
-  const { la, lb } = cmp;
-  const note = h('p', { class: 'sec-note' }, 'The classes of the ', h('code', null, 'io.quarkus'), ' jars that ', h('code', null, 'quarkus-bom'),
-    ' manages, nested ones included', comparedAt(cmp, 'classes') ? frag(',', comparedAt(cmp, 'classes')) : null,
-    '. A class that moved is listed in the jar it left and in the jar it reached.');
-  const sec = h('section', { class: 'sec', id: 'sec-classes', 'aria-labelledby': 'sec-classes-h' }, sectionHead(4, 'Classes', 'sec-classes-h', note));
-  const gap = gapText(cmp, 'classes');
-  if (gap) return add(sec, [emptyNote(gap)]);
-  if (la === lb) return add(sec, [emptyNote(sameSnapshotText(cmp, 'classes'))]);
-  const lines = linesSpanning(core.classLinesOf(V.list, [la, lb]));
-  const slot = h('div', { class: 'cls-slot' }, h('p', { class: 'empty', role: 'status' }, 'Loading the classes…'));
-  sec.append(slot);
-  loadClasses(lines).then((classes) => {
-    classDiff(cmp, classes);
-    slot.replaceChildren(classChanges(cmp));
-  }).catch((e) => slot.replaceChildren(missingData(lines.map((major) => `classes-${major}.json`).join(' or '), e?.message)));
-  return sec;
-}
-
-/* ---------- §5 API ---------- */
+/* ---------- §4 API ---------- */
 
 /** The deprecation changes of a comparison (core.diffDeprecations), once per comparison. */
 function apiDeprecations(cmp, classes) {
@@ -2920,6 +2853,12 @@ function apiChangedOf(cmp, classes) {
   return cmp.apiChanged;
 }
 
+/** The classes of a comparison that are API at both releases and in other jars at B (core.movedApiClasses), once per comparison. */
+function apiMovedOf(cmp, classes) {
+  if (!cmp.apiMoved) cmp.apiMoved = core.movedApiClasses(classes.raw, cmp.aa, cmp.ab);
+  return cmp.apiMoved;
+}
+
 /** For core.diffApi: the jars of a class at A and at B (artifactIds), to pick among several. */
 function jarsAtBoth(cmp, classes) {
   return (name) => {
@@ -2931,17 +2870,17 @@ function jarsAtBoth(cmp, classes) {
 }
 
 /**
- * §5: the API of the io.quarkus jars between the two releases. From the classes files: the deprecation changes. With
- * member data: every change of the classes whose API revision differs, whose shard files load after the page when
- * they are small (API_AUTO_BYTES, estimated), else when the section opens or on request (always on request under
- * Save-Data). Classes are compared by name across jars.
+ * §4: the API of the io.quarkus jars between the two releases. From the classes files: the deprecation changes and the
+ * classes that moved to another jar. With member data: every change of the classes whose API revision differs, whose
+ * shard files load after the page when they are small (API_AUTO_BYTES, estimated), else when the section opens or on
+ * request (always on request under Save-Data). Classes are compared by name across jars.
  */
 function apiSection(cmp) {
   const V = store.V;
   const at = comparedAt(cmp, 'api');
   const note = h('p', { class: 'sec-note' }, 'The public and protected classes and members of the ', h('code', null, 'io.quarkus'), ' jars',
-    at ? frag(',', at) : null, '. A class is compared by name, whichever jar has it.');
-  const sec = h('section', { class: 'sec', id: 'sec-api', 'aria-labelledby': 'sec-api-h' }, sectionHead(5, 'API', 'sec-api-h', note));
+    at ? frag(',', at) : null, '. A class is compared by name, whichever jar has it, and one that moved to another jar says so.');
+  const sec = h('section', { class: 'sec', id: 'sec-api', 'aria-labelledby': 'sec-api-h' }, sectionHead(4, 'API', 'sec-api-h', note));
   const gap = gapText(cmp, 'api');
   if (gap) return add(sec, [emptyNote(gap)]);
   if (cmp.aa === cmp.ab) return add(sec, [emptyNote(sameSnapshotText(cmp, 'api'))]);
@@ -2950,8 +2889,9 @@ function apiSection(cmp) {
   loadClasses(linesSpanning(core.classLinesOf(V.list, [cmp.aa, cmp.ab]))).then((classes) => {
     const deps = apiDeprecations(cmp, classes);
     const changed = apiChangedOf(cmp, classes);
+    const moved = apiMovedOf(cmp, classes);
     if (!changed || !memberLines(classes.raw).length) {
-      slot.replaceChildren(deprecationChanges(deps));
+      slot.replaceChildren(deprecationChanges(deps, moved));
       return;
     }
     if (cmp.apiRows) {
@@ -2959,7 +2899,9 @@ function apiSection(cmp) {
       return;
     }
     if (!changed.length) {
-      slot.replaceChildren(emptyNote('No class changed its API between these releases.'));
+      // the same API at both, but maybe in other jars
+      cmp.apiRows = core.sortApiRows([...moved]);
+      slot.replaceChildren(moved.length ? apiChanges(cmp) : emptyNote('No class changed its API between these releases.'));
       return;
     }
     const files = shardFilesOf(classes, changed);
@@ -2977,27 +2919,29 @@ function apiSection(cmp) {
         const enclosing = await enclosingApiRows(classes, changed);
         // a member a class no longer declares may be inherited: from the supertypes, loaded as far as the data goes
         const supers = await supertypeApiRows(classes, removalSupertypes(rowsByName, cmp.aa, cmp.ab), [cmp.ab], rowsByName);
-        cmp.apiRows = core.diffApi(rowsByName, cmp.aa, cmp.ab, jarsAtBoth(cmp, classes), (name) => enclosing.get(name),
+        const rows = core.diffApi(rowsByName, cmp.aa, cmp.ab, jarsAtBoth(cmp, classes), (name) => enclosing.get(name),
           (name) => rowsByName.get(name) ?? supers.get(name) ?? null);
+        cmp.apiRows = core.sortApiRows([...rows, ...moved]);
         slot.replaceChildren(apiChanges(cmp));
       }).catch((e) => {
         // the files that failed are forgotten (loadApiShard): another try fetches them again
         loading = false;
         slot.replaceChildren(missingData('the API member files', e?.message),
           h('p', null, h('button', { type: 'button', class: 'btn', onclick: load }, 'Try again')),
-          deprecationChanges(deps));
+          deprecationChanges(deps, moved));
       });
     };
     if (bytes <= API_AUTO_BYTES && !saveData()) {
       load();
       return;
     }
-    // larger member files: the deprecations now, the members when the section opens (unless saving data) or on request
+    // larger member files: the deprecations and the moves now, the members when the section opens (unless saving
+    // data) or on request
     const btn = h('button', { type: 'button', class: 'btn', onclick: load },
       `Load the API changes of ${plural(changed.length, 'class', 'classes')} (${plural(files.length, 'file')}, ${aboutSize(bytes)})`);
     note = h('div', { class: 'note api-load' },
-      h('p', null, `${plural(changed.length, 'class', 'classes')} changed their API. Their members are in ${plural(files.length, 'file')}, which load when you ask: below, the deprecations alone.`), btn);
-    slot.replaceChildren(note, deprecationChanges(deps));
+      h('p', null, `${plural(changed.length, 'class', 'classes')} changed their API. Their members are in ${plural(files.length, 'file')}, which load when you ask: below, the deprecations ${moved.length ? 'and the moves to another jar ' : ''}alone.`), btn);
+    slot.replaceChildren(note, deprecationChanges(deps, moved));
     if (!saveData()) {
       sec.addEventListener('sectiontoggle', () => {
         if (isSectionOpen(sec)) load();
@@ -3010,26 +2954,31 @@ function apiSection(cmp) {
 
 const DEPRECATION_CHIPS = [
   ['removal', 'for removal'], ['deprecated', 'deprecated'], ['unremoval', 'no longer for removal'], ['undeprecated', 'undeprecated'], ['removed', 'removed'],
+  ['moved', 'moved'],
 ];
 
-/** The deprecation changes (core.diffDeprecations) by jar, then class. */
-function deprecationChanges(deps) {
-  if (!deps.rows.length) return emptyNote('No class or member was deprecated, marked for removal or undeprecated between these releases.');
+/**
+ * What the classes files tell of the API without the member files: the deprecation changes (core.diffDeprecations)
+ * and the classes that moved to another jar (`moved`, core.movedApiClasses), by jar, then class.
+ */
+function deprecationChanges(deps, moved = []) {
+  const all = core.sortApiRows([...deps.rows, ...moved]);
+  if (!all.length) return emptyNote('No class or member was deprecated, marked for removal or undeprecated between these releases.');
   const counts = {};
-  for (const r of deps.rows) counts[r.change] = (counts[r.change] ?? 0) + 1;
+  for (const r of all) counts[r.change] = (counts[r.change] ?? 0) + 1;
   const state = { tags: new Set(), text: '' };
   const groups = moduleGroups(() => update());
   const groupsEl = h('div', { class: 'cgroups' });
   const status = h('p', { class: 'filter-status', 'aria-live': 'polite' });
   const update = () => {
     const words = state.text.toLowerCase().split(/\s+/).filter(Boolean);
-    const rows = deps.rows.filter((r) => (!state.tags.size || state.tags.has(r.change))
-      && words.every((w) => `${r.name}\n${r.member ?? ''}\n${r.artifact}`.toLowerCase().includes(w)));
+    const rows = all.filter((r) => (!state.tags.size || state.tags.has(r.change))
+      && words.every((w) => `${r.name}\n${r.member ?? ''}\n${r.artifact}\n${(r.fromJars ?? []).join('\n')}`.toLowerCase().includes(w)));
     const byJar = [...core.groupBy(rows, (r) => r.artifact)];
     groups.listed(byJar.map(([jar]) => jar), words.join(' '));
     renderGroupPages(groupsEl, byJar, (jar, list) => apiJarGroup(jar, list, deprecationRow, groups),
-      'No deprecation change matches these filters.', 'more jar');
-    status.textContent = rows.length === deps.rows.length ? `${plural(rows.length, 'change')}.` : `Showing ${fmt(rows.length)} of ${plural(deps.rows.length, 'change')}.`;
+      'No change matches these filters.', 'more jar');
+    status.textContent = rows.length === all.length ? `${plural(rows.length, 'change')}.` : `Showing ${fmt(rows.length)} of ${plural(all.length, 'change')}.`;
   };
   update();
   return frag(
@@ -3043,8 +2992,9 @@ function deprecationChanges(deps) {
     groupsEl);
 }
 
-/** What a deprecation change says: "for removal since 3.35 (declared); marked from …", "removed after deprecation". */
+/** What a deprecation change says: "for removal since 3.35 (declared); marked from …", "removed after deprecation"; or a move. */
 function deprecationRow(r) {
+  if (r.change === 'moved') return apiRow(r);
   const what = r.member ? memberSignature(r.name, r.member, r.value) : h('span', { class: 'muted' }, 'the class');
   const since = r.since || r.from != null ? h('span', { class: 'msince' }, deprecationSince(r)) : null;
   const change = r.change === 'removal' ? deprecationChip('removal', 'Newly marked for removal')
@@ -3064,7 +3014,7 @@ function apiJarGroup(jar, list, renderRow, groups) {
       h('ul', { class: 'mlist' }, rows.map(renderRow)))));
 }
 
-const API_CHIPS = [['removed', 'removed'], ['inherited', 'inherited'], ['removal', 'for removal'], ['deprecated', 'deprecated'],
+const API_CHIPS = [['removed', 'removed'], ['inherited', 'inherited'], ['moved', 'moved'], ['removal', 'for removal'], ['deprecated', 'deprecated'],
   ['unremoval', 'no longer for removal'], ['undeprecated', 'undeprecated'], ['return type', 'return type'], ['signature', 'signature'],
   ['modifiers', 'modifiers'], ['supertype', 'supertype'], ['added', 'added']];
 
@@ -3085,7 +3035,7 @@ function apiChanges(cmp) {
     const byJar = [...core.groupBy(shown, (r) => r.artifact)];
     groups.listed(byJar.map(([jar]) => jar), words.join(' '));
     renderGroupPages(groupsEl, byJar, (jar, list) => apiJarGroup(jar, list, apiRow, groups), 'No API change matches these filters.', 'more jar');
-    // as §4 says it: what the toggles leave out (nested classes are left out at first)
+    // what the toggles leave out (nested classes are left out at first)
     const out = andList([
       !state.nested && rows.some((r) => r.nested) ? 'nested classes' : null,
       !state.protected && rows.some((r) => r.protected) ? 'protected classes and members' : null,
@@ -3146,103 +3096,12 @@ function apiRow(r) {
     : h('span', { class: 'muted' }, r.change === 'added' ? 'the class, new' : r.change === 'removed' ? 'the class, gone' : 'the class');
   const was = r.change === 'removed'
     ? h('span', { class: 'msince' }, r.was === 'removal' ? 'was deprecated for removal' : r.was ? 'was deprecated' : 'removed without deprecation')
-    : r.change === 'inherited' ? h('span', { class: 'msince' }, r.moved ? 'moved to ' : 'inherited from ', classRef(r.from, r.member)) : null;
+    : r.change === 'inherited' ? h('span', { class: 'msince' }, r.moved ? 'moved to ' : 'inherited from ', classRef(r.from, r.member))
+      : r.change === 'moved' ? h('span', { class: 'msince' }, 'was in ', jarLinks(r.fromJars), r.toJars.length > 1 ? frag('; now in ', jarLinks(r.toJars)) : null) : null;
   const previous = r.previous ? h('span', { class: 'msince' }, 'was ', memberSignature(r.name, r.previous, r.previousValue, { linked: false })) : null;
   const details = r.details?.length ? h('span', { class: 'msince' }, r.details.join(', ')) : null;
   return h('li', { class: 'mrow' }, label, what, previous, details, was,
     r.protected ? chip('neutral', 'protected', 'Protected: for subclasses') : null);
-}
-
-/** The filters and the groups of the Classes section. Nested classes are left out until their switch is on. */
-function classChanges(cmp) {
-  const d = cmp.classes;
-  const rows = cmp.classRows;
-  if (!rows.length) return emptyNote('No class was added, removed or moved between these releases.');
-  const state = { tags: new Set(), text: '', nested: false, expanded: new Set(), groups: moduleGroups(() => update()) };
-  const status = h('p', { class: 'filter-status', 'aria-live': 'polite' });
-  const groupsEl = h('div', { class: 'cgroups' });
-  const nestedCount = d.counts.added + d.counts.removed + d.counts.moved - d.top.added - d.top.removed - d.top.moved;
-  const chips = h('div', { class: 'cls-chips' });
-  const update = () => {
-    const pool = state.nested ? rows : rows.filter((r) => !r.nested);
-    const filtered = core.filterRows(pool, state);
-    const filtering = state.text.trim() !== '';
-    const byJar = [...core.groupBy(filtered, (r) => r.artifact)];
-    state.groups.listed(byJar.map(([jar]) => jar), state.text.trim());
-    renderGroupPages(groupsEl, byJar, (jar, list) => classGroup(jar, list, state, filtering), 'No class change matches these filters.', 'more jar');
-    const jars = new Set(filtered.map((r) => r.artifact)).size;
-    status.textContent = filtered.length === pool.length
-      ? `${plural(pool.length, 'change')} in ${plural(jars, 'jar')}${state.nested || !nestedCount ? '' : ', nested classes left out'}.`
-      : `Showing ${fmt(filtered.length)} of ${plural(pool.length, 'change')}, in ${plural(jars, 'jar')}.`;
-  };
-  const fillChips = () => chips.replaceChildren(filterChips(CLASS_CHIPS, state.nested ? d.counts : d.top, state.tags, update,
-    'Show only these kinds of class change'));
-  const nested = h('button', {
-    type: 'button', class: 'fchip tone-neu', 'aria-pressed': 'false', disabled: nestedCount === 0,
-    title: 'Also list the nested classes: member, local and anonymous classes, whose names have a $',
-  }, h('span', { class: 'fchip-dot', 'aria-hidden': 'true' }), 'nested classes', h('span', { class: 'fchip-n' }, fmt(nestedCount)));
-  nested.addEventListener('click', () => {
-    state.nested = !state.nested;
-    nested.setAttribute('aria-pressed', String(state.nested));
-    fillChips();
-    update();
-  });
-  fillChips();
-  update();
-  return frag(
-    h('div', { class: 'toolbar' },
-      h('div', { class: 'cls-filters' }, chips, nested),
-      textFilter('Filter by class, package or jar', (v) => {
-        state.text = v;
-        update();
-      })),
-    listBar(status, state.groups),
-    groupsEl);
-}
-
-function classGroup(jar, list, state, filtering) {
-  let added = 0;
-  let removed = 0;
-  let moved = 0;
-  for (const r of list) {
-    if (r.change === 'added') added++;
-    else if (r.change === 'removed') removed++;
-    else moved++;
-  }
-  const cap = filtering ? ROW_CAP_FILTERED : ROW_CAP;
-  const initial = state.expanded.has(jar) ? list.length : Math.min(list.length, cap);
-  const ul = h('ul', { class: 'crows' });
-  const fill = (from, to) => {
-    const f = document.createDocumentFragment();
-    for (let i = from; i < to; i++) f.append(classRow(list[i]));
-    return f;
-  };
-  ul.append(fill(0, initial));
-  const more = list.length > initial ? moreButton(`Show all ${plural(list.length, 'change')} in ${jar}`, () => {
-    state.expanded.add(jar);
-    ul.append(fill(initial, list.length));
-    more.remove();
-    ul.children[initial]?.querySelector('a')?.focus();
-  }) : null;
-  return moduleGroup(state.groups, jar, h('a', { href: link.extension(jar) }, jar),
-    h('span', { class: 'cgroup-counts' },
-      countMark('add', '+', added, 'added'),
-      countMark('rem', '−', removed, 'removed'),
-      countMark('chg', '~', moved, 'moved in or out')),
-    `${jar}: ${plural(list.length, 'change')}`, ul, more);
-}
-
-function classRow(r) {
-  const name = h('a', { class: 'prop', href: link.class(r.name) }, classNameEl(r.name));
-  const moved = r.change === 'moved-in' || r.change === 'moved-out';
-  return h('li', { class: `crow crow--${moved ? 'changed' : r.change}` },
-    h('div', { class: 'crow-name' }, name, copyButton(r.name, { label: 'Copy class name', target: name })),
-    h('div', { class: 'crow-tags' }, chip(r.change), r.nested ? chip('neutral', 'nested', 'A member, local or anonymous class') : null,
-      r.removedApi && r.removedApi !== 'none' ? h('span', { class: 'msince' }, r.removedApi.kind === 'removal' ? 'was deprecated for removal' : 'was deprecated', ' ', deprecationSince(r.removedApi)) : null,
-      r.removedApi === 'none' ? h('span', { class: 'msince' }, 'removed without deprecation') : null),
-    r.other.length
-      ? h('div', { class: 'crow-delta' }, h('div', { class: 'delta' }, deltaKey(r.change === 'moved-in' ? 'was in' : 'now in'), h('span', null, jarLinks(r.other))))
-      : null);
 }
 
 /* ========================================================================== */
