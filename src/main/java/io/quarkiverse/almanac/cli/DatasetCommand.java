@@ -9,6 +9,7 @@ import io.quarkiverse.almanac.util.SnapshotStore;
 import picocli.CommandLine;
 import picocli.CommandLine.Command;
 import picocli.CommandLine.Model.CommandSpec;
+import picocli.CommandLine.Option;
 import picocli.CommandLine.Spec;
 
 import java.io.IOException;
@@ -35,6 +36,9 @@ public final class DatasetCommand implements Runnable {
 
     @Spec
     CommandSpec spec;
+
+    @Option(names = {"-h", "--help"}, usageHelp = true, description = "Show this help message and exit.")
+    boolean help;
 
     @Override
     public void run() {

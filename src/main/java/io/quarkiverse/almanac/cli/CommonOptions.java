@@ -14,6 +14,10 @@ import java.nio.file.Path;
 /// Options shared by every command.
 public final class CommonOptions {
 
+    // help only: the top command's --version is not inherited, so that it cannot stand for a mistyped --versions
+    @Option(names = {"-h", "--help"}, usageHelp = true, description = "Show this help message and exit.")
+    boolean help;
+
     @Option(names = "--work", defaultValue = "work", paramLabel = "DIR",
             description = "Working folder for the HTTP cache and the snapshots (default: ${DEFAULT-VALUE}).")
     Path work;

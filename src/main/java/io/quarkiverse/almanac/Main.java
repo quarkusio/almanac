@@ -15,12 +15,10 @@ import io.quarkiverse.almanac.verify.VerifyCommand;
 import picocli.CommandLine;
 import picocli.CommandLine.Command;
 import picocli.CommandLine.Model.CommandSpec;
-import picocli.CommandLine.ScopeType;
 import picocli.CommandLine.Spec;
 
-/// Entry point of `quarkus-almanac.jar`. Its `--help` and `--version` reach every subcommand (`dataset import --help`).
-@Command(name = "quarkus-almanac", mixinStandardHelpOptions = true, scope = ScopeType.INHERIT,
-        version = "quarkus-almanac 0.1.0",
+/// Entry point of `quarkus-almanac.jar`.
+@Command(name = "quarkus-almanac", mixinStandardHelpOptions = true, version = "quarkus-almanac 0.1.0",
         description = "Extracts Quarkus release data (BOM, platform BOM, config properties, extensions, classes, "
                 + "API) from Maven Central into a committed dataset and assembles the data files of the Quarkus "
                 + "Almanac site.",
