@@ -6,8 +6,7 @@ their API and deprecations. Every config property, managed artifact and class al
 
 **Site:** https://quarkus.io/almanac/
 
-It covers every Quarkus release from 0.11.0 on, pre-releases included. Releases before 3.8 are listed with the "Show
-old releases" switch.
+It covers every Quarkus release on Maven Central, from 0.11.0 on, pre-releases included.
 
 ## How it works
 
@@ -33,10 +32,10 @@ To browse the site locally, serve the `site` folder with any static web server, 
 ## Adding a release
 
 New releases come in on their own: every twelve hours, the workflow `.github/workflows/new-releases.yml` adds the
-releases published on GitHub at least 6 hours earlier and the platform BOMs that came out since, commits them to
-`main` and deploys the site. Run it from the Actions tab to add given releases.
+releases published on GitHub at least 6 hours ago and any platform BOM the dataset lacks, commits them to `main` and
+deploys the site. Run it from the Actions tab to add given releases.
 
-By hand:
+By hand, once the release is 6 hours old (a jar not yet on Maven Central would be left out for good):
 
 ```sh
 java -jar target/quarkus-almanac.jar bom --versions 3.40.2
@@ -48,8 +47,7 @@ java -jar target/quarkus-almanac.jar dataset verify --offline
 java -jar target/quarkus-almanac.jar assemble --offline --pre-releases all
 ```
 
-Then commit `dataset/` and `site/data/`. `all` runs the whole pipeline for the releases the dataset does not have yet,
-and `--help` lists every command and option.
+Then commit `dataset/` and `site/data/`. `--help` lists every command, and `<command> --help` its options.
 
 ## Limitations
 
@@ -59,11 +57,14 @@ and `--help` lists every command and option.
 - Descriptions are the first sentence of each property's documentation.
 - Extensions start at 0.27, platform BOMs at 2.0. The platform BOM of a release is the platform release of the same
   version, and some releases have none (3.4.0, for example).
-- The classes include those that some jars bundle from other libraries (`quarkus-grpc-cli`, for one); the API leaves
-  them out. The API is everything public or protected in the class files, Quarkus internals included. Signatures are
-  erased, so a change of generics alone does not show, and `throws` clauses and javadoc are not read.
-- Deprecation comes from `@Deprecated` or a javadoc `@deprecated`. Its `since` is often missing, so the site also shows
-  the first release with the mark. The members of a deprecated class are not marked one by one.
+- The classes include the copies of other projects that some jars bundle. The API leaves out those of
+  `quarkus-grpc-cli` and `quarkus-bootstrap-gradle-resolver`, those of `quarkus-ide-launcher` outside
+  `io.quarkus.launcher`, and the packages with a `shaded` segment.
+- The API is everything public or protected in the class files, Quarkus internals included. Signatures are erased and
+  `throws` clauses are not read, so a change of generics or `throws` alone does not show.
+- Deprecation is the mark javac writes into a class file for `@Deprecated` or a javadoc `@deprecated`. As `@Deprecated`
+  often has no `since`, the site also shows the first release with the mark. The members of a deprecated class are not
+  marked one by one.
 - Release dates are the upload times of the BOMs on Maven Central.
 
 Data extracted from artifacts published on Maven Central. Problems and ideas go to
