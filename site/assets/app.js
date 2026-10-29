@@ -315,6 +315,8 @@ function prepareVersions(json) {
     list,
     streams,
     reference,
+    // the oldest release listed anywhere, those listed for reference included: where the coverage starts
+    oldest: core.sortVersions([...(list.length ? [list[0].v] : []), ...reference.map((r) => r.v)])[0] ?? null,
     configVis,
     extVis,
     clsVis,
@@ -1204,7 +1206,7 @@ function updateDataNotice() {
   const V = store.V;
   shell.footData.textContent = [
     V.generatedAt ? `Data generated ${core.formatDate(V.generatedAt)}` : null,
-    `${plural(V.list.length, 'release')} from ${versionText(V.list[0].v)} to ${versionText(V.list[V.list.length - 1].v)}`,
+    `${plural(V.list.length, 'release')} from ${versionText(V.oldest)} to ${versionText(V.list[V.list.length - 1].v)}`,
   ].filter(Boolean).join(' · ');
 }
 
@@ -1945,11 +1947,10 @@ function renderNotFound(r) {
 async function renderHome() {
   const V = store.V;
   const pair = core.defaultPair(V.json) ?? { from: 0, to: V.list.length - 1 };
-  const first = V.list[0];
   const last = V.list[V.list.length - 1];
 
   const hero = h('section', { class: 'hero band', 'aria-labelledby': 'home-title' },
-    h('p', { class: 'kicker' }, 'Release almanac · Quarkus ', h('span', { class: 'ver' }, versionText(first.v)), ' to ', h('span', { class: 'ver' }, versionText(last.v))),
+    h('p', { class: 'kicker' }, 'Release almanac · Quarkus ', h('span', { class: 'ver' }, versionText(V.oldest)), ' to ', h('span', { class: 'ver' }, versionText(last.v))),
     h('h1', { class: 'display', id: 'home-title', tabindex: '-1' }, 'What changed between Quarkus releases?'),
     h('p', { class: 'lede' },
       'Pick two releases to see which ', h('code', null, 'quarkus.*'), ' config properties were added, removed or changed, ',
@@ -2016,7 +2017,6 @@ function quickPickItem(p) {
 
 function coverageFacts() {
   const V = store.V;
-  const first = V.list[0];
   const last = V.list[V.list.length - 1];
   const fact = (value, label, sub, cls) => h('div', { class: cls ? `fact ${cls}` : 'fact' }, h('dt', null, label), h('dd', { class: 'fact-n' }, value), sub == null ? null : h('dd', { class: 'fact-sub' }, sub));
   const propsN = h('span', null, '…');
@@ -2049,12 +2049,10 @@ function coverageFacts() {
     artsSub.textContent = 'bom.json unavailable';
   });
   const preCount = V.visOff.pre.filter(Boolean).length;
-  // from the oldest release listed, those listed for reference included
-  const oldest = core.sortVersions([first.v, ...V.reference.map((r) => r.v)])[0];
   return h('section', { class: 'facts', 'aria-labelledby': 'facts-h' },
     h('h2', { class: 'label-h', id: 'facts-h' }, 'Coverage'),
     h('dl', { class: 'facts-grid' },
-      fact(fmt(V.list.length), 'releases', `${versionText(oldest)} to ${versionText(last.v)}${preCount ? `, ${plural(preCount, 'pre-release')} among them` : ''}`),
+      fact(fmt(V.list.length), 'releases', `${versionText(V.oldest)} to ${versionText(last.v)}${preCount ? `, ${plural(preCount, 'pre-release')} among them` : ''}`),
       fact(propsN, 'config properties tracked', propsSub),
       fact(artsN, 'managed artifacts tracked', artsSub),
       fact(V.generatedAt ? core.formatDate(V.generatedAt) : '—', 'data generated', null, 'fact--date')));
