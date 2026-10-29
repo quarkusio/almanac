@@ -1557,15 +1557,39 @@ export function deprecatedFrom(rows, lines, vi) {
 }
 
 /**
- * The deprecation of a class or member at release `vi`: `{kind, since, from, value}` with `kind` 'deprecated' or
- * 'removal', the declared `since` (null when none), and `from`, the first release of the deprecation (deprecatedFrom
- * over `lines`, apiLinesOf); null when it is not deprecated at `vi`.
+ * Where the kind of a deprecation at release `vi` began (deprecationOf: marked for removal, or deprecated only), from
+ * `vi` back over the releases with api data of the lines loaded (`lines`, apiLinesOf): the first from which the rows
+ * have that kind without a break up to `vi`. A run that reaches the first release loaded began there only when the
+ * deprecation did (deprecatedFrom); else it began before what is loaded, and the result is null, as when it is not
+ * deprecated at `vi`.
+ */
+export function deprecationKindFrom(rows, lines, vi) {
+  const kindAt = (u) => deprecationOf(depValueAt(rows, u));
+  const kind = kindAt(vi);
+  if (!kind) return null;
+  const vs = lines.flatMap((l) => l.versions);
+  let from = null;
+  for (let k = vs.length - 1; k >= 0; k--) {
+    if (vs[k] > vi) continue;
+    if (kindAt(vs[k]) !== kind) return from;
+    from = vs[k];
+  }
+  return deprecatedFrom(rows, lines, vi) === from ? from : null;
+}
+
+/**
+ * The deprecation of a class or member at release `vi`: `{kind, since, from, kindFrom, value}` with `kind`
+ * 'deprecated' or 'removal', the declared `since` (null when none), `from`, the first release of the deprecation
+ * (deprecatedFrom over `lines`, apiLinesOf), and `kindFrom`, the first of its kind (deprecationKindFrom: null when that
+ * began before the lines loaded); null when it is not deprecated at `vi`.
  */
 export function deprecationAt(rows, lines, vi, member = false) {
   const value = depValueAt(rows, vi);
   const kind = deprecationOf(value);
   if (!kind) return null;
-  return { kind, since: parseApiValue(value, member)?.since ?? null, from: deprecatedFrom(rows, lines, vi), value };
+  return {
+    kind, since: parseApiValue(value, member)?.since ?? null, from: deprecatedFrom(rows, lines, vi), kindFrom: deprecationKindFrom(rows, lines, vi), value,
+  };
 }
 
 /**
@@ -1613,8 +1637,8 @@ export function deprecationEvents(rows, cvs, member = false) {
 
 /**
  * Every class and member deprecated at release `vi` (a release with api data), one item per jar:
- * `{classIndex, name, artifact, member, kind, since, from, value}`, sorted by jar, class and member (the class first).
- * `kind`, `since` and `value` are the jar's, `from` the item's over all its jars (deprecatedFrom).
+ * `{classIndex, name, artifact, member, kind, since, from, kindFrom, value}`, sorted by jar, class and member (the class
+ * first). `kind`, `since` and `value` are the jar's, `from` and `kindFrom` the item's over all its jars (deprecationAt).
  */
 export function deprecationsAt(classes, vi) {
   const lines = apiLinesOf(classes);
@@ -1623,14 +1647,18 @@ export function deprecationsAt(classes, vi) {
     const name = className(classes, classes.classes[classIndex]);
     for (const [key, rows] of members) {
       let from;
+      let kindFrom;
       for (const row of rows) {
         const value = stateAt(row[3], vi);
         const kind = deprecationOf(value);
         if (!kind) continue;
-        if (from === undefined) from = deprecatedFrom(rows, lines, vi);
+        if (from === undefined) {
+          from = deprecatedFrom(rows, lines, vi);
+          kindFrom = deprecationKindFrom(rows, lines, vi);
+        }
         out.push({
           classIndex, name, artifact: classes.artifacts[row[1]], member: key || null, kind,
-          since: parseApiValue(value, key !== '')?.since ?? null, from, value,
+          since: parseApiValue(value, key !== '')?.since ?? null, from, kindFrom, value,
         });
       }
     }
@@ -1643,11 +1671,11 @@ const cmpText = (x, y) => (x < y ? -1 : x > y ? 1 : 0);
 /**
  * The deprecation changes between releases `a` and `b` (releases with api data, or null for none), for classes and
  * members merged across jars (a class that moved keeps its deprecation): `rows` of
- * `{classIndex, name, member, artifact, change, since, from, value, added}` with change 'deprecated' (newly; `added`
+ * `{classIndex, name, member, artifact, change, since, from, kindFrom, value, added}` with change 'deprecated' (newly; `added`
  * when it is new at B), 'removal' (newly marked for removal), 'unremoval' (no longer for removal, still deprecated),
  * 'undeprecated' or 'removed' (there at A, gone at B, deprecated the last time it was there: deprecationBeforeRemoval),
- * and their `counts` for classes and members. `since`, `from` and `value` are those of the deprecation shown: at B, at
- * A for 'undeprecated', the last time it was there for 'removed'.
+ * and their `counts` for classes and members. `since`, `from`, `kindFrom` and `value` are those of the deprecation
+ * shown (deprecationAt): at B, at A for 'undeprecated', the last time it was there for 'removed'.
  */
 export function diffDeprecations(classes, a, b) {
   const lines = apiLinesOf(classes);
@@ -1685,6 +1713,7 @@ export function diffDeprecations(classes, a, b) {
         change,
         since: d?.since ?? null,
         from: d?.from ?? null,
+        kindFrom: d?.kindFrom ?? null,
         value: d?.value ?? null,
         added: change !== 'removed' && change !== 'undeprecated' && va == null,
       });

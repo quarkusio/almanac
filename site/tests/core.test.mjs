@@ -2072,7 +2072,7 @@ describe('API: deprecations from the classes files', () => {
   test('deprecationAt, deprecatedFrom and deprecationEvents', () => {
     const qut = depRowsOf(merged, QUT);
     const lines = core.apiLinesOf(merged);
-    assert.deepEqual(deprecationAt(qut, lines, 5), { kind: 'removal', since: '3.35', from: 3, value: '+R since 3.35' });
+    assert.deepEqual(deprecationAt(qut, lines, 5), { kind: 'removal', since: '3.35', from: 3, kindFrom: 3, value: '+R since 3.35' });
     assert.equal(deprecationAt(qut, lines, 2), null);
     const parse = depRowsOf(merged, row('io.quarkus.runtime.Util'), PARSE);
     assert.equal(deprecatedFrom(parse, lines, 2), 2);
@@ -2399,6 +2399,23 @@ describe('API: dating across jars and lines, change kinds, members across jars',
     assert.equal(at(mergeClasses([line3, bare]), 6).from, 5);
   });
 
+  test('the removal mark is dated on its own, over the lines loaded, and undated when it began before them', () => {
+    const { deprecationKindFrom } = core;
+    // run() deprecated from 2 (3.10.0), for removal from 4 (3.12.0) in line 3; line 4 carries its "marked from", 2
+    const line3 = file(3, [0, 1, 2, 3, 4], ['quarkus-core'], [[0, 'Old', [[0, 0]]]], [[0, 0, 'run()V', [[0, '+'], [2, '+D'], [4, '+R']]]]);
+    const line4 = file(4, [5, 6], ['quarkus-core'], [[0, 'Old', [[5, 0]]]], [[0, 0, 'run()V', [[5, '+R']], 2]]);
+    const kindFrom = (c, vi) => deprecationKindFrom(depRowsOf(c, 0, 'run()V'), apiLinesOf(c), vi);
+    const both = mergeClasses([line3, line4]);
+    assert.equal(kindFrom(both, 6), 4, 'over both lines: from 3.12.0');
+    assert.equal(deprecationAt(depRowsOf(both, 0, 'run()V'), apiLinesOf(both), 6, true).from, 2, 'the deprecation itself from 3.10.0');
+    assert.equal(kindFrom(both, 3), 2, 'deprecated only, at 3: from 2');
+    assert.equal(kindFrom(mergeClasses([line4]), 6), null, 'line 4 alone: for removal since before it, from when is unknown');
+    assert.equal(kindFrom(both, 1), null, 'not deprecated');
+    // for removal from the first release loaded, where the deprecation began too: dated
+    const fresh = file(4, [5, 6], ['quarkus-core'], [[0, 'Old', [[5, 0]]]], [[0, 0, 'run()V', [[5, '+R']]]]);
+    assert.equal(kindFrom(mergeClasses([fresh]), 6), 5);
+  });
+
   test('a withdrawn removal is a change of its own: unremoval', () => {
     const c = file(3, [0, 1, 2], ['a'], [[0, 'Old', [[0, 0]], [[0, 1], [1, 2]]]], [
       [0, 0, null, [[0, '+R'], [1, '+D']]],
@@ -2644,7 +2661,7 @@ describe('API: dating across jars and lines, change kinds, members across jars',
     ]);
     const rows = depRowsOf(c, 0);
     const lines = apiLinesOf(c);
-    assert.deepEqual(deprecationBeforeRemoval(rows, lines, 0, 3), { kind: 'deprecated', since: '3.9', from: 1, value: '+D since 3.9', at: 1 });
+    assert.deepEqual(deprecationBeforeRemoval(rows, lines, 0, 3), { kind: 'deprecated', since: '3.9', from: 1, kindFrom: 1, value: '+D since 3.9', at: 1 });
     assert.equal(deprecationBeforeRemoval(rows, lines, 0, 1), null, 'not deprecated at 0, the last release of [0, 1)');
     assert.equal(deprecationBeforeRemoval(rows, lines, 1, 0).at, 1, 'from a newer release: its deprecation there');
     assert.equal(deprecationBeforeRemoval(rows, lines, 3, 0), null, 'not there at 3');

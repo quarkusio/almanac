@@ -667,17 +667,18 @@ function getSearchIndex() {
 
 const PRE_KEY = 'quarkus-almanac-prereleases';
 const OLD_KEY = 'quarkus-almanac-old-releases';
-/** Which BOM a comparison shows: "platform" (io.quarkus.platform:quarkus-bom) or "core" (io.quarkus:quarkus-bom). */
+/** Which BOM a comparison shows: "platform" (io.quarkus.platform:quarkus-bom, the default) or "core" (io.quarkus:quarkus-bom). */
 const BOM_KEY = 'quarkus-almanac-bom';
-const prefs = { showPre: readPref(PRE_KEY), showOld: readPref(OLD_KEY), platformBom: readPref(BOM_KEY, 'platform') };
+const prefs = { showPre: readPref(PRE_KEY), showOld: readPref(OLD_KEY), platformBom: readPref(BOM_KEY, 'platform', true) };
 let prefHooks = []; // {anchor, fn}: run while `anchor` is in the document
 
-/** Whether the stored preference is on: its value is `onValue`. */
-function readPref(key, onValue = '1') {
+/** Whether the stored preference is on: its value is `onValue`; `fallback` when none is stored, or storage is blocked. */
+function readPref(key, onValue = '1', fallback = false) {
   try {
-    return window.localStorage.getItem(key) === onValue;
+    const value = window.localStorage.getItem(key);
+    return value == null ? fallback : value === onValue;
   } catch {
-    return false; // storage may be blocked: off by default
+    return fallback; // storage may be blocked
   }
 }
 
@@ -2982,9 +2983,9 @@ function apiSection(cmp, { title = 'API', since = null, open = false } = {}) {
     const load = () => {
       if (loading) return;
       loading = true;
-      // the deprecations stay in view while the files load
+      // the deprecations stay in view while the files load, though the page may not be on screen yet (an open section)
       const status = h('p', { class: 'empty', role: 'status' }, `Loading the members of ${plural(changed.length, 'class', 'classes')}…`);
-      if (note?.isConnected) note.replaceWith(status);
+      if (note?.parentNode === slot) note.replaceWith(status);
       else slot.replaceChildren(status);
       classesApiRows(classes, changed).then(async (rowsByName) => {
         const enclosing = await enclosingApiRows(classes, changed);
@@ -3763,11 +3764,20 @@ function deprecatedAnnotation(since, forRemoval) {
   return since ? h('code', { class: 'val' }, `@Deprecated(since = "${since}"${forRemoval ? ', forRemoval = true' : ''})`) : null;
 }
 
-/** "@Deprecated(since = "3.35", forRemoval = true); marked from 3.35.0.CR1": a deprecation's annotation and the release it is marked from. */
+/**
+ * "@Deprecated(since = "3.16", forRemoval = true); deprecated from 3.16.0.CR1, for removal from 3.17.0.CR1": a
+ * deprecation's annotation and the releases that began it (core.deprecationAt's `from` and `kindFrom`).
+ */
 function deprecationNote(d) {
   const V = store.V;
-  const annotation = deprecatedAnnotation(d.since, core.deprecationOf(d.value) === 'removal');
-  return frag(annotation, d.from != null ? frag(annotation ? '; ' : '', 'marked from ', verLink(V.list[d.from].v)) : null);
+  const removal = core.deprecationOf(d.value) === 'removal';
+  const annotation = deprecatedAnnotation(d.since, removal);
+  const ver = (vi) => verLink(V.list[vi].v);
+  const dates = d.from == null ? null
+    : !removal || d.kindFrom == null ? frag('deprecated from ', ver(d.from))
+      : d.kindFrom === d.from ? frag('for removal from ', ver(d.from))
+        : frag('deprecated from ', ver(d.from), ', for removal from ', ver(d.kindFrom));
+  return frag(annotation, annotation && dates ? '; ' : '', dates);
 }
 
 /**
@@ -3820,14 +3830,20 @@ function classDeprecationLine(info) {
   if (!info) return null;
   const V = store.V;
   if (info.now) {
-    const removal = info.now.kind === 'removal';
-    const from = info.now.from != null ? frag(' from ', verLink(V.list[info.now.from].v)) : null;
-    // a class gone since: up to the last time it was API
+    const { kind, from, kindFrom } = info.now;
+    const removal = kind === 'removal';
     const at = `${short(V.list[info.at].v)}, ${apiAtWhat(info)}`;
-    const run = info.gone ? (from ? frag(from, ` to ${at}`) : ` in ${at}`) : from ? frag(from, ' on') : null;
+    // the releases from `start` on; for a class gone since, up to the last time it was API ("in" it, when only that)
+    const run = (start) => (start == null ? (info.gone ? ` in ${at}` : null)
+      : info.gone ? (start === info.at ? ` in ${at}` : frag(' from ', verLink(V.list[start].v), ` to ${at}`))
+        : frag(' from ', verLink(V.list[start].v), ' on'));
+    // marked for removal when deprecated, later (dated when the data loaded tells when), or deprecated only
+    const text = !removal ? frag('Deprecated', run(from))
+      : kindFrom === from ? frag('Deprecated for removal', run(from))
+        : kindFrom != null ? frag('Deprecated from ', verLink(V.list[from].v), ', for removal', run(kindFrom))
+          : frag('Deprecated', run(from), info.gone ? ', and for removal there' : ', and for removal now');
     const annotation = deprecatedAnnotation(info.now.since, removal);
-    return h('p', { class: 'status-line' }, deprecationChip(info.now.kind),
-      h('span', null, removal ? 'Deprecated for removal' : 'Deprecated', run, annotation ? ': ' : '', annotation, '.'));
+    return h('p', { class: 'status-line' }, deprecationChip(kind), h('span', null, text, annotation ? ': ' : '', annotation, '.'));
   }
   if (info.outer) {
     return h('p', { class: 'status-line' }, chip('deprecated', 'in a deprecated class', 'The class it is nested in is deprecated'),
@@ -4464,7 +4480,7 @@ async function renderDeprecated(r) {
     h('p', { class: 'lede' }, `The public and protected classes and members of the io.quarkus jars deprecated in ${short(x.v)}`,
       av === i ? '' : `, from the API data of ${short(V.list[av].v)}`, `: ${deprecatedCounts(items)}.`),
     h('section', { class: 'sec', 'aria-labelledby': 'dep-h' }, sectionHead(1, 'By jar', 'dep-h',
-      h('p', { class: 'sec-note' }, '@Deprecated(since = …) is the annotation as the code declares it; “marked from” is the first release, of those in a row up to this one, that marks it deprecated.')),
+      h('p', { class: 'sec-note' }, '@Deprecated(since = …) is the annotation as the code declares it; “deprecated from” and “for removal from” are the first releases, of those in a row up to this one, that mark it so.')),
     deprecatedList(items, `deprecated:${x.v}`)));
 }
 
