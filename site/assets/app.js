@@ -2781,7 +2781,7 @@ function depsSection(cmp, data) {
   };
   const own = block(word, modulesLine, d.groups.filter((g) => g.own));
   const third = block('Third-party', null, d.groups.filter((g) => !g.own));
-  const none = emptyNote('No dependency change matches these filters.');
+  const none = emptyNote(`No ${d.modules ? 'listed ' : ''}dependency change matches these filters.`);
   const total = d.rows.length;
   const update = () => {
     const words = state.text.toLowerCase().split(/\s+/).filter(Boolean);
@@ -2803,8 +2803,9 @@ function depsSection(cmp, data) {
       }
       n += k;
       b.n.textContent = !b.total ? '' : shown.length === b.total ? fmt(b.total) : `${fmt(shown.length)} of ${fmt(b.total)}`;
-      // a filter shows the blocks it matches in; without one, the own block shows with modules alone too
-      b.el.hidden = filtering ? !shown.length : b === own && !d.modules && !b.total;
+      // a filter shows the blocks it matches in, and the own block whenever there are modules, whose line says that
+      // they are not listed: a filter matches none of them
+      b.el.hidden = b === own ? !d.modules && (filtering ? !shown.length : !b.total) : filtering && !shown.length;
       if (shown.length) renderDepGroups(b.list, shown);
       else if (b === third && !filtering) b.list.replaceChildren(emptyNote('No third-party dependency changed version.'));
       else b.list.replaceChildren();

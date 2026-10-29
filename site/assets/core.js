@@ -662,7 +662,8 @@ export const BOM_KIND_ORDER = ['downgrade', 'major', 'minor', 'patch', 'other', 
 
 /**
  * Whether a groupId is Quarkus's own: `io.quarkus` and its subgroups (`io.quarkus.arc`, `io.quarkus.platform`, …), and
- * `org.jboss.shamrock` before 0.10.0. bom.json writes `"="` for these alone.
+ * `org.jboss.shamrock` before 0.10.0. bom.json writes `"="` for these alone, but for the subgroups of the projects
+ * released on their own (Gizmo, quarkus-http, quarkus-security), which keep their versions.
  */
 export function isQuarkusGroup(group) {
   return group === 'io.quarkus' || group.startsWith('io.quarkus.') || group === 'org.jboss.shamrock';

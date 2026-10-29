@@ -55,7 +55,7 @@ import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
 /// Turns per-version snapshots into the compact site data: `versions.json`, `bom.json` (change points, `"="` for "the
-/// release's own version" of Quarkus's own artifacts), `config.json` (interned states, change points
+/// release's own version" of the artifacts versioned with it), `config.json` (interned states, change points
 /// over config versions, latest descriptions), `extensions.json` (change points over extension versions: the
 /// releases with an extensions snapshot, flagged `ext` in `versions.json`), `platform.json` (how the platform BOM
 /// differs from the BOM, over the releases with a platform BOM snapshot; see [#build]) and, per major version line,
@@ -199,9 +199,14 @@ public final class HistoryBuilder {
     /// Any API shard file name, for the shards that a new assembly no longer has.
     private static final Pattern API_SHARD_FILE = Pattern.compile("api-(\\d+)-\\d+\\.json");
 
-    /// Value written for a managed version equal to the release's own version, of Quarkus's own artifacts only
-    /// ([#isQuarkusOwn]).
+    /// Value written for a managed version equal to the release's own version, of the artifacts versioned with the
+    /// release only ([#followsRelease]).
     public static final String SAME_AS_RELEASE = "=";
+
+    /// The subgroups of `io.quarkus` whose projects are released on their own, with versions of their own: Gizmo,
+    /// quarkus-http, quarkus-security and the Keycloak adapter of 0.23.
+    private static final Set<String> RELEASED_ON_THEIR_OWN = Set.of("io.quarkus.gizmo", "io.quarkus.http",
+            "io.quarkus.keycloak", "io.quarkus.security");
 
     private static final JsonNodeFactory NODES = JsonNodeFactory.instance;
     private static final Map<String, String> PHASE_CODES = Map.of(
@@ -364,7 +369,7 @@ public final class HistoryBuilder {
         Map<String, JsonNode> managed = new HashMap<>();
         for (ManagedDep dep : bom.deps()) {
             managed.put(dep.id(), TextNode.valueOf(
-                    dep.v().equals(bom.version()) && isQuarkusOwn(dep.id()) ? SAME_AS_RELEASE : dep.v()));
+                    dep.v().equals(bom.version()) && followsRelease(dep.id()) ? SAME_AS_RELEASE : dep.v()));
         }
         bomHistory.observe(vi, managed);
 
@@ -390,10 +395,11 @@ public final class HistoryBuilder {
         if (release.hasPlatform()) {
             platformVersions.add(vi);
             Map<String, JsonNode> differences = new HashMap<>();
-            // "=" for Quarkus's own artifacts only, as in bom.json
-            BomDifferences.of(bom.version(), bom.deps(), release.platform().deps())
-                    .forEach((id, value) -> differences.put(id, TextNode.valueOf(
-                            value.equals(BomDifferences.SAME_AS_RELEASE) && !isQuarkusOwn(id) ? bom.version() : value)));
+            // "=" for the artifacts versioned with the release only, as in bom.json
+            BomDifferences.of(bom.version(), bom.deps(), release.platform().deps()).forEach((id, value) -> {
+                String v = value.equals(BomDifferences.SAME_AS_RELEASE) && !followsRelease(id) ? bom.version() : value;
+                differences.put(id, TextNode.valueOf(v));
+            });
             platformHistory.observe(vi, differences);
         }
         if (release.hasClasses()) {
@@ -468,8 +474,8 @@ public final class HistoryBuilder {
     /// The site documents for the releases added so far. `platform.json` has `versions`, the release indices with a
     /// platform BOM snapshot, and `artifacts`, the ids that a platform BOM manages otherwise than the BOM of the same
     /// release, with change points over those releases alone: the platform BOM's version (`"="` for the release's
-    /// own, of Quarkus's own artifacts), `"-"` ([BomDifferences#NOT_MANAGED]) when only the BOM manages the id, `null`
-    /// when both manage it alike or neither does.
+    /// own, of the artifacts versioned with it), `"-"` ([BomDifferences#NOT_MANAGED]) when only the BOM manages the
+    /// id, `null` when both manage it alike or neither does.
     public SiteData build(Instant generatedAt) {
         ObjectNode versions = NODES.objectNode().put("generatedAt", generatedAt.truncatedTo(ChronoUnit.SECONDS)
                 .toString());
@@ -739,13 +745,24 @@ public final class HistoryBuilder {
     }
 
     /// Whether an artifact (`groupId:artifactId…`) is Quarkus's own, by its groupId: `io.quarkus` and its subgroups
-    /// (`io.quarkus.arc`, `io.quarkus.platform`, …), and `org.jboss.shamrock` before 0.10.0. Only these are written
-    /// [#SAME_AS_RELEASE]: a third-party artifact whose version happens to be the release's keeps its version (the
-    /// Mutiny Vert.x bindings 3.14.0 of Quarkus 3.14.0), so that the site does not take it for a Quarkus module.
+    /// (`io.quarkus.arc`, `io.quarkus.platform`, …), and `org.jboss.shamrock` before 0.10.0.
     static boolean isQuarkusOwn(String id) {
-        int colon = id.indexOf(':');
-        String group = colon < 0 ? id : id.substring(0, colon);
+        String group = groupOf(id);
         return group.equals("io.quarkus") || group.startsWith("io.quarkus.") || group.equals("org.jboss.shamrock");
+    }
+
+    /// Whether an artifact is versioned with the release, when its version is the release's: Quarkus's own artifacts
+    /// ([#isQuarkusOwn]) but those of the projects released on their own ([#RELEASED_ON_THEIR_OWN]). Only these are
+    /// written [#SAME_AS_RELEASE]: another artifact whose version happens to be the release's keeps its version (the
+    /// Mutiny Vert.x bindings 3.14.0 of Quarkus 3.14.0, Gizmo 1.0.0.Final of Quarkus 1.0.0.Final), so that the site
+    /// does not take it for a Quarkus module.
+    static boolean followsRelease(String id) {
+        return isQuarkusOwn(id) && !RELEASED_ON_THEIR_OWN.contains(groupOf(id));
+    }
+
+    private static String groupOf(String id) {
+        int colon = id.indexOf(':');
+        return colon < 0 ? id : id.substring(0, colon);
     }
 
     /// Each name → its position in the (sorted) set.

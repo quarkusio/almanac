@@ -238,9 +238,22 @@ class HistoryBuilderTest {
                 {"versions":[0],
                  "artifacts":[{"id":"io.smallrye.reactive:smallrye-mutiny-vertx-core","h":[[0,"3.14.0"]]}]}
                 """), data.platform());
-        assertTrue(HistoryBuilder.isQuarkusOwn("io.quarkus.platform:quarkus-bom-quarkus-platform-properties:properties"));
+        assertTrue(HistoryBuilder.isQuarkusOwn(
+                "io.quarkus.platform:quarkus-bom-quarkus-platform-properties:properties"));
         assertTrue(HistoryBuilder.isQuarkusOwn("org.jboss.shamrock:shamrock-core"));
         assertFalse(HistoryBuilder.isQuarkusOwn("io.quarkusio:quarkus-not-ours"));
+
+        // Gizmo is Quarkus's own, but released on its own: its 1.0.0.Final of Quarkus 1.0.0.Final is no module's
+        HistoryBuilder first = new HistoryBuilder();
+        first.add(new HistoryBuilder.Release(bom("1.0.0.Final", "2019-11-25", dep("io.quarkus.gizmo:gizmo",
+                "1.0.0.Final"), dep("io.quarkus:quarkus-core", "1.0.0.Final")), null, null));
+        assertEquals(json("""
+                [{"id":"io.quarkus.gizmo:gizmo","h":[[0,"1.0.0.Final"]]},
+                 {"id":"io.quarkus:quarkus-core","h":[[0,"="]]}]
+                """), first.build(NOW).bom().get("artifacts"));
+        assertTrue(HistoryBuilder.isQuarkusOwn("io.quarkus.gizmo:gizmo"));
+        assertFalse(HistoryBuilder.followsRelease("io.quarkus.gizmo:gizmo"));
+        assertTrue(HistoryBuilder.followsRelease("io.quarkus.arc:arc"));
     }
 
     @Test
