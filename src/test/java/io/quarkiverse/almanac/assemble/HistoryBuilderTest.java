@@ -142,6 +142,20 @@ class HistoryBuilderTest {
     }
 
     @Test
+    void aReleaseTaggedWithoutAGitHubReleaseSaysSo() throws IOException {
+        HistoryBuilder builder = new HistoryBuilder();
+        builder.add(new HistoryBuilder.Release(bom("3.17.0", "2024-11-27", dep("io.quarkus:quarkus-core", "3.17.0")), null,
+                null));
+        builder.add(new HistoryBuilder.Release(bom("3.17.1", "2024-12-04", dep("io.quarkus:quarkus-core", "3.17.1")), null,
+                null));
+        HistoryBuilder.SiteData data = builder.build(NOW);
+        assertFalse(data.versions().get("versions").get(0).has("ghRelease"), "it has one");
+        assertEquals("{\"v\":\"3.17.1\",\"date\":\"2024-12-04\",\"stream\":\"3.17\",\"pre\":false,\"lts\":false,"
+                + "\"config\":false,\"ext\":false,\"classes\":false,\"ghRelease\":false}",
+                data.versions().get("versions").get(1).toString());
+    }
+
+    @Test
     void releasesWithExtensionsButNoConfigAreExtensionVersionsOnly() throws IOException {
         HistoryBuilder builder = new HistoryBuilder();
         builder.add(EXTENSIONS_ONLY);

@@ -27,6 +27,8 @@ const QUARKUS_LOGO = 'https://quarkus.io/assets/images/quarkus_logo_horizontal_r
 /** The Commonhaus Foundation's logo for dark backgrounds, from the same place quarkus.io's footer takes it. */
 const COMMONHAUS_LOGO = 'https://raw.githubusercontent.com/commonhaus/artwork/main/foundation/brand/svg/CF_logo_horizontal_single_reverse.svg';
 const ALMANAC_REPO = 'https://github.com/quarkusio/almanac';
+/** Where every release is tagged, and most have a GitHub release (all but those flagged `ghRelease: false`). */
+const QUARKUS_REPO = 'https://github.com/quarkusio/quarkus';
 /**
  * The oldest stream the site lists by default. The releases of older streams are "old releases": they stay in the
  * data and are listed with the "Show old releases" switch. Raise it as streams age out.
@@ -1294,7 +1296,7 @@ function moduleWord(cmp) {
 
 /** "0.10.0 (f260571)", a link to the commit that a pre-launch release's git tag names. */
 function gitTagLink(git) {
-  return h('a', { href: `https://github.com/quarkusio/quarkus/tree/${git.commit}`, target: '_blank', rel: 'noopener noreferrer', class: 'ext-link' },
+  return h('a', { href: `${QUARKUS_REPO}/tree/${git.commit}`, target: '_blank', rel: 'noopener noreferrer', class: 'ext-link' },
     `${git.tag} (${git.commit.slice(0, 7)})`, icon('external'));
 }
 
@@ -2047,12 +2049,12 @@ function coverageFacts() {
     artsSub.textContent = 'bom.json unavailable';
   });
   const preCount = V.visOff.pre.filter(Boolean).length;
-  const gitCount = V.list.filter((x) => x.git).length;
+  // from the oldest release listed, those listed for reference included
+  const oldest = core.sortVersions([first.v, ...V.reference.map((r) => r.v)])[0];
   return h('section', { class: 'facts', 'aria-labelledby': 'facts-h' },
     h('h2', { class: 'label-h', id: 'facts-h' }, 'Coverage'),
     h('dl', { class: 'facts-grid' },
-      fact(fmt(V.list.length), 'releases', `${versionText(first.v)} to ${versionText(last.v)}${preCount ? `, ${plural(preCount, 'pre-release')} among them` : ''}`
-        + `${gitCount ? `; ${gitCount} pre-launch, never published, with their BOM alone` : ''}`),
+      fact(fmt(V.list.length), 'releases', `${versionText(oldest)} to ${versionText(last.v)}${preCount ? `, ${plural(preCount, 'pre-release')} among them` : ''}`),
       fact(propsN, 'config properties tracked', propsSub),
       fact(artsN, 'managed artifacts tracked', artsSub),
       fact(V.generatedAt ? core.formatDate(V.generatedAt) : '—', 'data generated', null, 'fact--date')));
@@ -4292,7 +4294,7 @@ function referenceItem(r) {
     h('span', { class: 'ver' }, versionText(r.v)),
     dateEl(r.date),
     why,
-    h('a', { href: `https://github.com/quarkusio/quarkus/tree/${r.commit}`, target: '_blank', rel: 'noopener noreferrer', class: 'ext-link', title: `Its git tag, ${r.v}` },
+    h('a', { href: `${QUARKUS_REPO}/tree/${r.commit}`, target: '_blank', rel: 'noopener noreferrer', class: 'ext-link', title: `Its git tag, ${r.v}` },
       'tag', icon('external'))));
 }
 
@@ -4343,6 +4345,11 @@ async function renderVersion(r) {
   row('Released', dateEl(x.date) ?? h('em', { class: 'none' }, 'unknown'),
     x.git ? h('span', { class: 'kv-sub' }, 'The day of its tagged commit: it was never published.') : null);
   row('Stream', h('span', { class: 'mono' }, x.stream || core.stream(x.v)), x.lts ? frag(' ', chip('lts', 'LTS')) : null);
+  // on GitHub: its release, which all but a few have, and the repository at its tag, which every release has
+  const external = (href, text) => h('a', { href, target: '_blank', rel: 'noopener noreferrer', class: 'ext-link' }, text, icon('external'));
+  row('GitHub', x.ghRelease === false ? null : frag(external(`${QUARKUS_REPO}/releases/tag/${x.v}`, 'Release notes'), ' · '),
+    external(`${QUARKUS_REPO}/tree/${x.v}`, `Repository at tag ${x.v}`),
+    x.ghRelease === false ? h('span', { class: 'kv-sub' }, 'Tagged without a GitHub release.') : null);
   // a pre-launch release: its BOM from the poms at its git tag
   if (x.git) row('BOM', h('span', { class: 'mono' }, x.git.bom), h('span', { class: 'kv-sub' }, 'From the poms at git tag ', gitTagLink(x.git), '.'));
   // the release's config, as it was extracted; in a data set where it has none of its own, whose its comparisons use

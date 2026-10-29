@@ -65,7 +65,8 @@ import java.util.stream.Stream;
 /// classes per file; see [#apiShards]), so that a page loads the classes of the lines it shows only, and the members of
 /// the classes it shows.
 ///
-/// A release never published on Maven Central has `git` (`tag`, `commit`, `bom`) in its `versions.json` row: its BOM
+/// A release whose git tag has no GitHub release has `ghRelease: false` in its `versions.json` row
+/// ([#WITHOUT_GITHUB_RELEASE]). A release never published on Maven Central has `git` (`tag`, `commit`, `bom`): its BOM
 /// comes from the poms at its git tag ([GitReleases]). When there is one, `versions.json` also has `reference`, the
 /// pre-launch releases with nothing for the dataset (`v`, `date`, `stream`, `commit`, `why`: `no-bom` or `canceled`),
 /// which the Releases page lists for reference.
@@ -205,6 +206,11 @@ public final class HistoryBuilder {
     private static final Map<String, String> PHASE_CODES = Map.of(
             "BUILD_TIME", "B", "BUILD_AND_RUN_TIME_FIXED", "F", "RUN_TIME", "R", "BOOTSTRAP", "S");
 
+    /// The releases whose git tag has no GitHub release, flagged `ghRelease: false` in `versions.json`. Every other
+    /// release has one: the new-releases workflow adds only releases published on GitHub. Update it if a release is
+    /// ever added by hand without one.
+    static final Set<String> WITHOUT_GITHUB_RELEASE = Set.of("3.17.1", "3.34.4");
+
     private final ArrayNode versionRows = NODES.arrayNode();
     /// Whether a release never published on Maven Central was added: the site then covers the pre-launch releases.
     private boolean preLaunch;
@@ -343,6 +349,9 @@ public final class HistoryBuilder {
         row.put("classes", release.hasClasses());
         if (release.hasApi()) {
             row.put("api", true);
+        }
+        if (WITHOUT_GITHUB_RELEASE.contains(bom.version())) {
+            row.put("ghRelease", false);
         }
         if (bom.git() != null) {
             // never published on Maven Central: the BOM comes from the poms at the release's git tag
