@@ -668,7 +668,7 @@ export function isQuarkusGroup(group) {
   return group === 'io.quarkus' || group.startsWith('io.quarkus.') || group === 'org.jboss.shamrock';
 }
 
-/** Rows of a BOM diff by kind, with `changed` for those of neither 'added' nor 'removed'. */
+/** Rows (or groups) of a BOM diff by kind, with `changed` for those of neither 'added' nor 'removed'. */
 function bomCounts(rows) {
   const counts = { changed: 0 };
   for (const kind of BOM_KIND_ORDER) counts[kind] = 0;
@@ -682,7 +682,9 @@ function bomCounts(rows) {
 /**
  * BOM diff between releases `a` and `b` (indices into versions). `"="` resolves to the release version;
  * artifacts that are `"="` in both releases are only counted (`modules`), not listed. Each row says whether it is
- * Quarkus's own (`own`, isQuarkusGroup); `counts` are of all rows, `ownCounts` and `thirdPartyCounts` of each kind.
+ * Quarkus's own (`own`, isQuarkusGroup); `counts` are of all rows, `ownCounts` and `thirdPartyCounts` of each kind,
+ * and `groupCounts` and `thirdPartyGroupCounts` count the groups (groupBomRows) the same way: one per groupId and
+ * version change, as the Dependencies section lists them.
  */
 export function diffBom(bom, versions, a, b) {
   const va = versions[a].v;
@@ -713,9 +715,11 @@ export function diffBom(bom, versions, a, b) {
     rows.push({ id: art.id, group, artifact, extra, from, to, kind, follows: ra === '=' || rb === '=', own: isQuarkusGroup(group) });
   }
   rows.sort((x, y) => (x.id < y.id ? -1 : x.id > y.id ? 1 : 0));
+  const groups = groupBomRows(rows);
   return {
-    a, b, from: va, to: vb, modules, unchanged, rows, groups: groupBomRows(rows),
+    a, b, from: va, to: vb, modules, unchanged, rows, groups,
     counts: bomCounts(rows), ownCounts: bomCounts(rows.filter((r) => r.own)), thirdPartyCounts: bomCounts(rows.filter((r) => !r.own)),
+    groupCounts: bomCounts(groups), thirdPartyGroupCounts: bomCounts(groups.filter((g) => !g.own)),
   };
 }
 

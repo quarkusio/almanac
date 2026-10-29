@@ -459,6 +459,13 @@ describe('BOM diff', () => {
     assert.deepEqual(d.groups.filter((g) => g.own).map((g) => g.group), ['io.quarkus', 'io.quarkus.gizmo', 'io.quarkus', 'io.quarkus']);
     assert.ok(d.groups.every((g) => g.own === isQuarkusGroup(g.group)));
   });
+  test('groups are counted too, one per groupId and version change', () => {
+    const pick = (c) => ({ changed: c.changed, added: c.added, removed: c.removed, downgrade: c.downgrade, major: c.major, minor: c.minor, patch: c.patch, other: c.other });
+    // netty-common and netty-buffer move together: one group, two artifacts; netty-tcnative is a version change of its own
+    assert.deepEqual(pick(d.groupCounts), { changed: 6, added: 1, removed: 1, downgrade: 1, major: 1, minor: 1, patch: 2, other: 1 });
+    assert.deepEqual(pick(d.thirdPartyGroupCounts), { changed: 4, added: 0, removed: 0, downgrade: 1, major: 1, minor: 0, patch: 2, other: 0 });
+    assert.equal(d.thirdPartyCounts.patch, 3, 'by artifact');
+  });
   test('groups share (groupId, from, to) and are ordered by severity', () => {
     const netty = d.groups.filter((g) => g.group === 'io.netty');
     assert.equal(netty.length, 2);

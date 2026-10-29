@@ -2372,17 +2372,21 @@ function summaryLedger(cmp, data) {
     cells.push(cell('Configuration', 'sec-config', [], data.config ? gapText(cmp, 'config') ?? 'No config data for this pair of releases.' : 'config.json is unavailable.'));
   }
   if (cmp.bom) {
-    // the numbers count the third-party dependencies; Quarkus's own artifacts (core.isQuarkusGroup) are a line apart
+    // the numbers count the third-party dependency changes as the section lists them, one per groupId and version
+    // change, since one upgrade moves many artifacts; Quarkus's own artifacts (core.isQuarkusGroup) are a line apart,
+    // counted by artifact, since all the modules a release adds share one groupId and version
     const d = cmp.bom;
-    const t = d.thirdPartyCounts;
+    const t = d.thirdPartyGroupCounts;
     const o = d.ownCounts;
     const kinds = ['downgrade', 'major', 'minor', 'patch', 'other'].filter((k) => t[k]).map((k) => `${fmt(t[k])} ${KIND_LABEL[k]}`);
-    const third = kinds.length ? `third-party: ${kinds.join(' · ')}` : t.added || t.removed ? 'third-party dependencies' : 'no third-party change';
-    const own = [d.modules ? `${plural(d.modules, 'module')} versioned with the release` : null,
-      o.changed ? `${fmt(o.changed)} changed` : null, o.added ? `${fmt(o.added)} added` : null, o.removed ? `${fmt(o.removed)} removed` : null].filter(Boolean);
+    const third = !(t.changed || t.added || t.removed) ? 'no third-party change'
+      : `third-party, by groupId${kinds.length ? `: ${kinds.join(' · ')}, in ${plural(d.thirdPartyCounts.changed, 'artifact')}` : ''}`;
+    const others = [['changed', o.changed], ['added', o.added], ['removed', o.removed]].filter(([, n]) => n)
+      .map(([label, n], k) => (k ? `${fmt(n)} ${label}` : `${plural(n, 'artifact')} ${label}`));
+    const own = [d.modules ? `${plural(d.modules, 'module')} versioned with the release` : null, others.length ? others.join(', ') : null].filter(Boolean);
     cells.push(cell('Dependencies', 'sec-deps', [[t.changed, 'changed', 'chg'], [t.added, 'added', 'add'], [t.removed, 'removed', 'rem']], [
       cmp.platform?.used ? `Platform BOM; ${third}` : `${third.charAt(0).toUpperCase()}${third.slice(1)}`,
-      own.length ? h('span', { class: 'muted' }, `${moduleWord(cmp)}: ${own.join(', ')}`) : null]));
+      own.length ? h('span', { class: 'muted' }, `${moduleWord(cmp)}: ${own.join('; ')}`) : null]));
   } else {
     cells.push(cell('Dependencies', 'sec-deps', [], 'bom.json is unavailable.'));
   }
@@ -2769,11 +2773,11 @@ function depsSection(cmp, data) {
   const state = { tags: new Set(), text: '' };
   const status = h('p', { class: 'filter-status', 'aria-live': 'polite' });
   // the project's own artifacts first, with the modules versioned with the release, then the third-party ones
+  // each counted as the filter chips count: by entry of the list, a groupId and its version change
   const block = (title, lead, groups) => {
     const n = h('span', { class: 'eblock-n' });
     const list = h('div', { class: 'dgroups' });
-    const total = groups.reduce((sum, g) => sum + g.items.length, 0);
-    return { el: h('div', { class: 'eblock dblock' }, h('h3', { class: 'eblock-title' }, title, n), lead, list), n, list, groups, total };
+    return { el: h('div', { class: 'eblock dblock' }, h('h3', { class: 'eblock-title' }, title, n), lead, list), n, list, groups, total: groups.length };
   };
   const own = block(word, modulesLine, d.groups.filter((g) => g.own));
   const third = block('Third-party', null, d.groups.filter((g) => !g.own));
@@ -2798,7 +2802,7 @@ function depsSection(cmp, data) {
         k += items.length;
       }
       n += k;
-      b.n.textContent = !b.total ? '' : k === b.total ? fmt(b.total) : `${fmt(k)} of ${fmt(b.total)}`;
+      b.n.textContent = !b.total ? '' : shown.length === b.total ? fmt(b.total) : `${fmt(shown.length)} of ${fmt(b.total)}`;
       // a filter shows the blocks it matches in; without one, the own block shows with modules alone too
       b.el.hidden = filtering ? !shown.length : b === own && !d.modules && !b.total;
       if (shown.length) renderDepGroups(b.list, shown);
@@ -2810,7 +2814,7 @@ function depsSection(cmp, data) {
   };
   sec.append(
     h('div', { class: 'toolbar' },
-      filterChips(BOM_CHIPS, d.counts, state.tags, update, 'Show only these kinds of dependency change'),
+      filterChips(BOM_CHIPS, d.groupCounts, state.tags, update, 'Show only these kinds of dependency change'),
       textFilter('Filter by groupId, artifactId or version', (v) => {
         state.text = v;
         update();
