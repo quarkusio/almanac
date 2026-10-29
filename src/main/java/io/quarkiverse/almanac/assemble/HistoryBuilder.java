@@ -67,9 +67,9 @@ import java.util.stream.Stream;
 ///
 /// A release whose git tag has no GitHub release has `ghRelease: false` in its `versions.json` row
 /// ([#WITHOUT_GITHUB_RELEASE]). A release never published on Maven Central has `git` (`tag`, `commit`, `bom`): its BOM
-/// comes from the poms at its git tag ([GitReleases]). When there is one, `versions.json` also has `reference`, the
-/// pre-launch releases with nothing for the dataset (`v`, `date`, `stream`, `commit`, `why`: `no-bom` or `canceled`),
-/// which the Releases page lists for reference.
+/// comes from the poms at its git tag ([GitReleases]). `versions.json` then also has `reference`, the pre-launch
+/// releases with nothing for the dataset (`v`, `date`, `stream`, `commit`, `why`: `no-bom` or `canceled`) whose next
+/// release from a git tag was added, which the Releases page lists for reference.
 ///
 /// Releases are [added][#add] in ascending version order, then [#build] produces the documents.
 /// Before building config histories, each snapshot is normalised by [unnamed-key folding][#foldUnnamedKeys].
@@ -212,8 +212,9 @@ public final class HistoryBuilder {
     static final Set<String> WITHOUT_GITHUB_RELEASE = Set.of("3.17.1", "3.34.4");
 
     private final ArrayNode versionRows = NODES.arrayNode();
-    /// Whether a release never published on Maven Central was added: the site then covers the pre-launch releases.
-    private boolean preLaunch;
+    /// The releases never published on Maven Central that were added: the pre-launch releases next to them are listed
+    /// for reference.
+    private final Set<String> preLaunch = new HashSet<>();
     private final ChangePoints bomHistory = new ChangePoints();
     private final ChangePoints configHistory = new ChangePoints();
     private final ChangePoints extensionHistory = new ChangePoints();
@@ -356,7 +357,7 @@ public final class HistoryBuilder {
         if (bom.git() != null) {
             // never published on Maven Central: the BOM comes from the poms at the release's git tag
             row.putObject("git").put("tag", bom.git().tag()).put("commit", bom.git().commit()).put("bom", bom.git().bom());
-            preLaunch = true;
+            preLaunch.add(bom.version());
         }
 
         Map<String, JsonNode> managed = new HashMap<>();
@@ -471,10 +472,14 @@ public final class HistoryBuilder {
         ArrayNode lts = versions.putArray("lts");
         VersionSelector.LTS_STREAMS.forEach(lts::add);
         versions.set("versions", versionRows.deepCopy());
-        if (preLaunch) {
-            // the pre-launch releases with nothing for the dataset, which the Releases page lists for reference
+        // the pre-launch releases with nothing for the dataset, which the Releases page lists for reference next to the
+        // release from its git tag that came after each
+        List<GitReleases.Reference> references = GitReleases.references().stream()
+                .filter(r -> preLaunch.contains(r.follower()))
+                .toList();
+        if (!references.isEmpty()) {
             ArrayNode reference = versions.putArray("reference");
-            for (GitReleases.Reference r : GitReleases.references()) {
+            for (GitReleases.Reference r : references) {
                 reference.addObject().put("v", r.version()).put("date", r.date())
                         .put("stream", QuarkusVersion.parse(r.version()).stream()).put("commit", r.commit())
                         .put("why", r.why());

@@ -124,21 +124,34 @@ class HistoryBuilderTest {
     @Test
     void aReleaseFromItsGitTagSaysSoAndThePreLaunchReleasesAreListedForReference() throws IOException {
         HistoryBuilder builder = new HistoryBuilder();
-        builder.add(new HistoryBuilder.Release(new BomSnapshot("0.10.0", "2019-03-01",
-                new GitSource("0.10.0", "f26057191b8217f43b632e2eb5b3541821cf242d", "io.quarkus:quarkus-bom"),
-                List.of(dep("io.quarkus:quarkus-arc-deployment", "0.10.0"))), null, null));
+        builder.add(gitRelease("0.10.0", "f26057191b8217f43b632e2eb5b3541821cf242d", "io.quarkus:quarkus-bom"));
+        RELEASES.forEach(builder::add);
+        HistoryBuilder.SiteData alone = builder.build(NOW);
+        assertFalse(alone.versions().has("reference"), "without 0.2.0 and 0.9.1, which they are listed next to");
+
+        builder = new HistoryBuilder();
+        builder.add(gitRelease("0.2.0", "97a42b3fc1fd62b8e7a8ba61b9016324e9bcd20c", "org.jboss.shamrock:shamrock-bom"));
+        builder.add(gitRelease("0.9.1", "66ab40ef2921a6dd839ef7d815a3c57c8aeecadd", "org.jboss.shamrock:shamrock-bom"));
+        builder.add(gitRelease("0.10.0", "f26057191b8217f43b632e2eb5b3541821cf242d", "io.quarkus:quarkus-bom"));
         RELEASES.forEach(builder::add);
         HistoryBuilder.SiteData data = builder.build(NOW);
 
         assertEquals("{\"v\":\"0.10.0\",\"date\":\"2019-03-01\",\"stream\":\"0.10\",\"pre\":false,\"lts\":false,"
                         + "\"config\":false,\"ext\":false,\"classes\":false,\"git\":{\"tag\":\"0.10.0\",\"commit\":"
                         + "\"f26057191b8217f43b632e2eb5b3541821cf242d\",\"bom\":\"io.quarkus:quarkus-bom\"}}",
-                data.versions().get("versions").get(0).toString());
+                data.versions().get("versions").get(2).toString());
         assertEquals("{\"v\":\"0.9.0\",\"date\":\"2019-02-14\",\"stream\":\"0.9\",\"commit\":"
                         + "\"01ddfa0e920a39b7ddb541408ff5341405c5fe00\",\"why\":\"canceled\"}",
                 data.versions().get("reference").get(2).toString());
         assertEquals(3, data.versions().get("reference").size());
         assertFalse(build().versions().has("reference"), "listed only next to releases from git tags");
+    }
+
+    /// A pre-launch release whose BOM comes from its git tag, managing one module.
+    private static HistoryBuilder.Release gitRelease(String version, String commit, String bom) {
+        String module = bom.substring(0, bom.indexOf(':')) + ":module-deployment";
+        return new HistoryBuilder.Release(new BomSnapshot(version, "2019-03-01", new GitSource(version, commit, bom),
+                List.of(dep(module, version))), null, null);
     }
 
     @Test

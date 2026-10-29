@@ -1281,9 +1281,9 @@ function versionChips(x) {
   return [x.lts ? chip('lts', 'LTS', 'Long-term support stream') : null, preChip(x), gitChip(x)];
 }
 
-/** "never published" for a pre-launch release, whose BOM comes from the poms at its git tag; else null. */
+/** "not on Maven Central" for a pre-launch release, whose BOM comes from the poms at its git tag; else null. */
 function gitChip(x) {
-  return x.git ? chip('neutral', 'never published', `A pre-launch release, never published on Maven Central: its BOM, ${x.git.bom}, comes from the poms at its git tag ${x.git.tag}`) : null;
+  return x.git ? chip('neutral', 'not on Maven Central', `A pre-launch release, never published on Maven Central: its BOM, ${x.git.bom}, comes from the poms at its git tag ${x.git.tag}`) : null;
 }
 
 /** The BOM of a release: `io.quarkus:quarkus-bom`, or the one at the git tag of a pre-launch release. */
@@ -1635,7 +1635,7 @@ function versionSelect(selected) {
       const og = h('optgroup', { label: optgroupLabel(g) });
       for (let j = items.length - 1; j >= 0; j--) {
         const x = V.list[items[j]];
-        og.append(h('option', { value: String(items[j]) }, `${versionText(x.v)}${core.isPreRelease(x) ? ' (pre-release)' : ''}${x.git ? ' (never published)' : ''}`));
+        og.append(h('option', { value: String(items[j]) }, `${versionText(x.v)}${core.isPreRelease(x) ? ' (pre-release)' : ''}${x.git ? ' (not on Maven Central)' : ''}`));
       }
       f.append(og);
     }
@@ -1657,7 +1657,7 @@ function pickerField(label, sel) {
   const meta = h('span', { class: 'picker-date', 'aria-hidden': 'true' });
   const sync = () => {
     const x = store.V.list[Number(sel.value)];
-    meta.textContent = x ? [x.date ? core.formatDate(x.date) : null, x.lts ? 'LTS' : null, preLabel(x), x.git ? 'never published' : null].filter(Boolean).join(' · ') : '';
+    meta.textContent = x ? [x.date ? core.formatDate(x.date) : null, x.lts ? 'LTS' : null, preLabel(x), x.git ? 'not on Maven Central' : null].filter(Boolean).join(' · ') : '';
   };
   sel.addEventListener('change', sync);
   sync();
@@ -1712,7 +1712,7 @@ function resultSub(it) {
     return parts.filter(Boolean).join(' · ');
   }
   if (it.type === 'artifact') {
-    if (!it.current) return it.preLaunch ? 'managed only by pre-launch releases, never published' : 'no longer managed by quarkus-bom';
+    if (!it.current) return it.preLaunch ? 'managed only by pre-launch releases, not on Maven Central' : 'no longer managed by quarkus-bom';
     return it.follows ? `${versionText(it.value)} (versioned with Quarkus)` : `managed at ${it.value}`;
   }
   if (it.type === 'class') {
@@ -2121,8 +2121,10 @@ async function renderCompare(r) {
   const canonical = { page: 'compare', from: versionText(V.list[ia].v), to: versionText(V.list[ib].v) };
   if (hrefFor(canonical) !== hrefFor(r)) canonicalize(canonical);
   // the classes files of the API section start loading with the rest, though the page does not wait for them
-  const classLines = linesSpanning(core.classLinesOf(V.list, [ia, ib]));
-  if (classLines.length && ia !== ib && V.apiVis.length) loadClasses(classLines).catch(() => {});
+  // the files of their API data, as the API section loads them: none when a side has none (a pre-launch release)
+  const aa = core.apiVersionFor(ia, V.list, V.apiVis);
+  const ab = core.apiVersionFor(ib, V.list, V.apiVis);
+  if (aa != null && ab != null && aa !== ab) loadClasses(linesSpanning(core.classLinesOf(V.list, [aa, ab]))).catch(() => {});
   const [data, platform] = await Promise.all([loadSettled(['bom', 'config', 'extensions']), loadOptional('platform')]);
   data.platform = platform;
   const cmp = comparison(ia, ib, data);
@@ -2295,12 +2297,12 @@ function gapText(cmp, kind) {
   if (s.b == null && cmp.ib !== cmp.ia) missing.push(cmp.ib);
   if (!missing.length) return null;
   const names = (list) => list.map((i) => versionText(V.list[i].v)).join(' and ');
-  // a pre-launch release has its BOM alone: it was never published
+  // a pre-launch release has its BOM alone: it was never published on Maven Central
   const unpublished = missing.filter((i) => V.list[i].git);
   const pre = missing.filter((i) => !V.list[i].git && core.isPreRelease(V.list[i]));
   const fin = missing.filter((i) => !V.list[i].git && !core.isPreRelease(V.list[i]));
   const parts = [];
-  if (unpublished.length) parts.push(`no ${s.what} for ${names(unpublished)}, never published`);
+  if (unpublished.length) parts.push(`no ${s.what} for ${names(unpublished)}, not on Maven Central`);
   if (pre.length) parts.push(`no ${s.what} for ${names(pre)}`);
   if (fin.length) {
     const first = s.all.length ? versionText(V.list[s.all[0]].v) : null;
@@ -2309,6 +2311,8 @@ function gapText(cmp, kind) {
   const text = parts.join(', and ');
   const sentence = `${text.charAt(0).toUpperCase()}${text.slice(1)}`;
   if (kind === 'api') return `${sentence}.`;
+  // an extension gap next to a config comparison (0.11 to 0.26 have config and API data, no extension data)
+  if (kind !== 'config' && cmp.config) return `${sentence}.`;
   // config needs extensions, so only a config gap can leave an extension diff to show
   const shown = kind === 'config' && cmp.ext ? 'dependency and extension changes only' : 'dependency changes only';
   return `${sentence}: ${shown}.`;
@@ -2356,7 +2360,7 @@ function summaryLedger(cmp, data) {
     const b = cmp.bom.counts;
     const kinds = ['downgrade', 'major', 'minor', 'patch', 'other'].filter((k) => b[k]).map((k) => `${fmt(b[k])} ${KIND_LABEL[k]}`);
     cells.push(cell('Dependencies', 'sec-deps', [[b.changed, 'changed', 'chg'], [b.added, 'added', 'add'], [b.removed, 'removed', 'rem']],
-      [cmp.platform?.used ? 'Platform BOM' : null, kinds.length ? kinds.join(' · ') : null, cmp.bom.modules ? `plus ${fmt(cmp.bom.modules)} ${moduleWord(cmp)} modules` : null].filter(Boolean).join('; ')));
+      [cmp.platform?.used ? 'Platform BOM' : null, kinds.length ? kinds.join(' · ') : null, cmp.bom.modules ? `plus ${plural(cmp.bom.modules, `${moduleWord(cmp)} module`)}` : null].filter(Boolean).join('; ')));
   } else {
     cells.push(cell('Dependencies', 'sec-deps', [], 'bom.json is unavailable.'));
   }
@@ -2735,9 +2739,11 @@ function depsSection(cmp, data) {
   if (d.modules) {
     sec.append(h('p', { class: 'modules-line' },
       h('span', { class: 'modules-n' }, fmt(d.modules)),
-      h('span', null, ` ${moduleWord(cmp)} modules `), h('span', { class: 'ver' }, versionText(cmp.A.v)), h('span', { class: 'arrow', 'aria-hidden': 'true' }, ' → '), h('span', { class: 'sr-only' }, ' to '),
+      h('span', null, ` ${moduleWord(cmp)} module${d.modules === 1 ? '' : 's'} `), h('span', { class: 'ver' }, versionText(cmp.A.v)), h('span', { class: 'arrow', 'aria-hidden': 'true' }, ' → '), h('span', { class: 'sr-only' }, ' to '),
       h('span', { class: 'ver' }, versionText(cmp.B.v)), '.',
-      h('span', { class: 'muted' }, ` These ${bomIdOf(cmp.A).split(':')[0]} artifacts follow the platform version in both releases and are not listed below.`)));
+      h('span', { class: 'muted' }, d.modules === 1
+        ? ` This ${bomIdOf(cmp.A).split(':')[0]} artifact follows the platform version in both releases and is not listed below.`
+        : ` These ${bomIdOf(cmp.A).split(':')[0]} artifacts follow the platform version in both releases and are not listed below.`)));
   }
   if (!d.groups.length) return add(sec, [emptyNote('No other managed dependency changed version.')]);
   const state = { tags: new Set(), text: '' };
@@ -4248,6 +4254,8 @@ async function renderVersions() {
   const ltsCount = shownStreams.filter((g) => g.lts).length;
   // the pre-launch releases with no data, listed for reference in their (old) streams when old releases are shown
   const references = V.reference.filter((r) => prefs.showOld || core.compareVersions(r.stream, OLDEST_SHOWN_STREAM) >= 0);
+  // those in a stream with no release shown, which the stream count leaves out
+  const alone = references.filter((r) => !shownStreams.some((g) => g.stream === r.stream)).length;
   const tbody = h('tbody');
   for (const g of V.streams) {
     const items = g.items.filter((i) => vis.visible[i]);
@@ -4275,7 +4283,8 @@ async function renderVersions() {
       h('h1', { class: 'page-title', tabindex: '-1' }, 'All releases'),
       h('p', { class: 'lede' }, `${plural(vis.indices.length, 'release')} in ${plural(shownStreams.length, 'stream')}, newest first`,
         hiddenNow.length ? `, ${hiddenCount(hiddenNow)} hidden` : null, `. ${plural(ltsCount, 'stream')} marked LTS.`,
-        references.length ? ` ${plural(references.length, 'other pre-launch release')}, with no data, ${references.length === 1 ? 'is' : 'are'} listed for reference.` : null),
+        references.length ? ` ${plural(references.length, 'other pre-launch release')}, with no data, ${references.length === 1 ? 'is' : 'are'} listed for reference${
+          alone ? `, ${alone === references.length ? 'in streams of their own' : `${fmt(alone)} of them in streams of their own`}` : ''}.` : null),
       tools),
     h('div', { class: 'table-scroll' },
       h('table', { class: 'tbl tbl-streams' },
@@ -4341,7 +4350,7 @@ async function renderVersion(r) {
   const kv = h('dl', { class: 'kv' });
   const row = (k, ...v) => kv.append(h('dt', null, k), h('dd', null, v));
   row('Released', dateEl(x.date) ?? h('em', { class: 'none' }, 'unknown'),
-    x.git ? h('span', { class: 'kv-sub' }, 'The day of its tagged commit: it was never published.') : null);
+    x.git ? h('span', { class: 'kv-sub' }, 'The day of its tagged commit: it was never published on Maven Central.') : null);
   row('Stream', h('span', { class: 'mono' }, x.stream || core.stream(x.v)), x.lts ? frag(' ', chip('lts', 'LTS')) : null);
   // on GitHub: its release, which all but a few have, and the repository at its tag, which every release has
   const external = (href, text) => h('a', { href, target: '_blank', rel: 'noopener noreferrer', class: 'ext-link' }, text, icon('external'));
@@ -4363,7 +4372,7 @@ async function renderVersion(r) {
     const shown = ev == null ? 'dependency changes only' : 'dependency and extension changes only';
     row('Config', isPre
       ? frag(h('em', { class: 'none' }, 'none'), h('span', { class: 'kv-sub' }, `Pre-releases are compared only with their own config data, so comparisons with this release show ${shown}.`))
-      : h('em', { class: 'none' }, x.git ? 'none: never published' : 'none: no config data for this release'));
+      : h('em', { class: 'none' }, x.git ? 'none: not on Maven Central' : 'none: no config data for this release'));
   }
   const managedN = h('span', null, '…');
   const propsN = h('span', null, '…');
@@ -4384,7 +4393,7 @@ async function renderVersion(r) {
     managedN.textContent = 'bom.json unavailable';
   });
   if (cv == null) {
-    propsN.textContent = x.git ? 'none: never published' : 'no config data';
+    propsN.textContent = x.git ? 'none: not on Maven Central' : 'no config data';
   } else {
     loadFile('config').then((c) => {
       propsN.textContent = `${fmt(c.raw.props.filter((p) => core.stateAt(p.h, cv) != null).length)}${cv === i ? '' : `, at ${versionText(V.list[cv].v)}`}`;
@@ -4393,7 +4402,7 @@ async function renderVersion(r) {
     });
   }
   if (ev == null) {
-    extsN.textContent = x.git ? 'none: never published' : 'no extension data';
+    extsN.textContent = x.git ? 'none: not on Maven Central' : 'no extension data';
   } else {
     loadFile('extensions').then((e) => {
       extsN.textContent = `${fmt(e.raw.exts.filter((xx) => core.stateAt(xx.h, ev) != null).length)}${ev === i ? '' : `, at ${versionText(V.list[ev].v)}`}`;
@@ -4410,7 +4419,7 @@ async function renderVersion(r) {
     const depN = h('span', null, '…');
     kv.append(h('dt', null, 'Deprecated API'), h('dd', null, depN));
     if (av == null) {
-      depN.replaceChildren(h('em', { class: 'none' }, x.git ? 'none: never published' : 'no API data for this release'));
+      depN.replaceChildren(h('em', { class: 'none' }, x.git ? 'none: not on Maven Central' : 'no API data for this release'));
     } else {
       // the lines that the API section loads too, which have this release's own
       loadClasses(avBase == null ? apiLinesFor(av) : linesSpanning(core.classLinesOf(V.list, [avBase, av]))).then((classes) => {

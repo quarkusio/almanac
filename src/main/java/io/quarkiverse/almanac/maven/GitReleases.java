@@ -71,11 +71,12 @@ public final class GitReleases {
     /// A pre-launch release with nothing for the dataset, which the site lists for reference only: one that had no BOM
     /// (0.0.1 and 0.1.0) or that was canceled during its release (0.9.0, whose 0.9.1 followed the same day).
     ///
-    /// @param version its version, which is also its git tag
-    /// @param commit  the commit the tag names
-    /// @param date    the commit's UTC day
-    /// @param why     [#NO_BOM] or [#CANCELED]
-    public record Reference(String version, String commit, String date, String why) {}
+    /// @param version  its version, which is also its git tag
+    /// @param commit   the commit the tag names
+    /// @param date     the commit's UTC day
+    /// @param why      [#NO_BOM] or [#CANCELED]
+    /// @param follower the release from its git tag that came next: the site lists this one only next to it
+    public record Reference(String version, String commit, String date, String why, String follower) {}
 
     /// Why a [Reference] has nothing for the dataset: the release had no BOM.
     public static final String NO_BOM = "no-bom";
@@ -83,9 +84,9 @@ public final class GitReleases {
     public static final String CANCELED = "canceled";
 
     private static final List<Reference> REFERENCES = List.of(
-            new Reference("0.0.1", "1200367b8ddbe5605d8219c4994205f6c1d7af50", "2018-12-12", NO_BOM),
-            new Reference("0.1.0", "33dcbe65ecda2cba507d136bed0420e08fe1f42b", "2018-12-13", NO_BOM),
-            new Reference("0.9.0", "01ddfa0e920a39b7ddb541408ff5341405c5fe00", "2019-02-14", CANCELED));
+            new Reference("0.0.1", "1200367b8ddbe5605d8219c4994205f6c1d7af50", "2018-12-12", NO_BOM, "0.2.0"),
+            new Reference("0.1.0", "33dcbe65ecda2cba507d136bed0420e08fe1f42b", "2018-12-13", NO_BOM, "0.2.0"),
+            new Reference("0.9.0", "01ddfa0e920a39b7ddb541408ff5341405c5fe00", "2019-02-14", CANCELED, "0.9.1"));
 
     private GitReleases() {
     }

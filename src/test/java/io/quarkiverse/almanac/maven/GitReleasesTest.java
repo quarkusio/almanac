@@ -64,6 +64,10 @@ class GitReleasesTest {
         for (GitReleases.Reference reference : GitReleases.references()) {
             assertTrue(GitReleases.source(reference.version()).isEmpty(), reference.version());
             assertTrue(reference.commit().matches("[0-9a-f]{40}"), reference.version());
+            // listed next to the release from its git tag that came next
+            assertTrue(GitReleases.source(reference.follower()).isPresent(), reference.version());
         }
+        assertEquals(List.of("0.2.0", "0.2.0", "0.9.1"),
+                GitReleases.references().stream().map(GitReleases.Reference::follower).toList());
     }
 }

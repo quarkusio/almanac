@@ -108,7 +108,7 @@ export function stream(v) {
   return parseVersion(v).stream;
 }
 
-/** Display form: the version as published, a `.Final` suffix kept (`1.0.0.Final`, `3.2.12`). */
+/** Display form: the version as published, a `.Final` suffix kept (`3.2.12.Final`, `3.8.6`). */
 export function versionText(v) {
   return String(v ?? '');
 }

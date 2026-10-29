@@ -54,9 +54,11 @@ java -jar target/quarkus-almanac.jar assemble --offline --pre-releases all
 Then commit `dataset/` and `site/data/`; the workflow adds the release's platform BOM when it comes out. `--help` lists
 the commands, and `<command> --help` their options (`dataset --help` its own commands).
 
-The pre-launch releases are in the dataset already. Their BOMs are resolved again, without Maven Central for anything but
-the `jboss-parent` poms, with `bom --versions 0.2.0,0.3.0,0.4.0,0.5.0,0.6.0,0.7.0,0.8.0,0.9.1,0.10.0 --force` and
-`dataset import --kinds bom` for the same versions; `config`, `classes` and `extensions` leave them out.
+The pre-launch releases are in the dataset already. Their BOMs are resolved again with
+`bom --versions 0.2.0,0.3.0,0.4.0,0.5.0,0.6.0,0.7.0,0.8.0,0.9.1,0.10.0 --force`, which asks Maven Central for the
+release list (`maven-metadata.xml`, unless the cached copy is under 6 hours old) and the `jboss-parent` poms only, and
+for nothing with `--offline` once those poms are in `work/cache`. `dataset import --kinds bom` for the same versions
+then takes them, with `--force` if one came out different; `config`, `classes` and `extensions` leave them out.
 
 ## Limitations
 

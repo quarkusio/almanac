@@ -15,6 +15,7 @@ import java.io.IOException;
 import java.nio.file.Path;
 import java.util.Collection;
 import java.util.List;
+import java.util.TreeSet;
 
 /// What a command works with: the repository (cached under `work/cache`), `work/snapshots` and the committed dataset
 /// (`--dataset`), which snapshot reads fall back to.
@@ -104,7 +105,16 @@ final class Workspace implements AutoCloseable {
     /// selection among the given versions.
     List<QuarkusVersion> selectForSite(Collection<String> withBom) throws IOException {
         try {
-            return select("all");
+            List<QuarkusVersion> all = select("all");
+            // a release from its git tag is selected by name only until the dataset lists it: with a BOM in the work
+            // folder alone (--include-work), it is part of the site too
+            List<String> git = withBom.stream().filter(version -> GitReleases.source(version).isPresent()).toList();
+            if (git.isEmpty()) {
+                return all;
+            }
+            TreeSet<QuarkusVersion> union = new TreeSet<>(all);
+            union.addAll(new VersionSelector(git).all(since, preReleases));
+            return List.copyOf(union);
         } catch (IOException e) {
             Log.warn("assemble: cannot read the release list (%s); selecting among the releases with BOM data",
                     e.getMessage());

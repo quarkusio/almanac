@@ -231,10 +231,11 @@ public final class DatasetFormat {
 
 
                 Release data of Quarkus, extracted from Maven Central by `quarkus-almanac` and committed so that no
-                published (immutable) release is ever downloaded again. The pre-launch releases of December 2018 to
-                March 2019, never published there, have their BOM alone, read from the poms at their git tag. Written
-                by the `quarkus-almanac dataset` commands (`import`, `remove`, `refresh-releases`) and by `all`; do not
-                edit by hand. `quarkus-almanac dataset verify` checks it.
+                published (immutable) release is ever downloaded again. The pre-launch releases 0.2.0 to 0.10.0
+                (December 2018 to March 2019), never published there, have their BOM alone, read from the poms at their
+                git tag; 0.0.1 and 0.1.0 had no BOM and 0.9.0 was canceled, so they are not here. Written by the
+                `quarkus-almanac dataset` commands (`import`, `remove`, `refresh-releases`) and by `all`; do not edit by
+                hand. `quarkus-almanac dataset verify` checks it.
 
                 ## Files
 

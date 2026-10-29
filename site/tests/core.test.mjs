@@ -88,6 +88,7 @@ describe('Quarkus versions', () => {
     assert.equal(stream('3.20.6'), '3.20');
     assert.equal(stream('3'), '3.0');
     assert.equal(versionText('1.0.0.Final'), '1.0.0.Final', 'as published, .Final kept');
+    assert.equal(versionText('3.2.12.Final'), '3.2.12.Final');
     assert.equal(versionText('4.0.0.Beta1'), '4.0.0.Beta1');
     assert.equal(versionText('3.40.1.1'), '3.40.1.1');
     assert.equal(versionText(null), '');
