@@ -2889,11 +2889,15 @@ const API_KINDS = [['class', 'classes'], ['method', 'methods'], ['field', 'field
  * Until the section has the members, the classes alone (core.apiClassCounts), or "Loading" while it loads them unasked.
  */
 function apiCell(cmp, classes) {
+  // a deprecated member the class no longer declares but inherits now is not removed: the members say so, once the
+  // section has them
+  const inherited = new Set((cmp.apiRows ?? []).filter((r) => r.change === 'inherited').map((r) => `${r.name} ${r.member}`));
   // as the API section counts them: changes of what both releases have (a member new at B already deprecated is
   // added), nested classes left out
   const depCount = {};
   for (const r of apiDeprecations(cmp, classes).rows) {
-    if (!r.added && !core.isNestedClass(r.name)) depCount[r.change] = (depCount[r.change] ?? 0) + 1;
+    if (r.added || core.isNestedClass(r.name) || (r.change === 'removed' && inherited.has(`${r.name} ${r.member}`))) continue;
+    depCount[r.change] = (depCount[r.change] ?? 0) + 1;
   }
   const dep = (k) => depCount[k] ?? 0;
   const deprecations = [[dep('deprecated'), 'deprecated', 'dep'], [dep('removal'), 'for removal', 'rem']];
