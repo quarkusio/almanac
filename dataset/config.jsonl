@@ -1134,6 +1134,8 @@
 {"key":"quarkus.hibernate-orm.cache.*.memory.maximum-weight","h":[["3.38.0.CR1","364ff2619f196c90"]]}
 {"key":"quarkus.hibernate-orm.cache.*.memory.object-count","h":[["1.6.0.CR1","d0dcb90d1e96317f"],["1.8.0.CR1","2ba98881123a91d2"],["3.9.0.CR1","3dcb3b3e1ad9db96"],["3.34.3","cf6867c4334c277d"]]}
 {"key":"quarkus.hibernate-orm.cache.*.memory.weigher-class","h":[["3.38.0.CR1","e32d0f31fdcecd27"]]}
+{"key":"quarkus.hibernate-orm.data-management.init-script","h":[["4.0.0.Beta2","e18620ab042225dd"]]}
+{"key":"quarkus.hibernate-orm.data-management.strategy","h":[["4.0.0.Beta2","d8a139af56a05018"]]}
 {"key":"quarkus.hibernate-orm.database.charset","h":[["0.11.0","9db51c4784da9b62"],["0.13.0",null],["1.6.0.CR1","f9f8a18bd761bebe"],["1.8.0.CR1","dc1e6247b198d200"],["3.9.0.CR1","4a351669d63d9209"]]}
 {"key":"quarkus.hibernate-orm.database.default-catalog","h":[["0.11.0","b8ea38d57054fba7"],["0.13.0",null],["1.6.0.CR1","f205cc202ae55e50"],["1.8.0.CR1","d0559bd30e3d4fc0"],["2.7.0.CR1","2f7ef2c120da57da"],["3.9.0.CR1","fcf314cb9e7873a3"]]}
 {"key":"quarkus.hibernate-orm.database.default-schema","h":[["0.11.0","ec6fd2600026608a"],["0.13.0",null],["1.6.0.CR1","a5b4d2d6d60d745b"],["1.8.0.CR1","a4d4aa22942605c1"],["2.7.0.CR1","bf1d6464ac09349d"],["3.9.0.CR1","e2819857f8d18f2a"]]}
@@ -1168,7 +1170,7 @@
 {"key":"quarkus.hibernate-orm.jdbc.statement-batch-size","h":[["0.11.0","fbb07a5215c45b8f"],["0.13.0",null],["1.6.0.CR1","ae4d047aec1151f2"],["1.8.0.CR1","16c6e929c0d2615d"],["3.9.0.CR1","fbd75120d10ca957"]]}
 {"key":"quarkus.hibernate-orm.jdbc.statement-fetch-size","h":[["0.11.0","134837a54e243b67"],["0.13.0",null],["1.6.0.CR1","b3b8c16826285f1f"],["1.8.0.CR1","0b98730a99fb4108"],["3.9.0.CR1","69437dc4f2e7f2f6"]]}
 {"key":"quarkus.hibernate-orm.jdbc.timezone","h":[["0.11.0","dcdadab69616ca08"],["0.13.0",null],["1.6.0.CR1","c5bb572b9b1910b6"],["1.8.0.CR1","1b1e9eb12e0d8d07"],["3.9.0.CR1","d1a8a6cd3434895a"]]}
-{"key":"quarkus.hibernate-orm.log-session-metrics","h":[["2.5.0.CR1","462994ceb4233c20"]]}
+{"key":"quarkus.hibernate-orm.log-session-metrics","h":[["2.5.0.CR1","462994ceb4233c20"],["4.0.0.Beta2","b371d67916e6ee28"]]}
 {"key":"quarkus.hibernate-orm.log.bind-param","h":[["1.6.0.CR1","0da0d56b82a6111f"],["1.10.0.CR1","6b0479b7695e515b"],["4.0.0.Beta1",null]]}
 {"key":"quarkus.hibernate-orm.log.bind-parameters","h":[["1.10.0.CR1","ce0372d305b76c2d"]]}
 {"key":"quarkus.hibernate-orm.log.format-sql","h":[["1.9.0.CR1","e4c54d583c4832d2"],["1.10.0.CR1","dfdeab679b8ba23f"],["3.9.0.CR1","fbeab032285383e6"]]}
@@ -1203,12 +1205,13 @@
 {"key":"quarkus.hibernate-orm.schema-management.create-schemas","h":[["3.23.0.CR1","6b963d4b017e6b68"]]}
 {"key":"quarkus.hibernate-orm.schema-management.extra-physical-table-types","h":[["3.29.0.CR1","051ff2a1221293ae"]]}
 {"key":"quarkus.hibernate-orm.schema-management.halt-on-error","h":[["3.23.0.CR1","d4192250bafa84ef"]]}
+{"key":"quarkus.hibernate-orm.schema-management.init-script","h":[["4.0.0.Beta2","17832375a145a630"]]}
 {"key":"quarkus.hibernate-orm.schema-management.strategy","h":[["3.23.0.CR1","098df91a5b104f9a"],["3.31.0.CR1","791b425afe6f7109"]]}
 {"key":"quarkus.hibernate-orm.scripts.generation","h":[["2.0.0.Alpha1","ef92c21f33beace3"],["3.9.0.CR1","d541d16d07ce362e"],["3.31.0.CR1","f7c7ff328437c984"]]}
 {"key":"quarkus.hibernate-orm.scripts.generation.create-target","h":[["2.0.0.Alpha1","1c6d8b1fd7737d11"],["3.9.0.CR1","6964e8001598cce3"]]}
 {"key":"quarkus.hibernate-orm.scripts.generation.drop-target","h":[["2.0.0.Alpha1","924bb23743609d41"],["3.9.0.CR1","5d35d3792bbecb36"]]}
 {"key":"quarkus.hibernate-orm.second-level-caching-enabled","h":[["1.6.0.CR1","02687da4d848469a"],["1.8.0.CR1","4a4530f5ecb77767"],["3.9.0.CR1","9e97520ace09a14a"]]}
-{"key":"quarkus.hibernate-orm.sql-load-script","h":[["0.11.0","ab9533f60b60e73d"],["0.13.0",null],["1.6.0.CR1","28c00a81c39a3174"],["1.8.0.CR1","f9390f11e6b8a3e8"],["2.4.0.CR1","9ec6b8205ad7ca8c"],["2.7.3.Final","0cab5867b429fdee"],["3.9.0.CR1","f3f6e2322f96ec37"],["3.12.0","ed778c35a4c56f9f"]]}
+{"key":"quarkus.hibernate-orm.sql-load-script","h":[["0.11.0","ab9533f60b60e73d"],["0.13.0",null],["1.6.0.CR1","28c00a81c39a3174"],["1.8.0.CR1","f9390f11e6b8a3e8"],["2.4.0.CR1","9ec6b8205ad7ca8c"],["2.7.3.Final","0cab5867b429fdee"],["3.9.0.CR1","f3f6e2322f96ec37"],["3.12.0","ed778c35a4c56f9f"],["4.0.0.Beta2","494294cb0ad3c268"]]}
 {"key":"quarkus.hibernate-orm.statistics","h":[["0.11.0","5f952c90a74c71b3"],["0.13.0",null],["1.6.0.CR1","44815532ebbc7d4d"]]}
 {"key":"quarkus.hibernate-orm.unsupported-properties.*","h":[["2.11.0.CR1","2c9b32babc247f80"],["3.9.0.CR1","028414d931c14db7"]]}
 {"key":"quarkus.hibernate-orm.validate-in-dev-mode","h":[["2.5.0.CR1","bac90576a8e3f29e"],["3.9.0.CR1","3e375a920cd72acc"]]}
@@ -2117,6 +2120,7 @@
 {"key":"quarkus.jaxb.exclude-classes","h":[["3.0.0.Alpha5","2063aff1e21d45ae"]]}
 {"key":"quarkus.jaxb.validate-jaxb-context","h":[["3.0.0.Alpha5","feb5dec343c7d418"],["3.0.0.CR1","db813c9c9926e92d"]]}
 {"key":"quarkus.jfr.enabled","h":[["3.12.0.CR1","937e24dcba1eca1f"],["3.31.0.CR1","3cf6620d336b8791"]]}
+{"key":"quarkus.jfr.rest-client.enabled","h":[["4.0.0.Beta2","cad0516731e6e60f"]]}
 {"key":"quarkus.jfr.rest.enabled","h":[["3.12.0.CR1","5983c9182f2aedd9"],["3.31.0.CR1","2018f60ace4dd655"]]}
 {"key":"quarkus.jfr.runtime.enabled","h":[["3.26.0.CR1","848a686edbe53064"],["3.31.0.CR1","8fe6d99886ea38d5"]]}
 {"key":"quarkus.jib.always-cache-base-image","h":[["1.12.0.CR1","893036a260acb32b"],["3.2.4.Final","400318e9d0547203"]]}
@@ -2146,7 +2150,7 @@
 {"key":"quarkus.jib.working-directory","h":[["2.7.3.Final","fcb7f29de4646f5a"],["3.2.4.Final","3217909022a46c69"]]}
 {"key":"quarkus.jlink.enabled","h":[["3.37.0.CR1","b9c50caede953664"]]}
 {"key":"quarkus.jlink.image-path","h":[["3.37.0.CR1","ca5d8aa382b640ad"]]}
-{"key":"quarkus.jlink.launcher-name","h":[["3.37.0.CR1","a277c1df76dacb27"]]}
+{"key":"quarkus.jlink.launcher-name","h":[["3.37.0.CR1","a277c1df76dacb27"],["4.0.0.Beta2","161d954ff1200914"]]}
 {"key":"quarkus.jlink.max-heap-size","h":[["3.37.0.CR1","401c77f1fddfdc86"]]}
 {"key":"quarkus.jlink.min-heap-size","h":[["3.37.0.CR1","c1b5b462ab9b601b"]]}
 {"key":"quarkus.jlink.output-directory","h":[["3.37.0.CR1","aa4b8b1c7b35c9f6"]]}
@@ -2270,7 +2274,7 @@
 {"key":"quarkus.keycloak.devservices.web-client-timeout","h":[["3.16.0.CR1","de56328c54a84d73"]]}
 {"key":"quarkus.keycloak.policy-enforcer.claim-information-point.*","h":[["0.27.0","0127580ac6d3c6de"],["1.1.0.CR1","c73ca1b68a7a9e22"],["2.0.0.Alpha3","cfc6ad044922f796"],["3.10.0.CR1","e72888189c40a064"],["3.14.0.CR1","765e9d1723ad5e16"]]}
 {"key":"quarkus.keycloak.policy-enforcer.enable","h":[["0.27.0","87174a9a4dc90296"],["1.1.0.CR1","18d91098a8fa70ba"],["2.0.0.Alpha3","cefb4ad8708e1501"],["2.11.0.CR1","e02f153270c0bb10"],["3.26.0.CR1","bbdae5e616d4aba9"],["4.0.0.Beta1",null]]}
-{"key":"quarkus.keycloak.policy-enforcer.enabled","h":[["3.26.0.CR1","97cb6c3c62b4ce2b"]]}
+{"key":"quarkus.keycloak.policy-enforcer.enabled","h":[["3.26.0.CR1","97cb6c3c62b4ce2b"],["4.0.0.Beta2","99e158551870b245"]]}
 {"key":"quarkus.keycloak.policy-enforcer.enforcement-mode","h":[["0.27.0","bf5c6768179f80af"],["1.1.0.CR1","2106cd9c78c2baab"],["1.5.0.Final","58e9cbc376050ab4"],["2.0.0.Alpha3","64abb58c292bb865"],["3.10.0.CR1","a3db726779863e1d"],["3.26.0.CR1","93023557f1e61d00"]]}
 {"key":"quarkus.keycloak.policy-enforcer.http-method-as-scope","h":[["0.27.0","843efe8057d614f2"],["1.1.0.CR1","81cf7f83bcfc5e65"],["2.0.0.Alpha3","857e15735181d0be"],["3.10.0.CR1","a00e14b118458301"]]}
 {"key":"quarkus.keycloak.policy-enforcer.lazy-load-paths","h":[["0.27.0","867c02dba4ba8946"],["1.1.0.CR1","34628ac78455448f"],["2.0.0.Alpha3","35963e1c4edc9f23"],["3.10.0.CR1","bb074493fa560210"]]}
@@ -3358,6 +3362,9 @@
 {"key":"quarkus.load-shedding.enabled","h":[["3.12.0.CR1","735cc1ddf7805ba2"]]}
 {"key":"quarkus.load-shedding.initial-limit","h":[["3.12.0.CR1","16e260aa2c70fc57"]]}
 {"key":"quarkus.load-shedding.max-limit","h":[["3.12.0.CR1","d1cb403107104dd9"]]}
+{"key":"quarkus.load-shedding.max-retry-after","h":[["4.0.0.Beta2","021570d4b2710de1"]]}
+{"key":"quarkus.load-shedding.metrics.enabled","h":[["4.0.0.Beta2","b9a4a5ae9667dd25"]]}
+{"key":"quarkus.load-shedding.min-limit","h":[["4.0.0.Beta2","418a6912955fce20"]]}
 {"key":"quarkus.load-shedding.priority.enabled","h":[["3.12.0.CR1","e445249f7a39ec39"]]}
 {"key":"quarkus.load-shedding.probe-factor","h":[["3.12.0.CR1","b03ba5020d883669"]]}
 {"key":"quarkus.locales","h":[["1.2.0.CR1","cc808db4cabb261e"]]}
@@ -3387,6 +3394,7 @@
 {"key":"quarkus.log.console.json.key-overrides","h":[["2.8.0.CR1","a6c84404452d9bf7"],["2.10.0.CR1","6effc443fcd4573d"]]}
 {"key":"quarkus.log.console.json.log-format","h":[["3.17.0.CR1","3d765ca245fbe57c"],["3.30.0.CR1","3c1a3b68a666b0b6"]]}
 {"key":"quarkus.log.console.json.mdc.flat-fields","h":[["3.37.0.CR1","6b59e45d922b720d"]]}
+{"key":"quarkus.log.console.json.mdc.key-overrides.*","h":[["4.0.0.Beta2","24b66bd921428cd5"]]}
 {"key":"quarkus.log.console.json.pretty-print","h":[["1.1.0.CR1","92cd7dd5200beda0"],["2.10.0.CR1","36125e0b9008e659"]]}
 {"key":"quarkus.log.console.json.print-details","h":[["1.1.0.CR1","60e1b6a819aba8c8"],["2.10.0.CR1","28abfcba08b266a4"]]}
 {"key":"quarkus.log.console.json.record-delimiter","h":[["1.1.0.CR1","2dbe38d628f0e579"],["2.10.0.CR1","6699160fcd1ddc1d"]]}
@@ -3415,6 +3423,7 @@
 {"key":"quarkus.log.file.json.key-overrides","h":[["2.10.0.CR1","a55c92e70bbd7df5"]]}
 {"key":"quarkus.log.file.json.log-format","h":[["3.17.0.CR1","a612804dfb9ef8f2"],["3.30.0.CR1","ba2e9b6b27c07016"]]}
 {"key":"quarkus.log.file.json.mdc.flat-fields","h":[["3.37.0.CR1","c592cea56bc2fa97"]]}
+{"key":"quarkus.log.file.json.mdc.key-overrides.*","h":[["4.0.0.Beta2","9e4997f6526c4ede"]]}
 {"key":"quarkus.log.file.json.pretty-print","h":[["2.10.0.CR1","c5a2d2d49b609819"]]}
 {"key":"quarkus.log.file.json.print-details","h":[["2.10.0.CR1","cf06c5d60a7d6e0d"]]}
 {"key":"quarkus.log.file.json.record-delimiter","h":[["2.10.0.CR1","dd088e881b8be644"]]}
@@ -3450,6 +3459,7 @@
 {"key":"quarkus.log.handler.console.*.json.key-overrides","h":[["3.35.0.CR1","dc593e28b4300f73"]]}
 {"key":"quarkus.log.handler.console.*.json.log-format","h":[["3.35.0.CR1","ee722d8a6fd1bcfd"]]}
 {"key":"quarkus.log.handler.console.*.json.mdc.flat-fields","h":[["3.37.0.CR1","4cb5ce23846bc33a"]]}
+{"key":"quarkus.log.handler.console.*.json.mdc.key-overrides.*","h":[["4.0.0.Beta2","b8e7887ea2a49aa3"]]}
 {"key":"quarkus.log.handler.console.*.json.pretty-print","h":[["3.35.0.CR1","cb89f9c5735da90c"]]}
 {"key":"quarkus.log.handler.console.*.json.print-details","h":[["3.35.0.CR1","fade30a649c96099"]]}
 {"key":"quarkus.log.handler.console.*.json.record-delimiter","h":[["3.35.0.CR1","c1a18d3183e06d44"]]}
@@ -3477,6 +3487,7 @@
 {"key":"quarkus.log.handler.file.*.json.key-overrides","h":[["3.35.0.CR1","c84e6b7087f574cd"]]}
 {"key":"quarkus.log.handler.file.*.json.log-format","h":[["3.35.0.CR1","a29d6d8be58a99a9"]]}
 {"key":"quarkus.log.handler.file.*.json.mdc.flat-fields","h":[["3.37.0.CR1","d01c3ee295d5a259"]]}
+{"key":"quarkus.log.handler.file.*.json.mdc.key-overrides.*","h":[["4.0.0.Beta2","16700ab12f94fda0"]]}
 {"key":"quarkus.log.handler.file.*.json.pretty-print","h":[["3.35.0.CR1","86a5a3d9c257c391"]]}
 {"key":"quarkus.log.handler.file.*.json.print-details","h":[["3.35.0.CR1","cfeae1abe23cecdb"]]}
 {"key":"quarkus.log.handler.file.*.json.record-delimiter","h":[["3.35.0.CR1","8cc0fe23cf8988f0"]]}
@@ -3531,6 +3542,7 @@
 {"key":"quarkus.log.handler.socket.*.json.key-overrides","h":[["3.35.0.CR1","885cba53080f4a4c"]]}
 {"key":"quarkus.log.handler.socket.*.json.log-format","h":[["3.35.0.CR1","e3e3141f16ee3034"]]}
 {"key":"quarkus.log.handler.socket.*.json.mdc.flat-fields","h":[["3.37.0.CR1","1a7722255743c663"]]}
+{"key":"quarkus.log.handler.socket.*.json.mdc.key-overrides.*","h":[["4.0.0.Beta2","f606b23534241ecb"]]}
 {"key":"quarkus.log.handler.socket.*.json.pretty-print","h":[["3.35.0.CR1","fb069bcc8d55e0ac"]]}
 {"key":"quarkus.log.handler.socket.*.json.print-details","h":[["3.35.0.CR1","75ee30ed66c55596"]]}
 {"key":"quarkus.log.handler.socket.*.json.record-delimiter","h":[["3.35.0.CR1","47ea3e7978f5cd60"]]}
@@ -3562,6 +3574,7 @@
 {"key":"quarkus.log.handler.syslog.*.json.key-overrides","h":[["3.35.0.CR1","b61c9186f4206550"]]}
 {"key":"quarkus.log.handler.syslog.*.json.log-format","h":[["3.35.0.CR1","4881f09e81689191"]]}
 {"key":"quarkus.log.handler.syslog.*.json.mdc.flat-fields","h":[["3.37.0.CR1","b130f3e6bbac5070"]]}
+{"key":"quarkus.log.handler.syslog.*.json.mdc.key-overrides.*","h":[["4.0.0.Beta2","20ed02b50d3f088d"]]}
 {"key":"quarkus.log.handler.syslog.*.json.pretty-print","h":[["3.35.0.CR1","3650d112d1c6b716"]]}
 {"key":"quarkus.log.handler.syslog.*.json.print-details","h":[["3.35.0.CR1","5a40fe9887f4b3fa"]]}
 {"key":"quarkus.log.handler.syslog.*.json.record-delimiter","h":[["3.35.0.CR1","0fc7b869c19bbcec"]]}
@@ -3608,6 +3621,7 @@
 {"key":"quarkus.log.socket.json.key-overrides","h":[["3.17.0.CR1","8a219e262b6c6674"]]}
 {"key":"quarkus.log.socket.json.log-format","h":[["3.17.0.CR1","03f4e2326bb51208"],["3.30.0.CR1","6bab9470a56a1a61"]]}
 {"key":"quarkus.log.socket.json.mdc.flat-fields","h":[["3.37.0.CR1","4ad1254fc0452f35"]]}
+{"key":"quarkus.log.socket.json.mdc.key-overrides.*","h":[["4.0.0.Beta2","ac049639aaa9aef7"]]}
 {"key":"quarkus.log.socket.json.pretty-print","h":[["3.17.0.CR1","d021740d2c2db3cb"]]}
 {"key":"quarkus.log.socket.json.print-details","h":[["3.17.0.CR1","a8862082ac373c5d"]]}
 {"key":"quarkus.log.socket.json.record-delimiter","h":[["3.17.0.CR1","9d151ce29cb98877"]]}
@@ -3639,6 +3653,7 @@
 {"key":"quarkus.log.syslog.json.key-overrides","h":[["3.0.0.CR1","8a0378adeaf44102"]]}
 {"key":"quarkus.log.syslog.json.log-format","h":[["3.17.0.CR1","6296ea4a3919250f"],["3.30.0.CR1","8f6c3410fc320e78"]]}
 {"key":"quarkus.log.syslog.json.mdc.flat-fields","h":[["3.37.0.CR1","eb1dfa1e1b14746d"]]}
+{"key":"quarkus.log.syslog.json.mdc.key-overrides.*","h":[["4.0.0.Beta2","ea41ae6409a4b7d5"]]}
 {"key":"quarkus.log.syslog.json.pretty-print","h":[["3.0.0.CR1","6332e19fede59808"]]}
 {"key":"quarkus.log.syslog.json.print-details","h":[["3.0.0.CR1","a198d02acc3424ca"]]}
 {"key":"quarkus.log.syslog.json.record-delimiter","h":[["3.0.0.CR1","34311592d7f0bd90"]]}
@@ -4372,6 +4387,8 @@
 {"key":"quarkus.oidc-client.connection-delay","h":[["1.11.0.CR1","23160e5b41ab6891"],["1.11.2.Final","127379628ce2a2a5"],["1.12.0.CR1","902f41b027cacda9"],["3.7.0","5fa25a295f724aae"],["3.14.0.CR1","23160e5b41ab6891"],["3.14.3","5fa25a295f724aae"],["3.17.0.CR1","7ae1f711dd9fd580"],["3.18.0.CR1","095a614f4be3d677"]]}
 {"key":"quarkus.oidc-client.connection-retry-count","h":[["2.0.0.Alpha2","beac9c51857787b5"],["3.2.9.Final","f55ee4461a609ad1"],["3.3.0.CR1","beac9c51857787b5"],["3.5.2","f55ee4461a609ad1"],["3.7.0","c3b8abc0cf01b27b"],["3.14.0.CR1","f8f29fee2c6ddda5"],["3.14.3","c3b8abc0cf01b27b"],["3.17.0.CR1","d97852e729a888ef"],["3.18.0.CR1","a2109ad6237c3969"]]}
 {"key":"quarkus.oidc-client.connection-timeout","h":[["1.12.0.CR1","cdc06357fd52f589"],["2.0.0.Alpha2","62e7d1c077f6a031"],["3.7.0","1bffb185098a926f"],["3.14.0.CR1","64812ba7bf10bf06"],["3.14.3","1bffb185098a926f"],["3.17.0.CR1","420adaa5817ca259"],["3.18.0.CR1","a0d4e98c756bab71"]]}
+{"key":"quarkus.oidc-client.credentials.attestation.enabled","h":[["4.0.0.Beta2","941acb8a8b44c289"]]}
+{"key":"quarkus.oidc-client.credentials.attestation.signature-algorithm","h":[["4.0.0.Beta2","269b1be243865822"]]}
 {"key":"quarkus.oidc-client.credentials.client-secret.method","h":[["1.11.0.CR1","318cc3caf5b189dc"],["2.7.0.CR1","36b135c2e1056faa"],["3.7.0.CR1","695b070af91d2863"],["3.7.0","678c1a127085d129"],["3.14.0.CR1","fda7c07c8e9e0902"],["3.14.3","678c1a127085d129"],["3.16.0.CR1","3233d495dfa72eaf"],["3.17.0.CR1","7bcc7756fac50291"],["3.18.0.CR1","de18ce94b72b1325"]]}
 {"key":"quarkus.oidc-client.credentials.client-secret.provider.key","h":[["2.1.0.CR1","5aa323129869f7ce"],["3.14.0.CR1","c7c8f0e090a0f36f"],["3.14.3","5aa323129869f7ce"],["3.16.0.CR1","a4950d671e02f829"],["3.17.0.CR1","182cf5dd1c3ba73f"],["3.18.0.CR1","a5c96bbb1f3f4ddc"]]}
 {"key":"quarkus.oidc-client.credentials.client-secret.provider.keyring-name","h":[["3.13.0.CR1","92698668dc67b9a5"],["3.14.0.CR1","08f789fc9afee503"],["3.14.3","92698668dc67b9a5"],["3.16.0.CR1","d30fee57bc34e358"],["3.17.0.CR1","ada499527fb6797a"],["3.18.0.CR1","f8e52162ecdc0ccb"]]}
@@ -4440,6 +4457,7 @@
 {"key":"quarkus.oidc-client.tls.trust-store-password","h":[["2.1.1.Final","1c4c9597f9ecf86c"],["3.2.9.Final","577494560352f589"],["3.3.0.CR1","1c4c9597f9ecf86c"],["3.5.2","577494560352f589"],["3.7.0","427ec6e7bf6ab71e"],["3.14.0.CR1","b6f374604bc3152a"],["3.14.3","427ec6e7bf6ab71e"],["3.16.0.CR1","3d7e01b90f0d5eaa"],["3.17.0.CR1","2630f6bc9eaf99a2"],["3.18.0.CR1","5edd78af009f33ed"],["4.0.0.Beta1",null]]}
 {"key":"quarkus.oidc-client.tls.trust-store-provider","h":[["2.7.6.Final","b1c0bc7180f9b250"],["2.8.0.CR1",null],["2.9.0.Final","b1c0bc7180f9b250"],["3.2.9.Final","f6322242a5b29b13"],["3.3.0.CR1","b1c0bc7180f9b250"],["3.5.2","f6322242a5b29b13"],["3.7.0","0997fe4b410b61b5"],["3.14.0.CR1","3c2cf7bd2fa6da94"],["3.14.3","0997fe4b410b61b5"],["3.16.0.CR1","aefdc7eeae46a014"],["3.17.0.CR1","b01a3514f1358e9c"],["3.18.0.CR1","21d2405e0e279399"],["4.0.0.Beta1",null]]}
 {"key":"quarkus.oidc-client.tls.verification","h":[["1.11.0.CR1","a327c1da760ea8c9"],["2.1.1.Final","b22865a6bf04715c"],["3.2.9.Final","0847e87fa3306164"],["3.3.0.CR1","b22865a6bf04715c"],["3.5.2","0847e87fa3306164"],["3.14.0.CR1","c4d42d35fd3fbaa1"],["3.14.3","0847e87fa3306164"],["3.16.0.CR1","9b54d011ba47033f"],["3.17.0.CR1","7009b5383fb5b0f9"],["3.18.0.CR1","3d5c3a9f473217c5"],["3.26.0.CR1","c05b5527e2a127e0"],["4.0.0.Beta1",null]]}
+{"key":"quarkus.oidc-client.token-cache-max-size","h":[["4.0.0.Beta2","50c282e446bad5fd"]]}
 {"key":"quarkus.oidc-client.token-path","h":[["1.11.0.CR1","9506bce5d8a946ff"],["1.11.2.Final","a1de336816434ce8"],["2.6.0.CR1","016754f502c51854"],["3.7.0","380828d95782f435"],["3.14.0.CR1","9506bce5d8a946ff"],["3.14.3","380828d95782f435"],["3.16.0.CR1","d90c9710b8cc31b1"],["3.17.0.CR1","2c8e810e8dfeeb40"],["3.18.0.CR1","92741f4e8f396e1d"]]}
 {"key":"quarkus.oidc-client.use-blocking-dns-lookup","h":[["3.8.2","f253a0505c52e746"],["3.14.0.CR1","4fd28c233b58e202"],["3.14.3","f253a0505c52e746"],["3.17.0.CR1","339a2086252810d4"],["3.18.0.CR1","b096898d1e0dded8"]]}
 {"key":"quarkus.oidc-token-propagation-reactive.client-name","h":[["2.15.0.CR1","d5b0847747a6eb20"],["3.0.0.Alpha1",null],["3.0.0.Alpha3","d5b0847747a6eb20"],["3.9.0.CR1",null]]}
@@ -4611,7 +4629,7 @@
 {"key":"quarkus.oidc.*.user-info-path","h":[["1.7.0.CR1","2c71cca8bba99cd8"],["2.6.0.CR1","12a95254a857a6ec"],["3.2.9.Final","f3f5922fd694b095"],["3.3.0.CR1","12a95254a857a6ec"],["3.5.2","f3f5922fd694b095"],["3.7.0","b9315dc06b601274"],["3.17.0.CR1",null]]}
 {"key":"quarkus.oidc.allow-token-introspection-cache","h":[["2.3.0.Final","ae76690118c6b155"],["3.17.0.CR1","be4451247146ab4d"]]}
 {"key":"quarkus.oidc.allow-user-info-cache","h":[["2.3.0.Final","00c0e38f4d52a142"],["3.17.0.CR1","42f2bfa0a11a3468"]]}
-{"key":"quarkus.oidc.allowed-routes","h":[["4.0.0.Beta1","89eb05236031305f"]]}
+{"key":"quarkus.oidc.allowed-routes","h":[["4.0.0.Beta1","89eb05236031305f"],["4.0.0.Beta2","2181e80f4ca61da3"]]}
 {"key":"quarkus.oidc.application-type","h":[["0.27.0","1206236c2faafa23"],["1.1.0.CR1","5a4f6ee7d9af27ab"],["1.3.0.CR1","2101c9431c535f93"],["1.4.0.Final","d29e92fb60f74f62"],["1.9.0.CR1","34198ccb344cfc1f"],["2.7.0.CR1","b9cbdd72226284b3"],["3.2.9.Final","611a5c19fb593ff0"],["3.3.0.CR1","b9cbdd72226284b3"],["3.5.2","611a5c19fb593ff0"],["3.17.0.CR1","1d1f103a3f4cb041"],["3.26.0.CR1","42c581630a14c9ba"]]}
 {"key":"quarkus.oidc.auth-server-url","h":[["0.24.0","298607d489fea56e"],["0.27.0","4f6942b8d658d257"],["1.2.0.CR1","972da58c79a3aba3"],["1.4.0.Final","375d8131c97a32d2"],["1.11.0.CR1","254d730b2d4bb69c"],["1.11.2.Final","8e84e3802ba71cc4"],["3.14.0.CR1","254d730b2d4bb69c"],["3.14.3","8e84e3802ba71cc4"],["3.17.0.CR1","52b342a4df122788"],["3.34.0.CR1","169a61cdf47c246d"]]}
 {"key":"quarkus.oidc.authentication.add-openid-scope","h":[["2.8.1.Final","cc5605f519fc4121"],["3.5.2","8007d3cb9f28bd54"],["3.17.0.CR1","266b56fcbb6598b2"]]}
@@ -4669,6 +4687,8 @@
 {"key":"quarkus.oidc.connection-delay","h":[["1.1.0.CR1","137570f533799b57"],["1.2.0.CR1","2b466efec197f8da"],["1.4.0.Final","423a6efc8f740d90"],["1.11.0.CR1","f1babdc418cb35eb"],["1.11.2.Final","e2902616a274e1c9"],["1.12.0.CR1","0652d1b09b14951c"],["3.7.0","b5ebb21786ad8af2"],["3.14.0.CR1","f1babdc418cb35eb"],["3.14.3","b5ebb21786ad8af2"],["3.17.0.CR1","d8b4d68f5215241e"]]}
 {"key":"quarkus.oidc.connection-retry-count","h":[["2.0.0.Alpha2","0c14e6118fc84cde"],["3.2.9.Final","b94cc82903289cf1"],["3.3.0.CR1","0c14e6118fc84cde"],["3.5.2","b94cc82903289cf1"],["3.7.0","d58abdc302ac85a8"],["3.14.0.CR1","619919dca911dab1"],["3.14.3","d58abdc302ac85a8"],["3.17.0.CR1","9c8978ee3a4cd2b7"]]}
 {"key":"quarkus.oidc.connection-timeout","h":[["1.12.0.CR1","8bce4ddb6b95a648"],["2.0.0.Alpha2","eee0f014c6261375"],["3.7.0","cffddcc91773af18"],["3.14.0.CR1","b0158d4340111ce9"],["3.14.3","cffddcc91773af18"],["3.17.0.CR1","a7bf2238fc4b6462"]]}
+{"key":"quarkus.oidc.credentials.attestation.enabled","h":[["4.0.0.Beta2","1d89f3927b78022c"]]}
+{"key":"quarkus.oidc.credentials.attestation.signature-algorithm","h":[["4.0.0.Beta2","6a3d39e04544a2da"]]}
 {"key":"quarkus.oidc.credentials.client-secret.method","h":[["1.3.0.CR2","7cfc7f784cc13ca6"],["1.4.0.Final","54557eb47f4d63e4"],["1.11.0.CR1","e74dc34f05a24ea8"],["2.7.0.CR1","27b7008d2b3a46ce"],["3.7.0.CR1","a88896e6c4b268f4"],["3.7.0","2eb1cb8feb4f658f"],["3.14.0.CR1","476242a41dca4ba6"],["3.14.3","2eb1cb8feb4f658f"],["3.16.0.CR1","a96ec6aa20fb1a05"],["3.17.0.CR1","0dca41bb74a7a089"]]}
 {"key":"quarkus.oidc.credentials.client-secret.provider.key","h":[["2.1.0.CR1","dd9f6b8f6ce6606d"],["3.14.0.CR1","6723518b88182371"],["3.14.3","dd9f6b8f6ce6606d"],["3.16.0.CR1","f074c89b1246c176"],["3.17.0.CR1","6a7525532ea7b519"]]}
 {"key":"quarkus.oidc.credentials.client-secret.provider.keyring-name","h":[["3.13.0.CR1","d06d123c89b44dcf"],["3.14.0.CR1","41bbde7cfd84c019"],["3.14.3","d06d123c89b44dcf"],["3.16.0.CR1","7b7db07550f0f638"],["3.17.0.CR1","3f8c7033d29ed545"]]}
@@ -4948,6 +4968,7 @@
 {"key":"quarkus.openshift.env.vars.*","h":[["1.6.0.CR1","6a5a86765054016e"],["2.12.1.Final","563dd0ddf71abd18"],["3.17.0.CR1","6987e2f63ea4570d"]]}
 {"key":"quarkus.openshift.expose","h":[["1.6.0.CR1","b8c6882ffda22c79"],["1.9.0.Final","5b9f8c2c9cd19e3e"],["1.10.0.CR1","b8c6882ffda22c79"],["2.16.0.CR1","3c342fef3ea698c1"],["3.0.0.Alpha1","b8c6882ffda22c79"],["3.0.0.Alpha3","3c342fef3ea698c1"],["3.0.0.Alpha6",null]]}
 {"key":"quarkus.openshift.externalize-init","h":[["3.0.0.Alpha3","37302faacb7ee7ea"],["3.2.0.CR1","6cae43f1aeb9951f"],["3.17.0.CR1","84ae7a30ade45062"],["3.31.0.CR1",null]]}
+{"key":"quarkus.openshift.fail-on-build-archive-upload-failure","h":[["4.0.0.Beta2","5a2b18f1128fe822"]]}
 {"key":"quarkus.openshift.flavor","h":[["1.10.0.CR1","4161134067e30590"],["3.17.0.CR1","b682196238138401"]]}
 {"key":"quarkus.openshift.generate-image-pull-secret","h":[["3.3.0.CR1","07fff7c9d8fd370f"],["3.17.0.CR1","0fd71fde19a53681"]]}
 {"key":"quarkus.openshift.git-repo-volumes.*.directory","h":[["1.6.0.CR1","0376cb1e7149ec6f"]]}
@@ -5944,7 +5965,7 @@
 {"key":"quarkus.rest-csrf.token-signature-key","h":[["3.9.0.CR1","4bb5ea6626b3eb72"]]}
 {"key":"quarkus.rest-csrf.token-size","h":[["3.9.0.CR1","8401bb8cf76446ef"]]}
 {"key":"quarkus.rest-csrf.verify-token","h":[["3.9.0.CR1","90cda2fb3b97ed35"]]}
-{"key":"quarkus.rest-data-panache.max-page-size","h":[["3.27.6.1","bb99435472c6eb44"],["3.28.0.CR1",null],["3.33.4.1","bb99435472c6eb44"],["3.34.0.CR1",null],["3.40.1.1","bb99435472c6eb44"],["4.0.0.Beta1",null]]}
+{"key":"quarkus.rest-data-panache.max-page-size","h":[["3.27.6.1","bb99435472c6eb44"],["3.28.0.CR1",null],["3.33.4.1","bb99435472c6eb44"],["3.34.0.CR1",null],["3.40.1.1","bb99435472c6eb44"],["4.0.0.Beta1",null],["4.0.0.Beta2","bb99435472c6eb44"]]}
 {"key":"quarkus.rest.build-time-condition-aware","h":[["1.13.0.CR1","99d92670700cf58d"],["2.0.0.Alpha1",null],["3.9.0.CR1","6882b492092d1cf8"]]}
 {"key":"quarkus.rest.default-produces","h":[["1.11.0.Final","4c41f761f636de92"],["2.0.0.Alpha1",null],["3.9.0.CR1","10131ef74b06e1ea"]]}
 {"key":"quarkus.rest.exception-mapping.disable-mapper-for","h":[["3.31.0.CR1","f9f7bca79e5a67e9"]]}
@@ -6108,6 +6129,7 @@
 {"key":"quarkus.security-jpa.persistence-unit-name","h":[["3.6.0.CR1","234d0c8a6354466d"]]}
 {"key":"quarkus.security.auth.enabled-in-dev-mode","h":[["2.8.0.CR1","8f5b321364465f4e"]]}
 {"key":"quarkus.security.deny-unannotated-members","h":[["0.27.0","cccc2f74e8624419"],["3.18.0.CR1","f5d223306298e335"]]}
+{"key":"quarkus.security.elytron.default-realm-name","h":[["4.0.0.Beta2","f7bbf9a1a3c4d19c"]]}
 {"key":"quarkus.security.embedded.auth-mechanism","h":[["0.13.0","1c86a94af2730ca4"],["0.17.0","c1bff3a115b58675"],["0.24.0",null]]}
 {"key":"quarkus.security.embedded.enabled","h":[["0.13.0","793a3cbb86a51556"],["0.17.0","6554f49b86e42454"],["0.24.0",null]]}
 {"key":"quarkus.security.embedded.realm-name","h":[["0.13.0","d3057769dd7e26b1"],["0.17.0","62629ba0274b8ead"],["0.24.0",null]]}
