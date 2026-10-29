@@ -40,14 +40,14 @@ const KIND_LABEL = {
   relocated: 'relocated', unrelocated: 'relocation dropped', status: 'status', renamed: 'renamed',
   moved: 'moved', 'moved-in': 'moved in', 'moved-out': 'moved out', introduced: 'introduced', reintroduced: 'reintroduced',
   removal: 'for removal', unremoval: 'no longer for removal', 'return type': 'return type', signature: 'signature', modifiers: 'modifiers',
-  supertype: 'supertype', inherited: 'inherited',
+  supertype: 'supertype', inherited: 'inherited', declared: 'declared',
 };
 const KIND_TONE = {
   added: 'add', removed: 'rem', changed: 'chg', default: 'chg', type: 'chg', phase: 'chg', enum: 'chg', extension: 'neu',
   deprecated: 'dep', undeprecated: 'dep-o', major: 'maj', minor: 'chg', patch: 'neu', other: 'neu', downgrade: 'rem',
   same: 'neu', relocated: 'chg', unrelocated: 'neu', status: 'chg', renamed: 'neu',
   moved: 'chg', 'moved-in': 'chg', 'moved-out': 'chg', introduced: 'add', reintroduced: 'add',
-  removal: 'rem', unremoval: 'dep-o', 'return type': 'chg', signature: 'chg', modifiers: 'chg', supertype: 'chg', inherited: 'neu',
+  removal: 'rem', unremoval: 'dep-o', 'return type': 'chg', signature: 'chg', modifiers: 'chg', supertype: 'chg', inherited: 'neu', declared: 'neu',
   lts: 'lts', pre: 'pre', cfg: 'neu',
 };
 const KIND_TITLE = {
@@ -63,6 +63,7 @@ const KIND_TITLE = {
   signature: 'A method went and another of the same name came: possibly the same method with other parameters',
   modifiers: 'Its modifiers changed', supertype: 'Its superclass or interfaces changed',
   inherited: 'No longer declared by the class, but a supertype declares it: still there, inherited',
+  declared: 'Declared by the class now, and inherited from a supertype before: it was there already',
 };
 /** An extension's status takes quarkus.io's tag colour for it, as on quarkus.io/extensions. */
 const STATUS_TONE = { stable: 'stable', preview: 'preview', experimental: 'experimental', deprecated: 'deprecated' };
@@ -579,18 +580,19 @@ async function supertypeApiRows(classes, seeds, vis, known = new Map()) {
 }
 
 /**
- * The supertypes at B of the classes `rowsByName` (binary name → rows) that may no longer declare a member there:
- * those of a class that loses one between A and B, or that is in several jars, where core.diffApi may compare others.
+ * The supertypes that core.inheritedFrom needs for the classes `rowsByName` (binary name → rows) between A and B: at B
+ * those of a class that loses a member (it may inherit it now), at A those of a class that gains one (it may have
+ * inherited it then); both for a class in several jars, where core.diffApi may compare others.
  */
-function removalSupertypes(rowsByName, a, b) {
+function inheritanceSupertypes(rowsByName, a, b) {
   const out = [];
+  const gains = (x, y) => [...y.members.keys()].some((k) => !x.members.has(k) && core.memberKind(k) !== 'constructor');
   for (const rows of rowsByName.values()) {
     const A = core.apiUnionAt(rows, a);
-    const B = core.apiAt(rows, b);
+    const B = core.apiUnionAt(rows, b);
     if (!A || !B) continue;
-    if (rows.length > 1 || [...A.members.keys()].some((k) => !B.members.has(k) && core.memberKind(k) !== 'constructor')) {
-      out.push(...core.supertypesOf(B.value));
-    }
+    if (rows.length > 1 || gains(B, A)) out.push(...core.supertypesOf(B.value));
+    if (rows.length > 1 || gains(A, B)) out.push(...core.supertypesOf(A.value));
   }
   return out;
 }
@@ -1901,7 +1903,7 @@ async function renderHome() {
     h('p', { class: 'lede' },
       'Pick two releases to see which ', h('code', null, 'quarkus.*'), ' config properties were added, removed or changed, ',
       'which dependency versions managed by ', h('code', null, 'quarkus-bom'), ' moved, which extensions appeared, disappeared or were relocated, ',
-      'and which classes of the Quarkus jars were added, removed or moved to another jar.'),
+      'and which classes, methods and fields of the Quarkus jars were added, removed, deprecated or moved to another jar.'),
     pickerForm({ from: pair.from, to: pair.to }),
     h('p', { class: 'picker-note' }, 'Preselected: the newest patch of the previous LTS stream and the newest final release.'));
 
@@ -2882,12 +2884,17 @@ const API_KINDS = [['class', 'classes'], ['method', 'methods'], ['field', 'field
 /**
  * The API cell of a comparison's summary: the classes and members added, removed and changed, as the API section lists
  * them by default (core.apiRowCounts, nested classes left out), with a count per kind of element, and the new
- * deprecations (core.diffDeprecations), the other deprecation changes in its note. Until the section has the members,
- * the classes alone (core.apiClassCounts), or "Loading" while it loads them unasked.
+ * deprecations (core.diffDeprecations, counted as the section counts them), the other deprecation changes in its note.
+ * Until the section has the members, the classes alone (core.apiClassCounts), or "Loading" while it loads them unasked.
  */
 function apiCell(cmp, classes) {
-  const c = apiDeprecations(cmp, classes).counts;
-  const dep = (k) => c.classes[k] + c.members[k];
+  // as the API section counts them: changes of what both releases have (a member new at B already deprecated is
+  // added), nested classes left out
+  const depCount = {};
+  for (const r of apiDeprecations(cmp, classes).rows) {
+    if (!r.added && !core.isNestedClass(r.name)) depCount[r.change] = (depCount[r.change] ?? 0) + 1;
+  }
+  const dep = (k) => depCount[k] ?? 0;
   const deprecations = [[dep('deprecated'), 'deprecated', 'dep'], [dep('removal'), 'for removal', 'rem']];
   const changed = apiChangedOf(cmp, classes);
   const movedTop = changed ? apiMovedOf(cmp, classes).filter((r) => !r.nested).length : 0;
@@ -2980,8 +2987,8 @@ function apiSection(cmp) {
       else slot.replaceChildren(status);
       classesApiRows(classes, changed).then(async (rowsByName) => {
         const enclosing = await enclosingApiRows(classes, changed);
-        // a member a class no longer declares may be inherited: from the supertypes, loaded as far as the data goes
-        const supers = await supertypeApiRows(classes, removalSupertypes(rowsByName, cmp.aa, cmp.ab), [cmp.ab], rowsByName);
+        // a member a class no longer declares may be inherited, one it declares now may have been: from the supertypes
+        const supers = await supertypeApiRows(classes, inheritanceSupertypes(rowsByName, cmp.aa, cmp.ab), [cmp.aa, cmp.ab], rowsByName);
         const rows = core.diffApi(rowsByName, cmp.aa, cmp.ab, jarsAtBoth(cmp, classes), (name) => enclosing.get(name),
           (name) => rowsByName.get(name) ?? supers.get(name) ?? null);
         cmp.apiFailed = false;
@@ -3004,9 +3011,9 @@ function apiSection(cmp) {
     // larger member files: the deprecations and the moves now, the members when the section opens (unless saving
     // data) or on request
     const btn = h('button', { type: 'button', class: 'btn', onclick: load },
-      `Load the API changes of ${plural(changed.length, 'class', 'classes')} (${plural(files.length, 'file')}, ${aboutSize(bytes)})`);
+      `Load the API changes of ${plural(changed.length, 'class', 'classes')} (at least ${plural(files.length, 'file')}, ${aboutSize(bytes)})`);
     note = h('div', { class: 'note api-load' },
-      h('p', null, `${plural(changed.length, 'class', 'classes')} changed their API. Their members are in ${plural(files.length, 'file')}, which load when you ask: below, the deprecations ${moved.length ? 'and the moves to another jar ' : ''}alone.`), btn);
+      h('p', null, `${plural(changed.length, 'class', 'classes')} changed their API. Their members are in ${plural(files.length, 'file')}, and their supertypes' in a few more, which load when you ask: below, the deprecations ${moved.length ? 'and the moves to another jar ' : ''}alone.`), btn);
     slot.replaceChildren(note, deprecationChanges(deps, moved, memory));
     if (!saveData()) {
       sec.addEventListener('sectiontoggle', () => {
@@ -3086,7 +3093,7 @@ function apiJarGroup(jar, list, renderRow, groups, noun = 'change') {
 
 const API_CHIPS = [['removed', 'removed'], ['inherited', 'inherited'], ['moved', 'moved'], ['removal', 'for removal'], ['deprecated', 'deprecated'],
   ['unremoval', 'no longer for removal'], ['undeprecated', 'undeprecated'], ['return type', 'return type'], ['signature', 'signature'],
-  ['modifiers', 'modifiers'], ['supertype', 'supertype'], ['added', 'added']];
+  ['modifiers', 'modifiers'], ['supertype', 'supertype'], ['declared', 'declared'], ['added', 'added']];
 
 /** The API changes (core.diffApi) by jar, then class, with filters for the kinds, nested classes, protected members and constructors. */
 function apiChanges(cmp) {
@@ -3175,7 +3182,8 @@ function apiRow(r) {
   const was = r.change === 'removed'
     ? h('span', { class: 'msince' }, r.was === 'removal' ? 'was deprecated for removal' : r.was ? 'was deprecated' : 'removed without deprecation')
     : r.change === 'inherited' ? h('span', { class: 'msince' }, r.moved ? 'moved to ' : 'inherited from ', classRef(r.from, r.member), inheritedDeprecation(r.inheritedValue))
-      : r.change === 'moved' ? h('span', { class: 'msince' }, 'was in ', jarLinks(r.fromJars), r.toJars.length > 1 ? frag('; now in ', jarLinks(r.toJars)) : null) : null;
+      : r.change === 'moved' ? h('span', { class: 'msince' }, 'was in ', jarLinks(r.fromJars), r.toJars.length > 1 ? frag('; now in ', jarLinks(r.toJars)) : null)
+        : r.change === 'declared' ? h('span', { class: 'msince' }, 'inherited from ', classRef(r.from, r.member), ' before') : null;
   const previous = r.previous ? h('span', { class: 'msince' }, 'was ', memberSignature(r.name, r.previous, r.previousValue, { linked: false })) : null;
   const details = r.details?.length ? h('span', { class: 'msince' }, r.details.join(', ')) : null;
   return h('li', { class: 'mrow' }, label, what, previous, details, was,
@@ -3905,19 +3913,30 @@ function classMemberSections(name, info, classes, member, kicker, move = true) {
   const load = (reveal) => Promise.all([classesApiRows(classes, [name]), enclosingApiRows(classes, [name])]).then(async ([byName, enclosing]) => {
     if (seq !== renderSeq) return;
     const rows = byName.get(name) ?? [];
-    // the supertypes it ever had, for the members it no longer declares but may inherit: only when it lost one
-    const lost = core.classMembers(rows, info.cvs, info.at, name).removed.some((x) => core.memberKind(x.key) !== 'constructor')
-      || core.classApiHistory(rows, info.cvs, enclosing.get(name) ?? null).some((ev) => !ev.first && ev.removed);
-    const seeds = lost ? rows.flatMap((r) => r.h.flatMap(([, value]) => core.supertypesOf(value))) : [];
-    const supers = await supertypeApiRows(classes, seeds, info.cvs, byName);
-    if (seq !== renderSeq) return;
-    const rowsOf = (n) => byName.get(n) ?? supers.get(n) ?? null;
-    const m = core.classMembers(rows, info.cvs, info.at, name, rowsOf);
-    const parsed = core.parseApiValue(m.value);
-    if (parsed && kicker) kicker.textContent = `${parsed.kind === 'annotation' ? 'Annotation' : parsed.kind[0].toUpperCase() + parsed.kind.slice(1)}${core.isNestedClass(name) ? ' (nested)' : ''}`;
-    membersBody.replaceChildren(membersView(name, m, parsed, member, info.at));
-    historyBody.replaceChildren(apiHistoryView(rows, info, enclosing.get(name) ?? null, rowsOf));
-    if (member) revealMember(members, member, reveal);
+    const outer = enclosing.get(name) ?? null;
+    const render = (rowsOf, first) => {
+      const m = core.classMembers(rows, info.cvs, info.at, name, rowsOf);
+      const parsed = core.parseApiValue(m.value);
+      if (parsed && kicker) kicker.textContent = `${parsed.kind === 'annotation' ? 'Annotation' : parsed.kind[0].toUpperCase() + parsed.kind.slice(1)}${core.isNestedClass(name) ? ' (nested)' : ''}`;
+      membersBody.replaceChildren(membersView(name, m, parsed, member, info.at));
+      historyBody.replaceChildren(apiHistoryView(rows, info, outer, rowsOf));
+      if (member) revealMember(members, member, first && reveal);
+    };
+    // its own members at once; then, when it lost or gained a member, again with the supertypes it ever had, which
+    // tell a member it inherits from a removed one and a member it declares now from an added one
+    render((n) => byName.get(n) ?? null, true);
+    const seeds = core.classApiHistory(rows, info.cvs, outer).some((ev) => !ev.first && (ev.removed || ev.added))
+      ? rows.flatMap((r) => r.h.flatMap(([, value]) => core.supertypesOf(value))) : [];
+    if (!seeds.length) return;
+    let supers;
+    try {
+      supers = await supertypeApiRows(classes, seeds, info.cvs, byName);
+    } catch (e) {
+      if (seq === renderSeq) historyBody.append(emptyNote(`The member files of its supertypes could not be loaded${e?.message ? ` (${e.message})` : ''}, so a member it inherits may read as removed, or as added.`, true));
+      return;
+    }
+    if (seq !== renderSeq || !supers.size) return;
+    render((n) => byName.get(n) ?? supers.get(n) ?? null, false);
   }).catch((e) => {
     if (seq !== renderSeq) return;
     // the files that failed are forgotten (loadApiShard): another try fetches them again
@@ -4044,7 +4063,7 @@ function apiHistoryView(rows, info, enclosing = null, supertypes = () => null) {
   if (!events.length) return emptyNote('The class is not public API in any release shown.');
   // deprecation is in the History above; here the members and the declaration
   const quiet = new Set(['deprecated', 'marked for removal', 'no longer marked for removal', 'undeprecated']);
-  const shown = events.filter((ev) => ev.first || ev.added || ev.removed || ev.inherited?.length || ev.changed || ev.changes.some((c) => !quiet.has(c)));
+  const shown = events.filter((ev) => ev.first || ev.added || ev.removed || ev.inherited?.length || ev.declared?.length || ev.changed || ev.changes.some((c) => !quiet.has(c)));
   return timeline(shown, (ev) => {
     if (ev.first) {
       return h('p', { class: 'tl-text' }, chip('neutral', 'API'),
@@ -4055,6 +4074,7 @@ function apiHistoryView(rows, info, enclosing = null, supertypes = () => null) {
         ev.added && ev.removed ? ' ' : null, countMark('rem', '−', ev.removed, ev.removed === 1 ? 'member removed' : 'members removed'),
         h('span', { 'aria-hidden': 'true' }, ev.added + ev.removed === 1 ? ' member' : ' members')) : null,
       ...(ev.inherited ?? []).map((x) => h('span', null, `${plural(x.count, 'member')} ${x.moved ? 'moved to' : 'now inherited from'} `, classRef(x.from))),
+      ...(ev.declared ?? []).map((x) => h('span', null, `${plural(x.count, 'member')} declared here now, inherited from `, classRef(x.from), ' before')),
       ev.changed ? `${plural(ev.changed, 'member')} changed` : null,
       ...ev.changes.filter((c) => !quiet.has(c)),
     ].filter(Boolean);

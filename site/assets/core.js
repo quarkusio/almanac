@@ -1265,8 +1265,8 @@ export function apiClassCounts(classes, a, b) {
 
 /** What each kind of API change counts as on the summary of a comparison; the deprecation changes count apart. */
 const API_COUNT_KIND = {
-  added: 'added', removed: 'removed', inherited: 'changed', moved: 'changed', 'return type': 'changed', signature: 'changed', modifiers: 'changed',
-  supertype: 'changed',
+  added: 'added', removed: 'removed', inherited: 'changed', declared: 'changed', moved: 'changed', 'return type': 'changed', signature: 'changed',
+  modifiers: 'changed', supertype: 'changed',
 };
 
 /**
@@ -2005,7 +2005,7 @@ function deprecationChange(from, to) {
 /** API change kinds in their order on the compare page. */
 export const API_CHANGE_ORDER = [
   'removed', 'inherited', 'moved', 'removal', 'deprecated', 'unremoval', 'undeprecated', 'return type', 'signature', 'modifiers', 'supertype',
-  'added',
+  'declared', 'added',
 ];
 
 /** API change rows (diffApi, movedApiClasses) in their order on the compare page: by jar, class, then kind and member. */
@@ -2096,9 +2096,17 @@ export function diffApi(rowsByName, a, b, prefer = () => [[], []], enclosing = (
       const got = inheritedFrom(key, A.members.get(key), B.value, b, supertypes, { wasKind: ca?.kind, declared });
       if (got) inherited.set(key, got);
     }
+    // the other way round, a member the class declares at B that it inherited at A (an override added, or a member
+    // that moved down from a supertype) was there already: it is declared now, not added
+    const declaredAtA = methodSignatures(A.members.keys());
+    const nowDeclared = new Map();
+    for (const key of came) {
+      const got = inheritedFrom(key, B.members.get(key), A.value, a, supertypes, { wasKind: cb?.kind, declared: declaredAtA });
+      if (got) nowDeclared.set(key, got);
+    }
     // a method that kept its name and parameters changed its return type; another of the same name may be a new signature
     const cameBySignature = groupBy(came.filter((k) => memberKind(k) !== 'field'), memberSignature);
-    const paired = new Set(inherited.keys());
+    const paired = new Set([...inherited.keys(), ...nowDeclared.keys()]);
     for (const key of gone) {
       if (memberKind(key) === 'field' || paired.has(key)) continue;
       const twin = (cameBySignature.get(memberSignature(key)) ?? []).find((k) => !paired.has(k));
@@ -2126,6 +2134,7 @@ export function diffApi(rowsByName, a, b, prefer = () => [[], []], enclosing = (
       const last = lastOf(key);
       memberRow(key, 'removed', last, { was: deprecationOf(last) });
     }
+    for (const [key, got] of nowDeclared) memberRow(key, 'declared', B.members.get(key), { from: got.from, inheritedValue: got.value });
     for (const key of came) if (!paired.has(key)) memberRow(key, 'added', B.members.get(key));
     for (const [key, va] of A.members) {
       const vb = B.members.get(key);
@@ -2152,10 +2161,11 @@ function supertypeChanges(from, to) {
 
 /**
  * The API history of a class over the releases `cvs` (ascending) from its rows (mergeApiRows): one event per release
- * whose API differs from the previous one shown, `{vi, added, removed, inherited, changed, changes}`: members added,
- * removed and changed in any of its jars (apiUnionAt, as classMembers lists them; each change as diffApi sees it), the
- * members it no longer declares but inherits (`inherited`: `[{from, count, moved}]` by supertype, most first, `moved`
- * when none of them was in that supertype before; not counted as removed), and the class's own changes in words
+ * whose API differs from the previous one shown, `{vi, added, removed, inherited, declared, changed, changes}`: members
+ * added, removed and changed in any of its jars (apiUnionAt, as classMembers lists them; each change as diffApi sees
+ * it), the members it no longer declares but inherits (`inherited`: `[{from, count, moved}]` by supertype, most first,
+ * `moved` when none of them was in that supertype before; not counted as removed), those it declares now but
+ * inherited before (`declared`: `[{from, count}]`; not counted as added), and the class's own changes in words
  * (deprecated, marked for removal, no longer marked for removal, undeprecated, became final, supertype changed, …). The
  * first release with API is `{vi, first: true}`, with `again` when it was API before; a release where it is no longer
  * API (gone, or no longer public or protected) says 'no longer public API'. `enclosing`: the rows of the class a nested
@@ -2171,15 +2181,25 @@ export function classApiHistory(rows, cvs, enclosing = null, supertypes = () => 
   for (const vi of cvs) {
     const now = apiUnionAt(rows, vi);
     if (!now) {
-      if (prev) events.push({ vi, first: false, added: 0, removed: prev.members.size, inherited: [], changed: 0, changes: ['no longer public API'] });
+      if (prev) events.push({ vi, first: false, added: 0, removed: prev.members.size, inherited: [], declared: [], changed: 0, changes: ['no longer public API'] });
       prev = null;
       continue;
     }
     if (!prev) {
-      events.push({ vi, first: true, ...(seen ? { again: true } : {}), added: now.members.size, removed: 0, inherited: [], changes: [] });
+      events.push({ vi, first: true, ...(seen ? { again: true } : {}), added: now.members.size, removed: 0, inherited: [], declared: [], changes: [] });
     } else if (prev.value !== now.value || !sameMembers(prev.members, now.members)) {
-      const added = [...now.members.keys()].filter((k) => !prev.members.has(k)).length;
+      const came = [...now.members.keys()].filter((k) => !prev.members.has(k));
       const gone = [...prev.members.keys()].filter((k) => !now.members.has(k));
+      // a member declared now that the class inherited at the previous release: no new API
+      const declaredBefore = methodSignatures(prev.members.keys());
+      const nowKind = parseApiValue(now.value)?.kind ?? null;
+      const byOrigin = new Map();
+      for (const key of came) {
+        const got = inheritedFrom(key, now.members.get(key), prev.value, prevVi, supertypes, { wasKind: nowKind, declared: declaredBefore });
+        if (got) byOrigin.set(got.from, (byOrigin.get(got.from) ?? 0) + 1);
+      }
+      const declaredNow = [...byOrigin].map(([from, count]) => ({ from, count })).sort((x, y) => y.count - x.count || cmpText(x.from, y.from));
+      const added = came.length - declaredNow.reduce((n, x) => n + x.count, 0);
       const bySupertype = new Map();
       const declared = methodSignatures(now.members.keys());
       const wasKind = parseApiValue(prev.value)?.kind ?? null;
@@ -2206,8 +2226,8 @@ export function classApiHistory(rows, cvs, enclosing = null, supertypes = () => 
         if (w == null || w === v) continue;
         if (deprecationChange(v, w) || memberModifierChanges(key, v, w, ca?.kind, cb?.kind).length) memberChanges++;
       }
-      if (added || removed || inherited.length || memberChanges || changes.length) {
-        events.push({ vi, first: false, added, removed, inherited, changed: memberChanges, changes });
+      if (added || removed || inherited.length || declaredNow.length || memberChanges || changes.length) {
+        events.push({ vi, first: false, added, removed, inherited, declared: declaredNow, changed: memberChanges, changes });
       }
     }
     seen = true;

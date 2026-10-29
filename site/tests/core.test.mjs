@@ -2239,7 +2239,7 @@ describe('API: members from the shards', () => {
 
   test('classApiHistory: what changed from one release shown to the next', () => {
     const events = classApiHistory(classA, [0, 1]);
-    assert.deepEqual(events[0], { vi: 0, first: true, added: 7, removed: 0, inherited: [], changes: [] });
+    assert.deepEqual(events[0], { vi: 0, first: true, added: 7, removed: 0, inherited: [], declared: [], changes: [] });
     assert.deepEqual([events[1].added, events[1].removed, events[1].changed, events[1].changes], [3, 4, 2, ['deprecated', 'became final', 'supertype changed']]);
     assert.deepEqual(classApiHistory(classA, [1]).map((e) => e.first), [true]);
     assert.deepEqual(modifierChanges(parseApiValue('+'), parseApiValue('#a')), ['public → protected', 'became abstract']);
@@ -2470,9 +2470,9 @@ describe('API: dating across jars and lines, change kinds, members across jars',
   test('classApiHistory: a class that is no longer API, and API again', () => {
     const g = [rowsOf('a', 'x.G', [[0, '+'], [1, null], [2, '+']], { 'f()V': [[0, '+'], [1, null], [2, '+']] })];
     assert.deepEqual(classApiHistory(g, [0, 1, 2]), [
-      { vi: 0, first: true, added: 1, removed: 0, inherited: [], changes: [] },
-      { vi: 1, first: false, added: 0, removed: 1, inherited: [], changed: 0, changes: ['no longer public API'] },
-      { vi: 2, first: true, again: true, added: 1, removed: 0, inherited: [], changes: [] },
+      { vi: 0, first: true, added: 1, removed: 0, inherited: [], declared: [], changes: [] },
+      { vi: 1, first: false, added: 0, removed: 1, inherited: [], declared: [], changed: 0, changes: ['no longer public API'] },
+      { vi: 2, first: true, again: true, added: 1, removed: 0, inherited: [], declared: [], changes: [] },
     ]);
   });
 
@@ -2573,6 +2573,26 @@ describe('API: dating across jars and lines, change kinds, members across jars',
     // the inherited member's value where it is declared now, for its deprecation
     const deprecated = new Map([['io.quarkus.Ops', [rowsOf('b', 'io.quarkus.Ops', [[1, '+a']], { [RUN]: [[1, '+R since 3.18']] })]]]);
     assert.equal(one({ h: [[0, '+'], [1, '+ extends io.quarkus.Ops']], members: { [RUN]: [[0, '+'], [1, null]] } }, RUN, deprecated)[0].inheritedValue, '+R since 3.18');
+  });
+
+  test('declared: a member the class inherited before and declares now is no new API, either way round', () => {
+    const TO_STRING = 'toString()Ljava/lang/String;';
+    const RUN = 'run()V';
+    const base = new Map([['io.quarkus.Base', [rowsOf('b', 'io.quarkus.Base', [[0, '+a']], { [RUN]: [[0, '+']] })]]]);
+    const known = (n) => base.get(n) ?? null;
+    // at 1, C overrides toString() and run(), which it inherited at 0 from java.lang.Object and Base; f() is new
+    const c = [rowsOf('a', 'io.quarkus.C', [[0, '+ extends io.quarkus.Base']], { [TO_STRING]: [[1, '+']], [RUN]: [[1, '+']], 'f()V': [[1, '+']] })];
+    assert.deepEqual(core.diffApi(new Map([['io.quarkus.C', c]]), 0, 1, undefined, undefined, known).map((r) => [r.member, r.change, r.from ?? null]),
+      [[RUN, 'declared', 'io.quarkus.Base'], [TO_STRING, 'declared', core.OBJECT_CLASS], ['f()V', 'added', null]]);
+    // the comparison the other way round: inherited at the newer release
+    assert.deepEqual(core.diffApi(new Map([['io.quarkus.C', c]]), 1, 0, undefined, undefined, known).map((r) => [r.member, r.change]),
+      [['f()V', 'removed'], [RUN, 'inherited'], [TO_STRING, 'inherited']]);
+    // without the supertypes' data, Base's run() is added, java.lang.Object's toString() still declared
+    assert.deepEqual(core.diffApi(new Map([['io.quarkus.C', c]]), 0, 1).map((r) => [r.member, r.change]),
+      [[TO_STRING, 'declared'], ['f()V', 'added'], [RUN, 'added']]);
+    const ev = core.classApiHistory(c, [0, 1], null, known)[1];
+    assert.deepEqual([ev.added, ev.declared], [1, [{ from: 'io.quarkus.Base', count: 1 }, { from: core.OBJECT_CLASS, count: 1 }]]);
+    assert.equal(core.apiRowCounts(core.diffApi(new Map([['io.quarkus.C', c]]), 0, 1, undefined, undefined, known)).changed, 2, 'declared counts as changed');
   });
 
   test('apiClassCounts and apiRowCounts: the counts of the summary, nested classes left out', () => {
