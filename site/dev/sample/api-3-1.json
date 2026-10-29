@@ -1,0 +1,6 @@
+{
+  "rows": [
+    ["quarkus-arc","io.quarkus.arc.runtime.ArcRecorder",[["3.0.4.Final","+"]],[["<init>()V",[["3.0.4.Final","+"]]],["initContainer(Lio/quarkus/runtime/ShutdownContext;)Lio/quarkus/arc/ArcContainer;",[["3.0.4.Final","+"]]],["initStaticSupplierBeans(Ljava/util/Map;)V",[["3.0.4.Final","+"],["3.33.3","+D"]]]]],
+    ["quarkus-smallrye-opentracing","io.quarkus.opentracing.runtime.TracingRecorder",[["3.0.4.Final","+"],["3.9.5","+D since 3.9"],["3.15.7",null]],[["<init>()V",[["3.0.4.Final","+"],["3.15.7",null]]],["setupResources()V",[["3.0.4.Final","+"],["3.9.5","+D since 3.9"],["3.15.7",null]]]]]
+  ]
+}

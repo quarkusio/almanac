@@ -3,20 +3,26 @@
   "artifacts": ["quarkus-amazon-lambda-http","quarkus-amazon-lambda-rest","quarkus-arc","quarkus-classloader-commons","quarkus-core","quarkus-junit","quarkus-junit-internal","quarkus-junit5","quarkus-junit5-internal","quarkus-rest","quarkus-resteasy-reactive","quarkus-smallrye-opentracing","quarkus-virtual-threads"],
   "packages": ["io.quarkus.amazon.lambda.http","io.quarkus.arc.runtime","io.quarkus.opentracing.runtime","io.quarkus.resteasy.reactive.server.runtime","io.quarkus.runtime","io.quarkus.runtime.util","io.quarkus.test","io.quarkus.test.junit","io.quarkus.virtual.threads"],
   "classes": [
-    [0,"LambdaHttpHandler",[[6,[0,1]]]],
-    [1,"ArcRecorder",[[3,2]]],
+    [0,"LambdaHttpHandler",[[6,[0,1]]],[[6,1]]],
+    [1,"ArcRecorder",[[3,2]],[[3,1],[24,2]]],
     [1,"ArcRecorder$1",[[3,2]]],
-    [2,"TracingRecorder",[[3,11],[15,null]]],
-    [3,"ResteasyReactiveRecorder",[[3,10],[12,9]]],
-    [4,"Application",[[3,4]]],
-    [4,"Quarkus",[[3,4]]],
+    [2,"TracingRecorder",[[3,11],[15,null]],[[3,1],[12,2],[15,null]]],
+    [3,"ResteasyReactiveRecorder",[[3,10],[12,9]],[[3,1]]],
+    [4,"Application",[[3,4]],[[3,1],[15,2],[18,3],[24,4]]],
+    [4,"LaunchMode",[[3,4]],[[3,1],[10,2]]],
+    [4,"Quarkus",[[3,4]],[[3,1],[12,2],[21,3],[27,4]]],
     [4,"Quarkus$1",[[3,4],[18,null]]],
-    [5,"ClassPathUtils",[[3,4],[15,3]]],
-    [6,"QuarkusExtensionTest",[[27,6]]],
-    [6,"QuarkusUnitTest",[[3,8],[24,6]]],
+    [5,"ClassPathUtils",[[3,4],[15,3]],[[3,1],[15,2],[18,3],[21,4],[24,5]]],
+    [6,"QuarkusExtensionTest",[[27,6]],[[27,1]]],
+    [6,"QuarkusUnitTest",[[3,8],[24,6]],[[3,1],[6,2],[12,3],[15,4],[18,5],[21,6],[24,7],[27,8]]],
     [6,"QuarkusUnitTest$1",[[3,8],[24,6],[27,null]]],
-    [6,"QuarkusUnitTest$Builder",[[21,8],[24,6]]],
-    [7,"QuarkusTest",[[3,7],[24,5]]],
+    [6,"QuarkusUnitTest$Builder",[[21,8],[24,6]],[[21,1],[27,2]]],
+    [7,"QuarkusTest",[[3,7],[24,5]],[[3,1]]],
     [8,"VirtualThreadsRecorder",[[10,12]]]
-  ]
+  ],
+  "api": {
+    "versions": [3,6,10,12,15,18,19,21,24,27],
+    "shards": 4,
+    "dep": [[1,2,"initContainer(Lio/quarkus/runtime/ShutdownContext;)Lio/quarkus/arc/ArcContainer;",[[3,"+"]]],[1,2,"initStaticSupplierBeans(Ljava/util/Map;)V",[[3,"+"],[24,"+D"]]],[3,11,null,[[3,"+"],[12,"+D since 3.9"],[15,null]]],[3,11,"setupResources()V",[[3,"+"],[12,"+D since 3.9"],[15,null]]],[5,4,"isStarted()Z",[[3,"+"],[18,"+D since 3.20"],[24,null]]],[7,4,"blockingExit()V",[[3,"+s"],[21,"+sD"],[27,"+sR since 3.40"]]],[9,3,"readStream(Ljava/net/URL;Ljava/util/function/Function;)Ljava/lang/Object;",[[15,"+s"],[18,"+sD since 3.20"],[24,"+sD since 3.20.1"]]],[9,3,"toLocalPath(Ljava/net/URL;)Ljava/nio/file/Path;",[[15,"+s"],[21,"+sD"]]],[9,4,"readStream(Ljava/net/URL;Ljava/util/function/Function;)Ljava/lang/Object;",[[3,"+s"],[15,null]]],[9,4,"toLocalPath(Ljava/net/URL;)Ljava/nio/file/Path;",[[3,"+s"],[15,null]]],[11,6,null,[[24,"+ implements org.junit.jupiter.api.extension.BeforeAllCallback,org.junit.jupiter.api.extension.AfterAllCallback"],[27,"+R implements org.junit.jupiter.api.extension.BeforeAllCallback,org.junit.jupiter.api.extension.AfterAllCallback since 3.40"]]],[11,6,"setFlatClassPath(Z)Lio/quarkus/test/QuarkusUnitTest;",[[24,"+R since 3.15"]]],[11,8,null,[[3,"+ implements org.junit.jupiter.api.extension.BeforeAllCallback,org.junit.jupiter.api.extension.AfterAllCallback"],[24,null]]],[11,8,"setArchiveProducer(Ljava/util/function/Supplier;)Lio/quarkus/test/QuarkusUnitTest;",[[3,"+"],[18,"+D"],[24,null]]],[11,8,"setFlatClassPath(Z)Lio/quarkus/test/QuarkusUnitTest;",[[3,"+"],[15,"+D since 3.15"],[21,"+R since 3.15"],[24,null]]],[13,6,null,[[24,"+s"],[27,"+sR since 3.40"]]],[13,8,null,[[21,"+s"],[24,null]]]]
+  }
 }

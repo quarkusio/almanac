@@ -3,17 +3,23 @@
   "artifacts": ["quarkus-amazon-lambda-http","quarkus-amazon-lambda-rest","quarkus-arc","quarkus-classloader-commons","quarkus-core","quarkus-junit","quarkus-junit-internal","quarkus-rest","quarkus-virtual-threads"],
   "packages": ["io.quarkus.amazon.lambda.http","io.quarkus.arc.runtime","io.quarkus.resteasy.reactive.server.runtime","io.quarkus.runtime","io.quarkus.runtime.util","io.quarkus.test","io.quarkus.test.junit","io.quarkus.virtual.threads"],
   "classes": [
-    [0,"LambdaHttpHandler",[[29,[0,1]]]],
-    [1,"ArcRecorder",[[29,2]]],
+    [0,"LambdaHttpHandler",[[29,[0,1]]],[[29,1]]],
+    [1,"ArcRecorder",[[29,2]],[[29,3]]],
     [1,"ArcRecorder$1",[[29,2]]],
-    [2,"ResteasyReactiveRecorder",[[29,7]]],
-    [3,"Application",[[29,4]]],
-    [3,"Quarkus",[[29,4]]],
-    [4,"ClassPathUtils",[[29,3]]],
-    [5,"QuarkusExtensionTest",[[29,6]]],
-    [5,"QuarkusUnitTest",[[29,6]]],
-    [5,"QuarkusUnitTest$Builder",[[29,6]]],
-    [6,"QuarkusTest",[[29,5]]],
+    [2,"ResteasyReactiveRecorder",[[29,7]],[[29,1]]],
+    [3,"Application",[[29,4]],[[29,4]]],
+    [3,"LaunchMode",[[29,4]],[[29,2]]],
+    [3,"Quarkus",[[29,4]],[[29,4]]],
+    [4,"ClassPathUtils",[[29,3]],[[29,6]]],
+    [5,"QuarkusExtensionTest",[[29,6]],[[29,1]]],
+    [5,"QuarkusUnitTest",[[29,6]],[[29,8]]],
+    [5,"QuarkusUnitTest$Builder",[[29,6]],[[29,3]]],
+    [6,"QuarkusTest",[[29,5]],[[29,1]]],
     [7,"VirtualThreadsRecorder",[[29,8]]]
-  ]
+  ],
+  "api": {
+    "versions": [29],
+    "shards": 2,
+    "dep": [[1,2,"initContainer(Lio/quarkus/runtime/ShutdownContext;)Lio/quarkus/arc/ArcContainer;",[[29,"+D since 4.0"]]],[1,2,"initStaticSupplierBeans(Ljava/util/Map;)V",[[29,"+D"]],24],[6,4,"blockingExit()V",[[29,"+sR since 3.40"]],21],[7,3,"readStream(Ljava/net/URL;Ljava/util/function/Function;)Ljava/lang/Object;",[[29,"+sD since 3.20.1"]],18],[7,3,"toLocalPath(Ljava/net/URL;)Ljava/nio/file/Path;",[[29,"+s"]]],[9,6,null,[[29,"+R implements org.junit.jupiter.api.extension.BeforeAllCallback,org.junit.jupiter.api.extension.AfterAllCallback since 3.40"]],27],[9,6,"setFlatClassPath(Z)Lio/quarkus/test/QuarkusUnitTest;",[[29,"+R since 3.15"]],15],[10,6,null,[[29,"+sD since 3.40"]],27]]
+  }
 }

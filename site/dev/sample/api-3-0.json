@@ -1,0 +1,6 @@
+{
+  "rows": [
+    ["quarkus-rest","io.quarkus.resteasy.reactive.server.runtime.ResteasyReactiveRecorder",[["3.9.5","+"]],[["<init>()V",[["3.9.5","+"]]],["createDeployment(Ljava/lang/Object;)Ljava/util/function/Supplier;",[["3.9.5","+"]]]]],
+    ["quarkus-resteasy-reactive","io.quarkus.resteasy.reactive.server.runtime.ResteasyReactiveRecorder",[["3.0.4.Final","+"],["3.9.5",null]],[["<init>()V",[["3.0.4.Final","+"],["3.9.5",null]]],["createDeployment(Ljava/lang/Object;)Ljava/util/function/Supplier;",[["3.0.4.Final","+"],["3.9.5",null]]]]]
+  ]
+}

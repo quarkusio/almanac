@@ -1,0 +1,5 @@
+{
+  "rows": [
+    ["quarkus-junit-internal","io.quarkus.test.QuarkusExtensionTest",[["3.40.1.1","+X implements org.junit.jupiter.api.extension.BeforeAllCallback,org.junit.jupiter.api.extension.AfterAllCallback"]],[["<init>()V",[["3.40.1.1","+"]]],["assertException(Ljava/util/function/Consumer;)Lio/quarkus/test/QuarkusExtensionTest;",[["3.40.1.1","+"]]],["withApplicationRoot(Ljava/util/function/Consumer;)Lio/quarkus/test/QuarkusExtensionTest;",[["3.40.1.1","+"]]]]]
+  ]
+}

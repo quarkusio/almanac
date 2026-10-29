@@ -1895,3 +1895,673 @@ describe('durations: stream starts and phrasing', () => {
     assert.equal(spanLabel('2024-01-15', '2026-01-14'), '1 year 11 months');
   });
 });
+
+/* -------------------------------------------------------------------------- */
+describe('API: values, signatures and shards', () => {
+  const { parseApiValue, deprecationOf, prettyMember, memberKind, memberShardOf, implicitMember, apiVersionsOf, apiVersionFor } = core;
+
+  test('parseApiValue: class values', () => {
+    assert.deepEqual(parseApiValue('+'), {
+      access: 'public', kind: 'class', abstract: false, final: false, static: false, experimental: false,
+      deprecated: false, forRemoval: false, extends: null, implements: [], since: null,
+    });
+    assert.equal(parseApiValue('+i').kind, 'interface');
+    assert.equal(parseApiValue('+n').kind, 'annotation');
+    assert.equal(parseApiValue('+e').kind, 'enum');
+    assert.equal(parseApiValue('+rf').kind, 'record');
+    const v = parseApiValue('#asXR extends io.quarkus.Base implements java.io.Serializable,java.lang.AutoCloseable since 3.35');
+    assert.deepEqual([v.access, v.kind, v.abstract, v.final, v.static, v.experimental, v.deprecated, v.forRemoval],
+      ['protected', 'class', true, false, true, true, true, true]);
+    assert.equal(v.extends, 'io.quarkus.Base');
+    assert.deepEqual(v.implements, ['java.io.Serializable', 'java.lang.AutoCloseable']);
+    assert.equal(v.since, '3.35');
+    // since is free text to the end; implements without extends
+    assert.equal(parseApiValue('+D since use the builder instead').since, 'use the builder instead');
+    assert.deepEqual(parseApiValue('+i implements java.util.function.Supplier').implements, ['java.util.function.Supplier']);
+    // a record is lower-case r, removal upper-case R
+    assert.deepEqual([parseApiValue('+r').kind, parseApiValue('+r').forRemoval, parseApiValue('+R').kind, parseApiValue('+R').forRemoval],
+      ['record', false, 'class', true]);
+  });
+
+  test('parseApiValue: member values, and values outside the grammar', () => {
+    const m = parseApiValue('+sfe', true);
+    assert.deepEqual([m.static, m.final, m.enumConstant, m.abstract, m.default, m.varargs, m.deprecated], [true, true, true, false, false, false, false]);
+    const n = parseApiValue('#avD since 3.20', true);
+    assert.deepEqual([n.access, n.abstract, n.varargs, n.deprecated, n.forRemoval, n.since], ['protected', true, true, true, false, '3.20']);
+    assert.deepEqual([parseApiValue('+dX', true).default, parseApiValue('+dX', true).experimental], [true, true]);
+    assert.equal(parseApiValue('x'), null);
+    assert.equal(parseApiValue('+ foo'), null);
+    assert.equal(parseApiValue(null), null);
+    assert.equal(parseApiValue('+Q', true), null);
+  });
+
+  test('deprecationOf reads only the head of a value', () => {
+    assert.equal(deprecationOf('+R'), 'removal');
+    assert.equal(deprecationOf('+sfD since Do not use'), 'deprecated');
+    assert.equal(deprecationOf('+r'), null, 'a record');
+    assert.equal(deprecationOf('+ extends io.quarkus.RD'), null);
+    assert.equal(deprecationOf('+f implements a.DR'), null);
+    assert.equal(deprecationOf(null), null);
+  });
+
+  test('prettyMember: methods, constructors, fields, arrays, varargs, nested types', () => {
+    const m = prettyMember('withApplicationRoot(Ljava/util/function/Consumer;)Lio/quarkus/test/QuarkusUnitTest;');
+    assert.equal(m.kind, 'method');
+    assert.equal(m.simple, 'QuarkusUnitTest withApplicationRoot(Consumer)');
+    assert.equal(m.full, 'io.quarkus.test.QuarkusUnitTest withApplicationRoot(java.util.function.Consumer)');
+    assert.equal(prettyMember('<init>()V', { className: 'io.quarkus.test.QuarkusUnitTest' }).simple, 'QuarkusUnitTest()');
+    const v = prettyMember('<init>(I[Ljava/lang/String;)V', { className: 'io.quarkus.test.QuarkusUnitTest$Builder', varargs: true });
+    assert.deepEqual([v.kind, v.simple, v.full], ['constructor', 'Builder(int, String...)', 'Builder(int, java.lang.String...)']);
+    assert.equal(prettyMember('grid([[ZJ)[[I').simple, 'int[][] grid(boolean[][], long)');
+    const f = prettyMember('INSTANCE:Lio/quarkus/Foo$Bar;');
+    assert.deepEqual([f.kind, f.simple, f.full], ['field', 'Foo.Bar INSTANCE', 'io.quarkus.Foo.Bar INSTANCE']);
+    assert.equal(prettyMember('run()V').simple, 'void run()');
+    assert.equal(prettyMember('foo(Lx)V'), null);
+    assert.equal(prettyMember('f:Q'), null);
+    assert.equal(prettyMember('f:II'), null);
+    assert.deepEqual(['<init>()V', 'a()V', 'A:I'].map(memberKind), ['constructor', 'method', 'field']);
+  });
+
+  test('memberShardOf: FNV-1a 32 of the UTF-8 name up to the first $', () => {
+    assert.equal(memberShardOf('', 0xffffffff), 2166136261);
+    assert.equal(memberShardOf('a', 0xffffffff), 3826002220);
+    assert.equal(memberShardOf('foobar', 0xffffffff), 3214735720);
+    assert.equal(memberShardOf('io.quarkus.test.QuarkusUnitTest', 32), 19);
+    assert.equal(memberShardOf('io.quarkus.test.QuarkusUnitTest', 16), 3);
+    assert.equal(memberShardOf('io.quarkus.test.QuarkusUnitTest$Builder', 32), 19, 'nested classes share the shard');
+    assert.equal(memberShardOf('io.quarkus.Größe', 32), 10, 'UTF-8 bytes');
+    assert.equal(memberShardOf('io.quarkus.Größe', 8), 2);
+    assert.equal(memberShardOf('io.quarkus.Foo', 0), 0);
+  });
+
+  test('implicit enum and record members', () => {
+    assert.ok(implicitMember('values()[Lio/quarkus/Kind;', 'enum', 'io.quarkus.Kind'));
+    assert.ok(implicitMember('valueOf(Ljava/lang/String;)Lio/quarkus/Kind;', 'enum', 'io.quarkus.Kind'));
+    assert.ok(!implicitMember('valueOf(Ljava/lang/String;)Lio/quarkus/Other;', 'enum', 'io.quarkus.Kind'));
+    assert.ok(implicitMember('hashCode()I', 'record', 'io.quarkus.R'));
+    assert.ok(!implicitMember('hashCode()I', 'class', 'io.quarkus.R'));
+  });
+
+  test('apiVersionsOf and apiVersionFor follow the snapshot rule', () => {
+    const versions = V('3.1.0', '3.1.1', '3.2.0.CR1', '3.2.0').map((x, i) => ({ ...x, api: i === 1 || i === 3 }));
+    assert.deepEqual(apiVersionsOf(versions), [1, 3]);
+    assert.equal(apiVersionFor(0, versions), 1, 'a final uses its stream newest patch');
+    assert.equal(apiVersionFor(2, versions), null, 'a pre-release only its own');
+    assert.equal(apiVersionFor(3, versions), 3);
+  });
+});
+
+/* -------------------------------------------------------------------------- */
+describe('API: deprecations from the classes files', () => {
+  const { mergeClasses, depRowsOf, deprecationAt, deprecatedFrom, deprecationEvents, deprecationsAt, diffDeprecations, apiChangedClasses, apiRevisionAt } = core;
+  // 0 3.30.0, 1 3.31.0.CR1, 2 3.31.0, 3 3.35.0.CR1, 4 3.35.0 (line 3), 5 4.0.0.Beta1 (line 4)
+  const versions = V('3.30.0', '3.31.0.CR1', '3.31.0', '3.35.0.CR1', '3.35.0', '4.0.0.Beta1').map((x) => ({ ...x, classes: true, api: true }));
+  const SAP = 'setArchiveProducer(Ljava/util/function/Supplier;)Lio/quarkus/test/QuarkusUnitTest;';
+  const PARSE = 'parse(Ljava/lang/String;)I';
+  const line3 = {
+    major: 3,
+    versions: [0, 1, 2, 3, 4],
+    artifacts: ['quarkus-core', 'quarkus-junit-internal', 'quarkus-junit5-internal'],
+    packages: ['io.quarkus.runtime', 'io.quarkus.test'],
+    classes: [
+      [0, 'Old', [[0, 0], [4, null]], [[0, 1], [4, null]]],
+      [0, 'Plain', [[0, 0], [4, null]], [[0, 1], [4, null]]],
+      [0, 'Util', [[0, 0]], [[0, 1], [2, 2]]],
+      [1, 'QuarkusUnitTest', [[0, 2], [1, 1]], [[0, 1], [3, 2]]],
+      [1, 'QuarkusUnitTest$Builder', [[0, 2], [1, 1]], [[0, 1]]],
+      [1, 'Internal', [[0, 1]]],
+    ],
+    api: {
+      versions: [0, 1, 2, 3, 4],
+      shards: 4,
+      dep: [
+        [0, 0, null, [[0, '+'], [2, '+D'], [4, null]]],
+        [2, 0, PARSE, [[0, '+s'], [2, '+sD'], [3, '+s']]],
+        [3, 1, null, [[1, '+'], [3, '+R since 3.35']]],
+        [3, 1, SAP, [[1, '+'], [2, '+D since 3.31'], [4, null]]],
+      ],
+    },
+  };
+  const line4 = {
+    major: 4,
+    versions: [5],
+    artifacts: ['quarkus-core', 'quarkus-junit-internal'],
+    packages: ['io.quarkus.runtime', 'io.quarkus.test'],
+    classes: [[0, 'Util', [[5, 0]], [[5, 3]]], [1, 'QuarkusUnitTest', [[5, 1]], [[5, 2]]]],
+    // QuarkusUnitTest has been marked for removal since 3.35.0.CR1 (3), in line 3: its row carries that
+    api: { versions: [5], shards: 2, dep: [[1, 1, null, [[5, '+R since 3.35']], 3]] },
+  };
+  const merged = mergeClasses([line4, line3]);
+  const row = (name) => merged.classes.findIndex((r) => core.className(merged, r) === name);
+  const QUT = row('io.quarkus.test.QuarkusUnitTest');
+
+  test('mergeClasses: api versions, lines, renumbered dep rows and revision histories', () => {
+    assert.deepEqual(merged.api.versions, [0, 1, 2, 3, 4, 5]);
+    assert.deepEqual(merged.api.lines, [{ major: 3, shards: 4, versions: [0, 1, 2, 3, 4] }, { major: 4, shards: 2, versions: [5] }]);
+    assert.deepEqual(merged.classes.map((r) => r[1]), ['Old', 'Plain', 'Util', 'Internal', 'QuarkusUnitTest', 'QuarkusUnitTest$Builder']);
+    assert.deepEqual(merged.classes[row('io.quarkus.runtime.Util')][3], [[0, 1], [2, 2], [5, 3]]);
+    assert.deepEqual(merged.classes[QUT][3], [[0, 1], [3, 2]], 'the same revision in both lines adds no point');
+    assert.deepEqual(merged.classes[row('io.quarkus.test.QuarkusUnitTest$Builder')][3], [[0, 1], [5, null]], 'not in line 4: closed');
+    assert.equal(merged.classes[row('io.quarkus.test.Internal')][3], undefined, 'never API: no revisions');
+    assert.deepEqual(merged.api.dep.map((d) => [merged.classes[d[0]][1], merged.artifacts[d[1]], d[2], d[3], d[4]]), [
+      ['Old', 'quarkus-core', null, [[0, '+'], [2, '+D'], [4, null]], undefined],
+      ['Util', 'quarkus-core', PARSE, [[0, '+s'], [2, '+sD'], [3, '+s'], [5, null]], undefined],
+      ['QuarkusUnitTest', 'quarkus-junit-internal', null, [[1, '+'], [3, '+R since 3.35']], [[5, 3]]],
+      ['QuarkusUnitTest', 'quarkus-junit-internal', SAP, [[1, '+'], [2, '+D since 3.31'], [4, null]], undefined],
+    ]);
+    // one line: its api data gets its line; no api data: unchanged
+    assert.deepEqual(mergeClasses([line3]).api.lines, [{ major: 3, shards: 4, versions: [0, 1, 2, 3, 4] }]);
+    const plain = { versions: [0], artifacts: [], packages: [], classes: [] };
+    assert.equal(mergeClasses([plain]), plain);
+    assert.equal(mergeClasses([plain, { ...plain, versions: [1] }]).api, undefined);
+    assert.equal(apiRevisionAt(merged.classes[QUT], 4), 2);
+    assert.equal(apiRevisionAt(merged.classes[row('io.quarkus.test.Internal')], 4), undefined);
+  });
+
+  test('deprecationAt, deprecatedFrom and deprecationEvents', () => {
+    const qut = depRowsOf(merged, QUT);
+    const lines = core.apiLinesOf(merged);
+    assert.deepEqual(deprecationAt(qut, lines, 5), { kind: 'removal', since: '3.35', from: 3, value: '+R since 3.35' });
+    assert.equal(deprecationAt(qut, lines, 2), null);
+    const parse = depRowsOf(merged, row('io.quarkus.runtime.Util'), PARSE);
+    assert.equal(deprecatedFrom(parse, lines, 2), 2);
+    assert.equal(deprecatedFrom(parse, lines, 3), null);
+    assert.deepEqual(deprecationEvents(parse, [0, 1, 2, 3, 4, 5], true).map((e) => [e.vi, e.type]), [[2, 'deprecated'], [3, 'undeprecated']]);
+    assert.deepEqual(deprecationEvents(qut, [0, 1, 2, 3, 4, 5]).map((e) => [e.vi, e.type, e.since, e.first]), [[3, 'removal', '3.35', false]]);
+    // shown from 3.35.0.CR1 on: already marked there
+    assert.deepEqual(deprecationEvents(qut, [3, 4, 5]).map((e) => [e.vi, e.type, e.first]), [[3, 'removal', true]]);
+  });
+
+  test('deprecationsAt: every deprecated class and member of a release, by jar', () => {
+    const at = (vi) => deprecationsAt(merged, vi).map((d) => [d.artifact, d.name.replace(/^.*\./, ''), d.member, d.kind, d.since, d.from]);
+    assert.deepEqual(at(2), [
+      ['quarkus-core', 'Old', null, 'deprecated', null, 2],
+      ['quarkus-core', 'Util', PARSE, 'deprecated', null, 2],
+      ['quarkus-junit-internal', 'QuarkusUnitTest', SAP, 'deprecated', '3.31', 2],
+    ]);
+    assert.deepEqual(at(3), [
+      ['quarkus-core', 'Old', null, 'deprecated', null, 2],
+      ['quarkus-junit-internal', 'QuarkusUnitTest', null, 'removal', '3.35', 3],
+      ['quarkus-junit-internal', 'QuarkusUnitTest', SAP, 'deprecated', '3.31', 2],
+    ]);
+    assert.deepEqual(at(5), [['quarkus-junit-internal', 'QuarkusUnitTest', null, 'removal', '3.35', 3]]);
+  });
+
+  test('diffDeprecations: newly deprecated, for removal, undeprecated, removed after deprecation', () => {
+    const rows = (a, b) => diffDeprecations(merged, a, b).rows.map((r) => [r.artifact, r.name.replace(/^.*\./, ''), r.member, r.change]);
+    assert.deepEqual(rows(1, 3), [
+      ['quarkus-core', 'Old', null, 'deprecated'],
+      ['quarkus-junit-internal', 'QuarkusUnitTest', null, 'removal'],
+      ['quarkus-junit-internal', 'QuarkusUnitTest', SAP, 'deprecated'],
+    ]);
+    const d = diffDeprecations(merged, 2, 4);
+    assert.deepEqual(d.rows.map((r) => [r.name.replace(/^.*\./, ''), r.member, r.change, r.since, r.from]), [
+      ['Old', null, 'removed', null, 2],
+      ['Util', PARSE, 'undeprecated', null, 2],
+      ['QuarkusUnitTest', null, 'removal', '3.35', 3],
+      ['QuarkusUnitTest', SAP, 'removed', '3.31', 2],
+    ]);
+    assert.deepEqual(d.counts, {
+      classes: { deprecated: 0, removal: 1, unremoval: 0, undeprecated: 0, removed: 1 },
+      members: { deprecated: 0, removal: 0, unremoval: 0, undeprecated: 1, removed: 1 },
+    });
+    assert.deepEqual(diffDeprecations(merged, 3, 3).rows, []);
+    assert.deepEqual(diffDeprecations(merged, null, 3).rows, []);
+    // across lines: still marked for removal in 4.0
+    assert.deepEqual(rows(4, 5), []);
+  });
+
+  test('apiChangedClasses: classes whose API revision differs', () => {
+    assert.deepEqual(apiChangedClasses(merged, 2, 3), ['io.quarkus.test.QuarkusUnitTest']);
+    assert.deepEqual(apiChangedClasses(merged, 4, 5), ['io.quarkus.runtime.Util', 'io.quarkus.test.QuarkusUnitTest$Builder']);
+    assert.deepEqual(apiChangedClasses(merged, 3, 4), ['io.quarkus.runtime.Old', 'io.quarkus.runtime.Plain']);
+  });
+
+  test('search: class results carry their deprecation in the newest release with api data', () => {
+    const index = core.buildSearchIndex({ classes: merged, versions });
+    const of = (name) => index.entries.find((e) => e.id === name);
+    assert.equal(of('io.quarkus.test.QuarkusUnitTest').deprecation, 'removal');
+    assert.equal(of('io.quarkus.runtime.Util').deprecation, null);
+    assert.equal(of('io.quarkus.runtime.Old').deprecation, null, 'gone: no chip');
+  });
+});
+
+/* -------------------------------------------------------------------------- */
+describe('API: members from the shards', () => {
+  const { apiShard, mergeApiRows, apiAt, diffApi, classApiHistory, classMembers, modifierChanges, parseApiValue } = core;
+  const versions = V('3.30.0', '3.31.0.CR1', '3.31.0', '3.35.0.CR1', '3.35.0', '4.0.0.Beta1');
+  const versionIndex = new Map(versions.map((x, i) => [x.v, i]));
+  const QUT = 'io.quarkus.test.QuarkusUnitTest';
+  const SAP = 'setArchiveProducer(Ljava/util/function/Supplier;)Lio/quarkus/test/QuarkusUnitTest;';
+  const WAR = 'withApplicationRoot(Ljava/util/function/Consumer;)Lio/quarkus/test/QuarkusUnitTest;';
+  const shard3 = apiShard({
+    rows: [
+      ['quarkus-junit-internal', QUT, [['3.31.0.CR1', '+'], ['3.35.0.CR1', '+R since 3.35']], [
+        ['<init>()V', [['3.31.0.CR1', '+']]],
+        [SAP, [['3.31.0.CR1', '+'], ['3.31.0', '+D since 3.31'], ['3.35.0', null]]],
+        [WAR, [['3.31.0.CR1', '+']]],
+      ]],
+      ['quarkus-junit5-internal', QUT, [['3.30.0', '+'], ['3.31.0.CR1', null]], [
+        ['<init>()V', [['3.30.0', '+'], ['3.31.0.CR1', null]]],
+        [SAP, [['3.30.0', '+'], ['3.31.0.CR1', null]]],
+      ]],
+      ['quarkus-x', 'io.quarkus.Unknown', [['9.9.9', '+']], []],
+    ],
+  }, versionIndex);
+  const shard4 = apiShard({ rows: [['quarkus-junit-internal', QUT, [['4.0.0.Beta1', '+R since 3.35']], [['<init>()V', [['4.0.0.Beta1', '+']]], [WAR, [['4.0.0.Beta1', '+']]]]]] }, versionIndex);
+  const rows = mergeApiRows([{ first: 5, rows: shard4.byName.get(QUT) }, { first: 0, rows: shard3.byName.get(QUT) }]);
+
+  test('apiShard maps version strings to release indices and drops unknown ones', () => {
+    assert.equal(shard3.rows.length, 3);
+    assert.deepEqual(shard3.rows[0].h, [[1, '+'], [3, '+R since 3.35']]);
+    assert.deepEqual(shard3.rows[2].h, [], 'unknown version');
+    assert.deepEqual(shard3.byName.get(QUT).map((r) => r.artifact), ['quarkus-junit-internal', 'quarkus-junit5-internal']);
+    assert.deepEqual(apiShard(null, versionIndex).rows, []);
+  });
+
+  test('mergeApiRows: one history per jar across lines', () => {
+    assert.deepEqual(rows.map((r) => r.artifact), ['quarkus-junit-internal', 'quarkus-junit5-internal']);
+    const [junit] = rows;
+    assert.deepEqual(junit.h, [[1, '+'], [3, '+R since 3.35']]);
+    assert.deepEqual(junit.members.get('<init>()V'), [[1, '+']]);
+    assert.deepEqual(junit.members.get(SAP), [[1, '+'], [2, '+D since 3.31'], [4, null]]);
+    // a member that line 4 does not have is closed at its first release
+    const closed = mergeApiRows([{ first: 0, rows: [{ artifact: 'a', name: 'x.Y', h: [[0, '+']], members: [['f()V', [[0, '+']]]] }] },
+      { first: 5, rows: [{ artifact: 'a', name: 'x.Y', h: [[5, '+']], members: [] }] }]);
+    assert.deepEqual(closed[0].members.get('f()V'), [[0, '+'], [5, null]]);
+    assert.deepEqual(closed[0].h, [[0, '+']]);
+  });
+
+  test('apiAt: the class at a release, across jars', () => {
+    assert.equal(apiAt(rows, 0).artifact, 'quarkus-junit5-internal');
+    const at2 = apiAt(rows, 2);
+    assert.equal(at2.artifact, 'quarkus-junit-internal');
+    assert.deepEqual([...at2.members.keys()], ['<init>()V', SAP, WAR]);
+    assert.equal(at2.members.get(SAP), '+D since 3.31');
+    assert.equal(apiAt([], 2), null);
+  });
+
+  // one class, two releases: what diffApi and classApiHistory see
+  const AK = {
+    RUN: 'run()V', OLD: 'old()V', SIZE_I: 'size()I', SIZE_J: 'size()J', GET_I: 'get(I)Ljava/lang/Object;', GET_J: 'get(J)Ljava/lang/Object;',
+    NAME: 'name:Ljava/lang/String;', PUT: 'put(Ljava/lang/String;)V', FRESH: 'fresh()V', INIT: '<init>()V',
+  };
+  const classA = [{
+    artifact: 'a', name: 'x.A', h: [[0, '+'], [1, '+fD extends x.Base']],
+    members: new Map([
+      [AK.RUN, [[0, '+'], [1, '+s']]], [AK.OLD, [[0, '+D'], [1, null]]], [AK.SIZE_I, [[0, '+'], [1, null]]], [AK.SIZE_J, [[1, '+']]],
+      [AK.GET_I, [[0, '+'], [1, null]]], [AK.GET_J, [[1, '+']]], [AK.NAME, [[0, '+'], [1, '+R']]], [AK.PUT, [[0, '+']]], [AK.FRESH, [[1, '+']]],
+      [AK.INIT, [[0, '#'], [1, null]]],
+    ]),
+  }];
+
+  test('diffApi: class and member changes, a moved class is no change', () => {
+    const byName = new Map([
+      ['x.A', classA],
+      ['x.New', [{ artifact: 'a', name: 'x.New', h: [[1, '+']], members: new Map() }]],
+      ['x.Gone', [{ artifact: 'a', name: 'x.Gone', h: [[0, '+D'], [1, null]], members: new Map() }]],
+      ['x.Moved', [
+        { artifact: 'j5', name: 'x.Moved', h: [[0, '+'], [1, null]], members: new Map([[AK.RUN, [[0, '+'], [1, null]]]]) },
+        { artifact: 'j', name: 'x.Moved', h: [[1, '+']], members: new Map([[AK.RUN, [[1, '+']]]]) },
+      ]],
+    ]);
+    const out = diffApi(byName, 0, 1);
+    assert.deepEqual(out.filter((r) => r.name === 'x.A').map((r) => [r.member, r.change, r.details, r.previous]), [
+      [null, 'deprecated', [], null],
+      [null, 'modifiers', ['became final'], null],
+      [null, 'supertype', ['extends nothing → x.Base'], null],
+      [AK.INIT, 'removed', [], null],
+      [AK.OLD, 'removed', [], null],
+      [AK.NAME, 'removal', [], null],
+      [AK.SIZE_J, 'return type', [], AK.SIZE_I],
+      [AK.GET_J, 'signature', [], AK.GET_I],
+      [AK.RUN, 'modifiers', ['became static'], null],
+      [AK.FRESH, 'added', [], null],
+    ]);
+    const init = out.find((r) => r.member === AK.INIT);
+    assert.deepEqual([init.constructor, init.protected], [true, true]);
+    assert.equal(out.find((r) => r.member === AK.OLD).was, 'deprecated');
+    assert.deepEqual(out.filter((r) => r.name !== 'x.A').map((r) => [r.name, r.member, r.change, r.was ?? null]), [['x.Gone', null, 'removed', 'deprecated'], ['x.New', null, 'added', null]]);
+    assert.ok(!out.some((r) => r.name === 'x.Moved'), 'a class that moved jars with the same API');
+    assert.deepEqual(diffApi(byName, 1, 1), []);
+  });
+
+  test('classApiHistory: what changed from one release shown to the next', () => {
+    const events = classApiHistory(classA, [0, 1]);
+    assert.deepEqual(events[0], { vi: 0, first: true, added: 7, removed: 0, changes: [] });
+    assert.deepEqual([events[1].added, events[1].removed, events[1].changed, events[1].changes], [3, 4, 2, ['deprecated', 'became final', 'supertype changed']]);
+    assert.deepEqual(classApiHistory(classA, [1]).map((e) => e.first), [true]);
+    assert.deepEqual(modifierChanges(parseApiValue('+'), parseApiValue('#a')), ['public → protected', 'became abstract']);
+  });
+
+  test('classMembers: the members at a release with their since, and those removed', () => {
+    const m = classMembers(classA, [0, 1], 1, 'x.A');
+    assert.deepEqual(m.members.map((x) => [x.key, x.since]), [
+      [AK.FRESH, 1], [AK.GET_J, 1], [AK.NAME, 0], [AK.PUT, 0], [AK.RUN, 0], [AK.SIZE_J, 1],
+    ]);
+    assert.deepEqual(m.removed.map((x) => [x.key, x.last, x.value]), [[AK.INIT, 0, '#'], [AK.GET_I, 0, '+'], [AK.OLD, 0, '+D'], [AK.SIZE_I, 0, '+']]);
+    assert.equal(m.members.find((x) => x.key === AK.NAME).parsed.forRemoval, true);
+    assert.equal(m.members.find((x) => x.key === AK.RUN).pretty.simple, 'void run()');
+    assert.equal(m.value, '+fD extends x.Base');
+    // shown from 1 on: everything there is new as far as the page knows
+    assert.ok(classMembers(classA, [1], 1, 'x.A').members.every((x) => x.since === 1));
+  });
+});
+
+/* -------------------------------------------------------------------------- */
+describe('sample dataset (dev/sample): API data follows the site data format', () => {
+  const { mergeClasses, apiVersionsOf, parseApiValue, prettyMember, memberShardOf, apiShard, mergeApiRows, apiChangedClasses, diffApi, deprecationOf } = core;
+  const list = load('versions').versions;
+  const files = [3, 4].map((major) => Object.assign(load(`classes-${major}`), { major }));
+  const classes = mergeClasses(files);
+  const versionIndex = new Map(list.map((x, i) => [x.v, i]));
+  const shards = new Map(); // `${major}-${k}` → core.apiShard
+  for (const f of files) for (let k = 0; k < f.api.shards; k++) shards.set(`${f.major}-${k}`, apiShard(load(`api-${f.major}-${k}`), versionIndex));
+  const changePoints = (h, allowed, label) => {
+    assert.ok(Array.isArray(h) && h.length, `${label}: non-empty`);
+    assert.notEqual(h[0][1], null, `${label}: nothing recorded before the first value`);
+    h.forEach(([vi, v], i) => {
+      assert.ok(allowed.includes(vi), `${label}: points at api releases only`);
+      if (i) assert.ok(vi > h[i - 1][0] && v !== h[i - 1][1], `${label}: change points only`);
+    });
+  };
+
+  test('classes files: api releases, shards, dep rows and revisions', () => {
+    assert.deepEqual(apiVersionsOf(list), classes.api.versions, 'versions.json flags the releases with api data');
+    // a dep row is for an item (a class, or a member of a class) deprecated in some release of any line, in any jar
+    const itemOf = (f, ci, member) => `${f.packages[f.classes[ci][0]]}.${f.classes[ci][1]}#${member ?? ''}`;
+    const deprecated = new Set(files.flatMap((f) => f.api.dep.filter((d) => d[3].some(([, v]) => deprecationOf(v))).map((d) => itemOf(f, d[0], d[2]))));
+    for (const f of files) {
+      assert.ok(f.api.versions.every((vi) => f.versions.includes(vi)), 'api data only where there are classes');
+      assert.ok(f.api.shards > 0);
+      for (const [ci, ai, member, h, from] of f.api.dep) {
+        const name = `${f.packages[f.classes[ci][0]]}.${f.classes[ci][1]}`;
+        assert.ok(ai >= 0 && ai < f.artifacts.length, `${name}: artifact index`);
+        changePoints(h, f.api.versions, `${name} ${member ?? ''}`);
+        for (const [, v] of h) if (v != null) assert.ok(parseApiValue(v, member != null), `${name}: ${v} follows the grammar`);
+        assert.ok(deprecated.has(itemOf(f, ci, member)), `${name} ${member ?? ''}: deprecated in some release of some line`);
+        if (from != null) assert.ok(from < f.api.versions[0] && classes.api.versions.includes(from), `${name}: from, a release of an earlier line`);
+        if (member) assert.ok(prettyMember(member, { className: name }), `${member}: a member key`);
+      }
+      for (const row of f.classes) if (row[3]) changePoints(row[3], f.api.versions, `${row[1]} revisions`);
+    }
+  });
+
+  test('dep rows carry where a deprecation began in an earlier line, so that every page dates it alike', () => {
+    const { deprecationsAt, depRowsOf, deprecationAt, apiLinesOf, stateAt } = core;
+    // what `from` stands for: the start of the deprecation, walking back over every line's releases (any jar)
+    const avs = classes.api.versions;
+    const across = (rows, vi) => {
+      let from = null;
+      for (let k = avs.indexOf(vi); k >= 0 && rows.some((r) => deprecationOf(stateAt(r[3], avs[k]))); k--) from = avs[k];
+      return from;
+    };
+    const items = (c, vi) => deprecationsAt(c, vi).map((x) => [x.artifact, x.name, x.member, x.kind, x.since, x.from]);
+    let carried = 0;
+    for (const f of files) {
+      const own = mergeClasses([f]);
+      for (const vi of f.api.versions) {
+        assert.deepEqual(items(own, vi), items(classes, vi), `${list[vi].v}: dated alike with its line alone and with every line`);
+        for (const x of deprecationsAt(classes, vi)) {
+          assert.equal(x.from, across(depRowsOf(classes, x.classIndex, x.member), vi), `${x.name} ${x.member ?? ''}, ${list[vi].v}`);
+        }
+      }
+      carried += f.api.dep.filter((d) => d[4] != null).length;
+    }
+    assert.ok(carried >= 5, 'deprecations that began in 3.x and hold in 4.0.0.Beta1');
+    // the release page of 4.0.0.Beta1 loads line 4 alone: QuarkusUnitTest, marked for removal from 3.40.1.1
+    const line4 = mergeClasses([files[1]]);
+    const qut = line4.classes.findIndex((r) => core.className(line4, r) === 'io.quarkus.test.QuarkusUnitTest');
+    const beta = list.findIndex((x) => x.v === '4.0.0.Beta1');
+    assert.equal(list[deprecationAt(depRowsOf(line4, qut), apiLinesOf(line4), beta).from].v, '3.40.1.1');
+  });
+
+  test('shards: every class in its own shard, sorted, its members only while it is API', () => {
+    for (const f of files) {
+      for (let k = 0; k < f.api.shards; k++) {
+        const { rows } = shards.get(`${f.major}-${k}`);
+        const keys = rows.map((r) => [r.name, r.artifact]);
+        assert.deepEqual(keys, [...keys].sort((x, y) => (x[0] < y[0] ? -1 : x[0] > y[0] ? 1 : x[1] < y[1] ? -1 : 1)), 'sorted by name, then jar');
+        for (const r of rows) {
+          assert.equal(memberShardOf(r.name, f.api.shards), k, `${r.name} is in its shard`);
+          changePoints(r.h, f.api.versions, r.name);
+          for (const [key, mh] of r.members) {
+            changePoints(mh, f.api.versions, `${r.name} ${key}`);
+            for (const [vi, v] of mh) if (v != null) assert.ok(core.stateAt(r.h, vi) != null, `${r.name} ${key}: only while the class is API`);
+          }
+        }
+      }
+    }
+  });
+
+  test('the whole pipeline: revisions, shards and diffApi agree for every pair of consecutive api releases', () => {
+    const rowsOf = (name) => mergeApiRows(files.map((f) => ({ first: f.api.versions[0], rows: shards.get(`${f.major}-${memberShardOf(name, f.api.shards)}`).byName.get(name) ?? [] })));
+    const avs = classes.api.versions;
+    let changes = 0;
+    for (let i = 1; i < avs.length; i++) {
+      const names = apiChangedClasses(classes, avs[i - 1], avs[i]);
+      const rows = diffApi(new Map(names.map((n) => [n, rowsOf(n)])), avs[i - 1], avs[i]);
+      for (const name of names) assert.ok(rows.some((r) => r.name === name), `${name}: its revision changed, so its API did (${list[avs[i]].v})`);
+      changes += rows.length;
+    }
+    assert.ok(changes > 10, 'the sample has API changes to show');
+  });
+});
+
+/* -------------------------------------------------------------------------- */
+describe('API: dating across jars and lines, change kinds, members across jars', () => {
+  const {
+    mergeClasses, apiLinesOf, depRowsOf, deprecationAt, deprecationsAt, deprecationBeforeRemoval, diffDeprecations,
+    diffApi, classApiHistory, classMembers, modifierChanges, parseApiValue, prettyMember, apiInLine,
+  } = core;
+  const file = (major, versions, artifacts, classes, dep) => ({
+    major, versions, artifacts, packages: ['io.quarkus'], classes, api: { versions, shards: 1, dep },
+  });
+  const rowsOf = (artifact, name, h, members = {}) => ({ artifact, name, h, members: new Map(Object.entries(members)) });
+
+  test('deprecationsAt dates an item over all its jars: a class that moved keeps its "marked from"', () => {
+    // io.quarkus.Old deprecated from 1 in quarkus-a, in quarkus-b from 3 on
+    const moved = file(3, [0, 1, 2, 3, 4, 5], ['quarkus-a', 'quarkus-b'], [[0, 'Old', [[0, 0], [3, 1]]]], [
+      [0, 0, null, [[0, '+'], [1, '+D since 3.1'], [3, null]]],
+      [0, 1, null, [[3, '+D since 3.1']]],
+      [0, 0, 'm()V', [[0, '+'], [1, '+D'], [3, null]]],
+      [0, 1, 'm()V', [[3, '+D']]],
+    ]);
+    const items = deprecationsAt(moved, 5).map((x) => [x.artifact, x.member, x.kind, x.since, x.from]);
+    assert.deepEqual(items, [['quarkus-b', null, 'deprecated', '3.1', 1], ['quarkus-b', 'm()V', 'deprecated', null, 1]]);
+    assert.equal(deprecationAt(depRowsOf(moved, 0), apiLinesOf(moved), 5).from, 1, 'the class page agrees');
+  });
+
+  test('"marked from" stays in its line and takes what the rows carry: the same whichever lines are loaded', () => {
+    // run() deprecated from 2 (3.10.0) in line 3, for removal from 6 (4.1.0) in line 4
+    const line3 = file(3, [0, 1, 2, 3, 4], ['quarkus-core'], [[0, 'Old', [[0, 0]]]], [[0, 0, 'run()V', [[0, '+'], [2, '+D']]]]);
+    const line4 = file(4, [5, 6], ['quarkus-core'], [[0, 'Old', [[5, 0]]]], [[0, 0, 'run()V', [[5, '+D'], [6, '+R']], 2]]);
+    const alone = mergeClasses([line4]);
+    const both = mergeClasses([line3, line4]);
+    const at = (c, vi) => deprecationAt(depRowsOf(c, 0, 'run()V'), apiLinesOf(c), vi, true);
+    assert.equal(at(alone, 6).from, 2, 'line 4 alone: what its rows carry');
+    assert.equal(at(both, 6).from, 2);
+    assert.equal(at(both, 3).from, 2, 'in line 3: its own walk');
+    assert.deepEqual(diffDeprecations(alone, 5, 6).rows.map((r) => [r.member, r.change, r.from]), [['run()V', 'removal', 2]], 'the compare page of 4.0 → 4.1');
+    // without the 5th element the walk stops at the line's first release: it never goes into line 3
+    const bare = file(4, [5, 6], ['quarkus-core'], [[0, 'Old', [[5, 0]]]], [[0, 0, 'run()V', [[5, '+D'], [6, '+R']]]]);
+    assert.equal(at(mergeClasses([line3, bare]), 6).from, 5);
+  });
+
+  test('a withdrawn removal is a change of its own: unremoval', () => {
+    const c = file(3, [0, 1, 2], ['a'], [[0, 'Old', [[0, 0]], [[0, 1], [1, 2]]]], [
+      [0, 0, null, [[0, '+R'], [1, '+D']]],
+      [0, 0, 'm()V', [[0, '+R since 3.1'], [1, '+D since 3.1']]],
+    ]);
+    const d = diffDeprecations(c, 0, 1);
+    assert.deepEqual(d.rows.map((r) => [r.member, r.change, r.since, r.from]), [[null, 'unremoval', null, 0], ['m()V', 'unremoval', '3.1', 0]]);
+    assert.equal(d.counts.classes.unremoval + d.counts.members.unremoval, 2);
+    assert.deepEqual(diffDeprecations(c, 1, 0).rows.map((r) => r.change), ['removal', 'removal'], 'the other way: marked for removal');
+    // diffApi and the class page see it too, and every value change is a row: since, enum constants
+    const rows = [rowsOf('a', 'io.quarkus.Old', [[0, '+R'], [1, '+D']], {
+      'm()V': [[0, '+R since 3.1'], [1, '+D since 3.1']],
+      's()V': [[0, '+D since 3.1'], [1, '+D since 3.2']],
+      't()V': [[0, '+D'], [1, '+D since 3.2']],
+      'K:Lio/quarkus/Old;': [[0, '+'], [1, '+e']],
+    })];
+    assert.deepEqual(diffApi(new Map([['io.quarkus.Old', rows]]), 0, 1).map((r) => [r.member, r.change, r.details]), [
+      [null, 'unremoval', []],
+      ['m()V', 'unremoval', []],
+      ['K:Lio/quarkus/Old;', 'modifiers', ['became final', 'became static', 'became an enum constant']],
+      ['s()V', 'modifiers', ['since 3.1 → 3.2']],
+      ['t()V', 'modifiers', ['since 3.2 declared']],
+    ]);
+    const [, ev] = classApiHistory(rows, [0, 1]);
+    assert.deepEqual([ev.changes, ev.changed], [['no longer marked for removal'], 4]);
+    assert.deepEqual(modifierChanges(parseApiValue('+D since 3.1', true), parseApiValue('+D', true)), ['since 3.1 dropped']);
+    assert.deepEqual(modifierChanges(parseApiValue('+', true), parseApiValue('+D since 3.1', true)), [], 'a new deprecation is its own row');
+  });
+
+  test('a change of class kind brings no modifier changes that the new kind implies', () => {
+    assert.deepEqual(modifierChanges(parseApiValue('+f'), parseApiValue('+r')), ['class → record']);
+    assert.deepEqual(modifierChanges(parseApiValue('+fs'), parseApiValue('+r')), ['class → record']);
+    assert.deepEqual(modifierChanges(parseApiValue('+a'), parseApiValue('+i')), ['class → interface']);
+    assert.deepEqual(modifierChanges(parseApiValue('+a'), parseApiValue('+f')), ['no longer abstract', 'became final'], 'a class stays a class');
+    // an abstract class that became an interface: its constant and abstract method are as they were; a default method is new
+    const iface = [rowsOf('a', 'io.quarkus.Shape', [[0, '+a'], [1, '+i']], {
+      'SIDES:I': [[0, '+sf'], [1, '+']],
+      'area()D': [[0, '+a'], [1, '+']],
+      'name()Ljava/lang/String;': [[0, '+'], [1, '+d']],
+      'of()Lio/quarkus/Shape;': [[0, '+s'], [1, '+s']],
+    })];
+    assert.deepEqual(diffApi(new Map([['io.quarkus.Shape', iface]]), 0, 1).map((r) => [r.member, r.change, r.details]), [
+      [null, 'modifiers', ['class → interface']],
+      ['name()Ljava/lang/String;', 'modifiers', ['became default']],
+    ]);
+    assert.deepEqual(classApiHistory(iface, [0, 1])[1].changed, 1);
+    // constants that became an enum's
+    const enumOf = [rowsOf('a', 'io.quarkus.Mode', [[0, '+f'], [1, '+e']], { 'DEV:Lio/quarkus/Mode;': [[0, '+sf'], [1, '+e']] })];
+    assert.deepEqual(diffApi(new Map([['io.quarkus.Mode', enumOf]]), 0, 1).map((r) => [r.member, r.details]), [
+      [null, ['class → enum']],
+      ['DEV:Lio/quarkus/Mode;', ['became an enum constant']],
+    ]);
+  });
+
+  test('classMembers: a member of one of the jars is there, not removed', () => {
+    const dup = [
+      rowsOf('quarkus-a', 'io.quarkus.Dup', [[0, '+']], { 'run()V': [[0, '+']] }),
+      rowsOf('quarkus-b', 'io.quarkus.Dup', [[0, '+']], { 'run()V': [[0, '+']], 'extra()V': [[0, '+']], 'gone()V': [[0, '+'], [2, null]] }),
+    ];
+    const m = classMembers(dup, [0, 1, 2], 2, 'io.quarkus.Dup');
+    assert.deepEqual(m.members.map((x) => [x.key, x.since]), [['extra()V', 0], ['run()V', 0]]);
+    assert.deepEqual(m.removed.map((x) => [x.key, x.last]), [['gone()V', 1]]);
+    assert.equal(m.artifact, 'quarkus-a');
+    // a class no longer API: every member it had is in removed
+    const gone = classMembers([rowsOf('a', 'x.G', [[0, '+'], [2, null]], { 'f()V': [[0, '+'], [2, null]] })], [0, 1, 2], 2, 'x.G');
+    assert.deepEqual([gone.value, gone.members, gone.removed.map((x) => [x.key, x.last])], [null, [], [['f()V', 1]]]);
+  });
+
+  test('classApiHistory: a class that is no longer API, and API again', () => {
+    const g = [rowsOf('a', 'x.G', [[0, '+'], [1, null], [2, '+']], { 'f()V': [[0, '+'], [1, null], [2, '+']] })];
+    assert.deepEqual(classApiHistory(g, [0, 1, 2]), [
+      { vi: 0, first: true, added: 1, removed: 0, changes: [] },
+      { vi: 1, first: false, added: 0, removed: 1, changed: 0, changes: ['no longer public API'] },
+      { vi: 2, first: true, again: true, added: 1, removed: 0, changes: [] },
+    ]);
+  });
+
+  test('deprecation lists and API changes carry the values, so varargs print as such', () => {
+    const OF = 'of([Ljava/lang/String;)Lio/quarkus/Foo;';
+    const c = file(3, [0, 1], ['a'], [[0, 'Foo', [[0, 0]]]], [[0, 0, OF, [[0, '+sv'], [1, '+svD']]]]);
+    const [item] = deprecationsAt(c, 1);
+    assert.equal(item.value, '+svD');
+    assert.equal(prettyMember(OF, { className: 'io.quarkus.Foo', varargs: parseApiValue(item.value, true).varargs }).simple, 'Foo of(String...)');
+    assert.equal(diffDeprecations(c, 0, 1).rows[0].value, '+svD');
+    const rows = [rowsOf('a', 'io.quarkus.Foo', [[0, '+']], { [OF]: [[0, '+sv'], [1, null]], 'of([Ljava/lang/Object;)Lio/quarkus/Foo;': [[1, '+sv']] })];
+    const [sig] = diffApi(new Map([['io.quarkus.Foo', rows]]), 0, 1);
+    assert.deepEqual([sig.change, sig.value, sig.previous, sig.previousValue], ['signature', '+sv', OF, '+sv']);
+  });
+
+  test('removed after deprecation: deprecated the last time it was there, whichever way the releases are compared', () => {
+    // deprecated at 1, gone at 2
+    const c = file(3, [0, 1, 2, 3], ['a'], [[0, 'Rec', [[0, 0], [2, null]], [[0, 1], [1, 2], [2, null]]]], [
+      [0, 0, null, [[0, '+'], [1, '+D since 3.9'], [2, null]]],
+    ]);
+    const rows = depRowsOf(c, 0);
+    const lines = apiLinesOf(c);
+    assert.deepEqual(deprecationBeforeRemoval(rows, lines, 0, 3), { kind: 'deprecated', since: '3.9', from: 1, value: '+D since 3.9', at: 1 });
+    assert.equal(deprecationBeforeRemoval(rows, lines, 0, 1), null, 'not deprecated at 0, the last release of [0, 1)');
+    assert.equal(deprecationBeforeRemoval(rows, lines, 1, 0).at, 1, 'from a newer release: its deprecation there');
+    assert.equal(deprecationBeforeRemoval(rows, lines, 3, 0), null, 'not there at 3');
+    assert.deepEqual(diffDeprecations(c, 0, 3).rows.map((r) => [r.change, r.since, r.from]), [['removed', '3.9', 1]]);
+    // diffApi says the same of the class
+    const api = [rowsOf('a', 'io.quarkus.Rec', [[0, '+'], [1, '+D since 3.9'], [2, null]], { 'f()V': [[0, '+'], [1, '+D'], [2, null]] })];
+    assert.deepEqual(diffApi(new Map([['io.quarkus.Rec', api]]), 0, 3).map((r) => [r.change, r.was]), [['removed', 'deprecated']]);
+    const later = [rowsOf('a', 'io.quarkus.Rec', [[1, '+D']], {})];
+    assert.deepEqual(diffApi(new Map([['io.quarkus.Rec', later]]), 1, 0).map((r) => [r.change, r.was]), [['removed', 'deprecated']]);
+    // a member deprecated before it went, while its class stays
+    const member = [rowsOf('a', 'io.quarkus.Kept', [[0, '+']], { 'f()V': [[0, '+'], [1, '+D'], [2, null]] })];
+    assert.deepEqual(diffApi(new Map([['io.quarkus.Kept', member]]), 0, 3).map((r) => [r.member, r.change, r.was, r.value]), [['f()V', 'removed', 'deprecated', '+D']]);
+  });
+
+  test('a class declared in an interface or an annotation is implicitly static, whatever its enclosing class was', () => {
+    assert.equal(core.enclosingClassName('io.quarkus.agroal.DataSource$DataSourceLiteral'), 'io.quarkus.agroal.DataSource');
+    assert.equal(core.enclosingClassName('a.B$C$D'), 'a.B$C');
+    assert.equal(core.enclosingClassName('a.B'), null);
+    // DataSource: a class at 0 and 2, an annotation at 1; its literal is written '+s' in a class, '+' in an annotation (the grammar orders a, f, s)
+    const LIT = 'io.quarkus.agroal.DataSource$DataSourceLiteral';
+    const outer = [rowsOf('quarkus-agroal', 'io.quarkus.agroal.DataSource', [[0, '+'], [1, '+n'], [2, '+']])];
+    const lit = [rowsOf('quarkus-agroal', LIT, [[0, '+s extends x.Lit'], [1, '+ extends x.Lit'], [2, '+fs extends x.Lit']])];
+    const byName = new Map([[LIT, lit]]);
+    const enclosing = (name) => (name === LIT ? outer : null);
+    assert.deepEqual(diffApi(byName, 0, 1, undefined, enclosing), [], 'class → annotation: static all along');
+    assert.deepEqual(diffApi(byName, 1, 0, undefined, enclosing), []);
+    assert.deepEqual(diffApi(byName, 1, 2, undefined, enclosing).map((r) => [r.change, r.details]), [['modifiers', ['became final']]], 'a real change stays');
+    assert.deepEqual(diffApi(byName, 0, 1).map((r) => r.details), [['no longer static']], 'without its enclosing class');
+    assert.deepEqual(classApiHistory(lit, [0, 1, 2], outer).map((e) => [e.vi, e.changes]), [[0, []], [2, ['became final']]], 'no event at 1');
+    assert.deepEqual(classApiHistory(lit, [0, 1, 2]).map((e) => [e.vi, e.changes]), [[0, []], [1, ['no longer static']], [2, ['became final', 'became static']]]);
+  });
+
+  test('removed after deprecation: only what the older release of the pair has, whichever lines lie between', () => {
+    // Gone() deprecated and gone between 0 and 3, never at either; Kept() there at 0, deprecated at 1, gone at 2
+    const c = file(3, [0, 1, 2, 3], ['a'], [[0, 'X', [[0, 0]]]], [
+      [0, 0, 'gone()V', [[1, '+D'], [2, null]]],
+      [0, 0, 'kept()V', [[0, '+'], [1, '+D'], [2, null]]],
+    ]);
+    assert.deepEqual(diffDeprecations(c, 0, 3).rows.map((r) => [r.member, r.change]), [['kept()V', 'removed']]);
+    assert.deepEqual(diffDeprecations(c, 3, 0).rows, []);
+    assert.equal(diffDeprecations(c, 0, 3).counts.members.removed, 1);
+    // a class of line 2 deprecated in line 3 and gone in line 4: seen when line 3 is merged in, as the compare page does
+    const l2 = file(2, [0, 1], ['a'], [[0, 'Old', [[0, 0]]]], [[0, 0, null, [[0, '+']]]]);
+    const l3 = file(3, [2, 3], ['a'], [[0, 'Old', [[2, 0]]]], [[0, 0, null, [[2, '+'], [3, '+R since 3.1']]]]);
+    const l4 = file(4, [4], ['a'], [], []);
+    const removedFrom = (parts) => {
+      const m = mergeClasses(parts);
+      return deprecationBeforeRemoval(depRowsOf(m, 0), apiLinesOf(m), 1, 4)?.kind ?? null;
+    };
+    assert.equal(removedFrom([l2, l4]), null, 'line 3 skipped: not seen');
+    assert.equal(removedFrom([l2, l3, l4]), 'removal');
+  });
+
+  test('classApiHistory counts the members of every jar, as the Members section lists them', () => {
+    const two = [
+      rowsOf('quarkus-amazon-lambda-http', 'io.quarkus.amazon.lambda.http.CognitoPrincipal', [[0, '+']], { 'getName()Ljava/lang/String;': [[0, '+']] }),
+      rowsOf('quarkus-amazon-lambda-rest', 'io.quarkus.amazon.lambda.http.CognitoPrincipal', [[0, '+']], {
+        'getName()Ljava/lang/String;': [[0, '+']], 'getClaims()Ljava/util/Map;': [[0, '+']], 'getIssuer()Ljava/lang/String;': [[1, '+']],
+      }),
+    ];
+    assert.deepEqual([...core.apiUnionAt(two, 1).members.keys()], ['getName()Ljava/lang/String;', 'getClaims()Ljava/util/Map;', 'getIssuer()Ljava/lang/String;']);
+    assert.equal(core.apiUnionAt(two, 1).artifact, 'quarkus-amazon-lambda-http');
+    assert.equal(core.apiAt(two, 1).members.size, 1, 'apiAt, for diffApi: the first jar alone');
+    // no event at 2, where no jar changed
+    assert.deepEqual(classApiHistory(two, [0, 1, 2]).map((e) => [e.vi, e.first, e.added, e.removed]), [[0, true, 2, 0], [1, false, 1, 0]]);
+    const m = classMembers(two, [0, 1, 2], 2, 'io.quarkus.amazon.lambda.http.CognitoPrincipal');
+    assert.equal(m.members.length, core.apiUnionAt(two, 2).members.size, 'the same members as the Members section');
+  });
+
+  test('apiInLine: whether a class is API in some release of a line, by its revisions', () => {
+    const row = (rev) => [0, 'X', [[0, 0]], rev];
+    assert.equal(apiInLine(row([[0, 1], [2, null]]), [0, 1, 2]), true);
+    assert.equal(apiInLine(row([[0, 1], [2, null]]), [3, 4]), false);
+    assert.equal(apiInLine(row([[3, 1]]), [0, 1, 2]), false);
+    assert.equal(apiInLine(row([[3, 1]]), [3, 4]), true);
+    assert.equal(apiInLine(row([[0, 1], [4, 2]]), [3, 4]), true);
+    assert.equal(apiInLine([0, 'X', [[0, 0]]], [0]), false, 'never API');
+    assert.equal(apiInLine(undefined, [0]), false);
+  });
+});

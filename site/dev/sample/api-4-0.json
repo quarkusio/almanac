@@ -1,0 +1,6 @@
+{
+  "rows": [
+    ["quarkus-rest","io.quarkus.resteasy.reactive.server.runtime.ResteasyReactiveRecorder",[["4.0.0.Beta1","+"]],[["<init>()V",[["4.0.0.Beta1","+"]]],["createDeployment(Ljava/lang/Object;)Ljava/util/function/Supplier;",[["4.0.0.Beta1","+"]]]]],
+    ["quarkus-junit-internal","io.quarkus.test.QuarkusExtensionTest",[["4.0.0.Beta1","+X implements org.junit.jupiter.api.extension.BeforeAllCallback,org.junit.jupiter.api.extension.AfterAllCallback"]],[["<init>()V",[["4.0.0.Beta1","+"]]],["assertException(Ljava/util/function/Consumer;)Lio/quarkus/test/QuarkusExtensionTest;",[["4.0.0.Beta1","+"]]],["withApplicationRoot(Ljava/util/function/Consumer;)Lio/quarkus/test/QuarkusExtensionTest;",[["4.0.0.Beta1","+"]]]]]
+  ]
+}

@@ -1049,46 +1049,93 @@ export function classLinesOf(versions, indices) {
  * One classes object from the classes files of several major lines (`classes-3.json`, `classes-4.json`, in any order),
  * as one file over all their releases would be: their artifacts and packages, renumbered, and one history per class.
  * Each line's file starts its histories afresh, so where a class that one line ends with is missing at the start of
- * the next, the merged history gets a null point at that line's first snapshot.
+ * the next, the merged history gets a null point at that line's first snapshot. The same holds for the API data:
+ * the revision history of each class row (its 4th element) and the `api.dep` rows, renumbered, start afresh at each
+ * line's first release with api data, and a dep row's `from` (its 5th element) becomes `[[that first release, from]]`,
+ * one pair per line that carries one. `api.lines` lists, for each line with api data, its `major` (the file's, which
+ * its loader sets), `shards` and `versions`, so that pages find the shard files of a class.
  */
 export function mergeClasses(parts) {
   const files = (parts ?? []).filter((f) => f && Array.isArray(f.versions) && f.versions.length)
     .sort((x, y) => x.versions[0] - y.versions[0]);
-  if (files.length <= 1) return files[0] ?? { versions: [], artifacts: [], packages: [], classes: [] };
+  if (!files.length) return { versions: [], artifacts: [], packages: [], classes: [] };
+  if (files.length === 1) return withApiLines(files[0]);
   const artifacts = [...new Set(files.flatMap((f) => f.artifacts))].sort();
   const packages = [...new Set(files.flatMap((f) => f.packages))].sort();
   const artifactIndex = new Map(artifacts.map((a, i) => [a, i]));
   const packageIndex = new Map(packages.map((p, i) => [p, i]));
   const rows = new Map(); // `${package index} ${name}` → merged row
+  const deps = new Map(); // `${row key}\u0000${artifactId}\u0000${member}` → {rowKey, artifact, member, h, from}
   const same = (x, y) => JSON.stringify(x ?? null) === JSON.stringify(y ?? null);
+  const identical = (x, y) => x === y;
+  const last = (h) => h[h.length - 1];
+  // what the earlier lines end with does not hold in this one before its first point
+  const append = (out, h, first, eq) => {
+    if (out.length && last(out)[1] != null && h[0]?.[0] !== first) out.push([first, null]);
+    for (const [vi, v] of h) if (!out.length || !eq(last(out)[1], v)) out.push([vi, v]);
+  };
+  const close = (out, first) => {
+    if (out.length && last(out)[1] != null && last(out)[0] < first) out.push([first, null]);
+  };
   for (const f of files) {
     const first = f.versions[0];
+    const apiFirst = f.api?.versions?.[0] ?? null;
     const remap = (v) => {
       if (v == null) return null;
       if (!Array.isArray(v)) return artifactIndex.get(f.artifacts[v]);
       return v.map((j) => artifactIndex.get(f.artifacts[j])).sort((a, b) => a - b);
     };
     const inLine = new Set();
-    for (const [pi, name, h] of f.classes) {
-      const pkg = packageIndex.get(f.packages[pi]);
-      const key = `${pkg} ${name}`;
+    for (const [pi, name, h, rev] of f.classes) {
+      const key = `${packageIndex.get(f.packages[pi])} ${name}`;
       inLine.add(key);
-      if (!rows.has(key)) rows.set(key, [pkg, name, []]);
-      const out = rows.get(key)[2];
-      // what the earlier lines end with does not hold in this one before its first point
-      if (out.length && out[out.length - 1][1] != null && h[0][0] !== first) out.push([first, null]);
-      for (const [vi, v] of h) {
-        const value = remap(v);
-        if (!out.length || !same(out[out.length - 1][1], value)) out.push([vi, value]);
-      }
+      if (!rows.has(key)) rows.set(key, [packageIndex.get(f.packages[pi]), name, []]);
+      const row = rows.get(key);
+      append(row[2], h.map(([vi, v]) => [vi, remap(v)]), first, same);
+      if (apiFirst == null) continue;
+      if (Array.isArray(rev) && rev.length) append(row[3] ?? (row[3] = []), rev, apiFirst, identical);
+      else if (row[3]) close(row[3], apiFirst);
     }
     for (const [key, row] of rows) {
-      const out = row[2];
-      if (!inLine.has(key) && out[out.length - 1][1] != null && out[out.length - 1][0] < first) out.push([first, null]);
+      if (inLine.has(key)) continue;
+      close(row[2], first);
+      if (row[3] && apiFirst != null) close(row[3], apiFirst);
     }
+    if (apiFirst == null) continue;
+    const seen = new Set();
+    for (const [ci, ai, member, h, from] of f.api.dep ?? []) {
+      const crow = f.classes[ci];
+      const rowKey = `${packageIndex.get(f.packages[crow[0]])} ${crow[1]}`;
+      const key = `${rowKey}\u0000${f.artifacts[ai]}\u0000${member ?? ''}`;
+      seen.add(key);
+      if (!deps.has(key)) deps.set(key, { rowKey, artifact: artifactIndex.get(f.artifacts[ai]), member: member ?? null, h: [], from: [] });
+      const d = deps.get(key);
+      append(d.h, h, apiFirst, identical);
+      if (from != null) d.from.push([apiFirst, from]);
+    }
+    for (const [key, d] of deps) if (!seen.has(key)) close(d.h, apiFirst);
   }
   const classes = [...rows.values()].sort((x, y) => x[0] - y[0] || (x[1] < y[1] ? -1 : x[1] > y[1] ? 1 : 0));
-  return { versions: files.flatMap((f) => f.versions), artifacts, packages, classes };
+  const merged = { versions: files.flatMap((f) => f.versions), artifacts, packages, classes };
+  const apiFiles = files.filter((f) => Array.isArray(f.api?.versions) && f.api.versions.length);
+  if (apiFiles.length) {
+    const rowIndex = new Map(classes.map((row, i) => [`${row[0]} ${row[1]}`, i]));
+    const dep = [...deps.values()].map((d) => [rowIndex.get(d.rowKey), d.artifact, d.member, d.h, ...(d.from.length ? [d.from] : [])])
+      .sort((x, y) => x[0] - y[0] || x[1] - y[1] || ((x[2] ?? '') < (y[2] ?? '') ? -1 : (x[2] ?? '') > (y[2] ?? '') ? 1 : 0));
+    merged.api = { versions: apiFiles.flatMap((f) => f.api.versions), dep, lines: apiFiles.map(apiLine) };
+  }
+  return merged;
+}
+
+/** The api line of a classes file: its major, its number of shards and its releases with api data. */
+function apiLine(f) {
+  return { major: f.major ?? null, shards: f.api.shards ?? 0, versions: f.api.versions };
+}
+
+/** A classes file as mergeClasses gives one: with `api.lines` when it has api data. */
+function withApiLines(f) {
+  if (!Array.isArray(f.api?.versions) || !f.api.versions.length) return f;
+  return { ...f, api: { ...f.api, lines: [apiLine(f)] } };
 }
 
 /** The binary name of a row `[package index, name in the package, h]` of a classes file (or of mergeClasses). */
@@ -1138,6 +1185,12 @@ export function topLevelClass(name) {
   const s = String(name ?? '');
   const dollar = s.indexOf('$', s.lastIndexOf('.') + 2);
   return dollar < 0 ? s : s.slice(0, dollar);
+}
+
+/** The class a nested class is declared in (`…QuarkusUnitTest` for `…QuarkusUnitTest$Builder`, `A$B` for `A$B$C`), else null. */
+export function enclosingClassName(name) {
+  const s = String(name ?? '');
+  return isNestedClass(s) ? s.slice(0, s.lastIndexOf('$')) : null;
 }
 
 /**
@@ -1204,6 +1257,863 @@ export function classRows(diff, classes) {
       (x.name < y.name ? -1 : x.name > y.name ? 1 : 0),
   );
   return rows;
+}
+
+/* ========================================================================== */
+/* API: the public and protected classes and members of the io.quarkus jars    */
+/* ========================================================================== */
+
+/*
+ * A classes file (classes-<major>.json) may have `api`: `versions`, the release indices of its line with api data;
+ * `shards`, how many api-<major>-<k>.json files hold the members of its classes; `dep`, a row
+ * `[class row, artifact, member key|null, history, from?]` for every class and member of the line that is deprecated
+ * in some release of any line, with its whole history over the line, and `from`, where the item's deprecation began
+ * when it began in an earlier line and still holds at the line's first release with api data (the rows of an item in
+ * a line carry the same). A class row may have a 4th element, the history of its API revision (equal revisions,
+ * even in two lines, mean equal API; null while it is not API). Values follow the dataset's grammar: a class
+ * `<access><kind><modifiers>[X][D|R][ extends N][ implements N,N][ since T]`, a member
+ * `<access><modifiers>[X][D|R][ since T]`; member keys are `name(descriptor)return` or `name:descriptor`.
+ */
+
+/** Indices of the releases with api data (`versions[].api`). */
+export function apiVersionsOf(versions) {
+  const out = [];
+  (Array.isArray(versions) ? versions : []).forEach((x, i) => {
+    if (x && x.api) out.push(i);
+  });
+  return out;
+}
+
+/** The api data used for release `vi`, or null: the config rule over the releases with api data (snapshotVersionFor). */
+export function apiVersionFor(vi, versions, apiVis) {
+  if (!Array.isArray(versions)) return null;
+  return snapshotVersionFor(vi, versions, apiVis ?? apiVersionsOf(versions));
+}
+
+const CLASS_KINDS = { '': 'class', i: 'interface', n: 'annotation', e: 'enum', r: 'record' };
+const CLASS_HEAD = /^([+#])([iner]?)(a?)(f?)(s?)(X?)([DR]?)/;
+const MEMBER_HEAD = /^([+#])(s?)(a?)(f?)(d?)(v?)(e?)(X?)([DR]?)/;
+
+/**
+ * A value of the api grammar, parsed: `access` (public or protected), its modifiers as flags, `experimental`,
+ * `deprecated` (also for one marked for removal), `forRemoval` and `since` (declared, else null); a class value
+ * (`member` false) also has `kind` (class, interface, annotation, enum or record), `extends` (null for none written)
+ * and `implements`. Null for null or for a value outside the grammar.
+ */
+export function parseApiValue(value, member = false) {
+  if (typeof value !== 'string') return null;
+  const m = (member ? MEMBER_HEAD : CLASS_HEAD).exec(value);
+  if (!m) return null;
+  let rest = value.slice(m[0].length);
+  const access = m[1] === '+' ? 'public' : 'protected';
+  const out = member
+    ? { access, static: !!m[2], abstract: !!m[3], final: !!m[4], default: !!m[5], varargs: !!m[6], enumConstant: !!m[7], experimental: !!m[8] }
+    : { access, kind: CLASS_KINDS[m[2]], abstract: !!m[3], final: !!m[4], static: !!m[5], experimental: !!m[6] };
+  const dep = member ? m[9] : m[7];
+  out.deprecated = dep !== '';
+  out.forRemoval = dep === 'R';
+  if (!member) {
+    out.extends = null;
+    out.implements = [];
+    const take = (prefix) => {
+      const end = rest.indexOf(' ', prefix.length);
+      const text = rest.slice(prefix.length, end < 0 ? undefined : end);
+      rest = end < 0 ? '' : rest.slice(end);
+      return text;
+    };
+    if (rest.startsWith(' extends ')) out.extends = take(' extends ');
+    if (rest.startsWith(' implements ')) out.implements = take(' implements ').split(',');
+  }
+  out.since = null;
+  if (rest.startsWith(' since ')) {
+    out.since = rest.slice(7);
+    rest = '';
+  }
+  return rest === '' ? out : null;
+}
+
+/** 'removal' for a value marked for removal, 'deprecated' for one only deprecated, else null (also for null). */
+export function deprecationOf(value) {
+  if (typeof value !== 'string') return null;
+  const space = value.indexOf(' ');
+  const head = space < 0 ? value : value.slice(0, space);
+  return head.includes('R') ? 'removal' : head.includes('D') ? 'deprecated' : null;
+}
+
+const PRIMITIVES = { B: 'byte', C: 'char', D: 'double', F: 'float', I: 'int', J: 'long', S: 'short', Z: 'boolean', V: 'void' };
+
+/** One type of a JVM descriptor from `at`: `{full, simple, dims, end}` (`java.util.Map.Entry`, `Map.Entry`, array dimensions, the index after it). */
+function readType(desc, at) {
+  let i = at;
+  let dims = 0;
+  while (desc[i] === '[') {
+    dims++;
+    i++;
+  }
+  let full;
+  let simple;
+  if (desc[i] === 'L') {
+    const end = desc.indexOf(';', i);
+    if (end < 0) return null;
+    const internal = desc.slice(i + 1, end);
+    full = internal.replace(/[/$]/g, '.');
+    simple = internal.slice(internal.lastIndexOf('/') + 1).replace(/\$/g, '.');
+    i = end + 1;
+  } else if (PRIMITIVES[desc[i]]) {
+    full = PRIMITIVES[desc[i]];
+    simple = full;
+    i++;
+  } else {
+    return null;
+  }
+  return { full: full + '[]'.repeat(dims), simple: simple + '[]'.repeat(dims), dims, end: i };
+}
+
+/** The kind of member a member key names: 'constructor' (`<init>(…)V`), 'method' (`name(…)…`) or 'field' (`name:…`). */
+export function memberKind(key) {
+  const s = String(key ?? '');
+  const paren = s.indexOf('(');
+  const colon = s.indexOf(':');
+  if (paren > 0 && (colon < 0 || paren < colon)) return s.startsWith('<init>(') ? 'constructor' : 'method';
+  return 'field';
+}
+
+/**
+ * A member key pretty-printed: `kind` ('constructor', 'method' or 'field'), `name`, `params` and `returns` (methods,
+ * constructors) or `type` (fields) as `{full, simple}` types, and two texts, `simple` (`QuarkusUnitTest
+ * withApplicationRoot(Consumer)`, with simple names) and `full` (with full names). A constructor takes the simple name
+ * of its class `className`; with `varargs` the last parameter shows as `T...`. Null for a key outside the grammar.
+ */
+export function prettyMember(key, { className: owner = '', varargs = false } = {}) {
+  const s = String(key ?? '');
+  const kind = memberKind(s);
+  if (kind === 'field') {
+    const colon = s.indexOf(':');
+    if (colon <= 0) return null;
+    const type = readType(s, colon + 1);
+    if (!type || type.end !== s.length) return null;
+    const name = s.slice(0, colon);
+    return { kind, name, type, simple: `${type.simple} ${name}`, full: `${type.full} ${name}` };
+  }
+  const paren = s.indexOf('(');
+  const close = s.indexOf(')', paren);
+  if (close < 0) return null;
+  const params = [];
+  for (let i = paren + 1; i < close;) {
+    const t = readType(s, i);
+    if (!t || t.end > close) return null;
+    params.push(t);
+    i = t.end;
+  }
+  const returns = readType(s, close + 1);
+  if (!returns || returns.end !== s.length) return null;
+  if (varargs && params.length && params[params.length - 1].dims > 0) {
+    const last = params[params.length - 1];
+    params[params.length - 1] = { ...last, full: `${last.full.slice(0, -2)}...`, simple: `${last.simple.slice(0, -2)}...` };
+  }
+  const name = s.slice(0, paren);
+  const shown = kind === 'constructor' ? simpleClassName(owner).replace(/^.*\$/, '') || name : name;
+  const list = (field) => params.map((p) => p[field]).join(', ');
+  return {
+    kind, name, params, returns,
+    simple: kind === 'constructor' ? `${shown}(${list('simple')})` : `${returns.simple} ${shown}(${list('simple')})`,
+    full: kind === 'constructor' ? `${shown}(${list('full')})` : `${returns.full} ${shown}(${list('full')})`,
+  };
+}
+
+/** The name and parameters of a method key (`withApplicationRoot(Ljava/util/function/Consumer;)`), without its return type. */
+function memberSignature(key) {
+  const close = key.indexOf(')');
+  return close < 0 ? key : key.slice(0, close + 1);
+}
+
+/**
+ * The member shard of a class (its file `api-<major>-<k>.json` among `n`): FNV-1a 32 over the UTF-8 bytes of its
+ * binary name up to the first `$`, so that nested classes share their outer class's shard, modulo `n`.
+ */
+export function memberShardOf(name, n) {
+  const s = String(name ?? '');
+  const cut = s.indexOf('$');
+  let hash = 0x811c9dc5;
+  for (const byte of new TextEncoder().encode(cut < 0 ? s : s.slice(0, cut))) {
+    hash = Math.imul(hash ^ byte, 0x01000193) >>> 0;
+  }
+  return n > 0 ? hash % n : 0;
+}
+
+/**
+ * The api data of a classes object: the `dep` rows grouped by class row and member (null for the class itself), each
+ * group the rows of one deprecated class or member in its jars. Built once per object.
+ */
+const depIndexes = new WeakMap();
+function depIndex(classes) {
+  let index = depIndexes.get(classes);
+  if (!index) {
+    index = new Map(); // class row index → Map(member key or '' → [dep rows])
+    for (const row of classes.api?.dep ?? []) {
+      if (!index.has(row[0])) index.set(row[0], new Map());
+      const members = index.get(row[0]);
+      const key = row[2] ?? '';
+      if (!members.has(key)) members.set(key, []);
+      members.get(key).push(row);
+    }
+    depIndexes.set(classes, index);
+  }
+  return index;
+}
+
+/** The dep rows of a class row index and member key (null: the class itself): one per jar, possibly none. */
+export function depRowsOf(classes, classIndex, member = null) {
+  return depIndex(classes).get(classIndex)?.get(member ?? '') ?? [];
+}
+
+/** The value of a group of dep rows (one class or member in its jars) at release `vi`: the first jar's that has one. */
+export function depValueAt(rows, vi) {
+  for (const row of rows) {
+    const value = stateAt(row[3], vi);
+    if (value != null) return value;
+  }
+  return null;
+}
+
+/**
+ * The api lines of a classes object, ascending: `api.lines` (mergeClasses), or its own releases with api data as one
+ * line for a lone classes file; none without api data.
+ */
+export function apiLinesOf(classes) {
+  const api = classes?.api;
+  if (!Array.isArray(api?.versions) || !api.versions.length) return [];
+  return Array.isArray(api.lines) ? api.lines : [{ versions: api.versions }];
+}
+
+/** The api line of release `vi` among `lines` (apiLinesOf): the last that starts at or before it. */
+function lineOf(lines, vi) {
+  let out = null;
+  for (const l of lines) if (l.versions.length && l.versions[0] <= vi) out = l;
+  return out;
+}
+
+/** The `from` a dep row carries (its 5th element) for the line whose first release with api data is `first`. */
+function carriedFrom(row, first) {
+  const from = row[4];
+  if (Array.isArray(from)) return from.find((x) => x[0] === first)?.[1] ?? null;
+  return from ?? null; // a lone classes file: its own line's
+}
+
+/**
+ * Where a deprecation began, from release `vi` back: over the releases with api data of its own line (`lines`,
+ * apiLinesOf), the first from which one of the dep rows `rows` (a class or member, one per jar) is deprecated without a
+ * break up to `vi`. When that is the line's first release, the release the rows carry for it (a deprecation that
+ * began in an earlier line), else that first release. It never walks into another line, so it is the same whichever
+ * lines are loaded. Null when it is not deprecated at `vi`.
+ */
+export function deprecatedFrom(rows, lines, vi) {
+  const line = lineOf(lines, vi);
+  if (!line) return null;
+  const deprecatedAt = (u) => rows.some((row) => deprecationOf(stateAt(row[3], u)) != null);
+  const vs = line.versions;
+  let from = null;
+  for (let k = vs.length - 1; k >= 0; k--) {
+    if (vs[k] > vi) continue;
+    if (!deprecatedAt(vs[k])) break;
+    from = vs[k];
+  }
+  if (from == null || from !== vs[0]) return from;
+  for (const row of rows) {
+    const carried = carriedFrom(row, from);
+    if (carried != null) return carried;
+  }
+  return from;
+}
+
+/**
+ * The deprecation of a class or member at release `vi`: `{kind, since, from, value}` with `kind` 'deprecated' or
+ * 'removal', the declared `since` (null when none), and `from`, the first release of the deprecation (deprecatedFrom
+ * over `lines`, apiLinesOf); null when it is not deprecated at `vi`.
+ */
+export function deprecationAt(rows, lines, vi, member = false) {
+  const value = depValueAt(rows, vi);
+  const kind = deprecationOf(value);
+  if (!kind) return null;
+  return { kind, since: parseApiValue(value, member)?.since ?? null, from: deprecatedFrom(rows, lines, vi), value };
+}
+
+/**
+ * The deprecation of a class or member gone at release `b` (deprecationAt, with `at` the release it describes), the
+ * last time it was there seen from `a`: at the last release with api data of [a, b) that has it when `a` is older, at
+ * `a` itself when it is newer. Null when it was not deprecated then, or not there.
+ */
+export function deprecationBeforeRemoval(rows, lines, a, b, member = false) {
+  if (a == null || b == null) return null;
+  let last = null;
+  if (a > b) {
+    last = depValueAt(rows, a) != null ? a : null;
+  } else if (rows.some((row) => stateAt(row[3], a) != null || row[3].some(([u, v]) => u > a && u < b && v != null))) {
+    const vs = lines.flatMap((l) => l.versions);
+    for (let k = vs.length - 1; k >= 0 && last == null; k--) {
+      if (vs[k] < a) break;
+      if (vs[k] < b && depValueAt(rows, vs[k]) != null) last = vs[k];
+    }
+  }
+  const d = last == null ? null : deprecationAt(rows, lines, last, member);
+  return d && { ...d, at: last };
+}
+
+/**
+ * The deprecation events of a class or member over the releases `cvs` (ascending): `{vi, type, since}` with type
+ * 'deprecated', 'removal' (marked for removal) or 'undeprecated' (still there, no longer deprecated). A deprecation in
+ * the first release is an event with `first` set; a value that goes away is no event here (the class history has it).
+ */
+export function deprecationEvents(rows, cvs, member = false) {
+  const events = [];
+  let prev;
+  cvs.forEach((vi, k) => {
+    const value = depValueAt(rows, vi);
+    const kind = deprecationOf(value);
+    const before = deprecationOf(prev);
+    if (value != null && kind !== before) {
+      const since = parseApiValue(value, member)?.since ?? null;
+      if (kind) events.push({ vi, type: kind, since, first: k === 0 || prev == null, from: before });
+      else if (before) events.push({ vi, type: 'undeprecated', since: null, first: false, from: before });
+    }
+    prev = value;
+  });
+  return events;
+}
+
+/**
+ * Every class and member deprecated at release `vi` (a release with api data), one item per jar:
+ * `{classIndex, name, artifact, member, kind, since, from, value}`, sorted by jar, class and member (the class first).
+ * `kind`, `since` and `value` are the jar's, `from` the item's over all its jars (deprecatedFrom).
+ */
+export function deprecationsAt(classes, vi) {
+  const lines = apiLinesOf(classes);
+  const out = [];
+  for (const [classIndex, members] of depIndex(classes)) {
+    const name = className(classes, classes.classes[classIndex]);
+    for (const [key, rows] of members) {
+      let from;
+      for (const row of rows) {
+        const value = stateAt(row[3], vi);
+        const kind = deprecationOf(value);
+        if (!kind) continue;
+        if (from === undefined) from = deprecatedFrom(rows, lines, vi);
+        out.push({
+          classIndex, name, artifact: classes.artifacts[row[1]], member: key || null, kind,
+          since: parseApiValue(value, key !== '')?.since ?? null, from, value,
+        });
+      }
+    }
+  }
+  return out.sort((x, y) => cmpText(x.artifact, y.artifact) || cmpText(x.name, y.name) || cmpText(x.member ?? '', y.member ?? ''));
+}
+
+const cmpText = (x, y) => (x < y ? -1 : x > y ? 1 : 0);
+
+/**
+ * The deprecation changes between releases `a` and `b` (releases with api data, or null for none), for classes and
+ * members merged across jars (a class that moved keeps its deprecation): `rows` of
+ * `{classIndex, name, member, artifact, change, since, from, value, added}` with change 'deprecated' (newly; `added`
+ * when it is new at B), 'removal' (newly marked for removal), 'unremoval' (no longer for removal, still deprecated),
+ * 'undeprecated' or 'removed' (there at A, gone at B, deprecated the last time it was there: deprecationBeforeRemoval),
+ * and their `counts` for classes and members. `since`, `from` and `value` are those of the deprecation shown: at B, at
+ * A for 'undeprecated', the last time it was there for 'removed'.
+ */
+export function diffDeprecations(classes, a, b) {
+  const lines = apiLinesOf(classes);
+  const rows = [];
+  const kinds = () => ({ deprecated: 0, removal: 0, unremoval: 0, undeprecated: 0, removed: 0 });
+  const counts = { classes: kinds(), members: kinds() };
+  if (a == null || b == null || a === b) return { rows, counts };
+  const jarAt = (group, vi) => group.find((row) => stateAt(row[3], vi) != null);
+  for (const [classIndex, members] of depIndex(classes)) {
+    for (const [key, group] of members) {
+      const member = key || null;
+      const va = depValueAt(group, a);
+      const vb = depValueAt(group, b);
+      const da = deprecationOf(va);
+      const db = deprecationOf(vb);
+      let change = null;
+      let d = null;
+      if (vb == null) {
+        // there at A, as diffApi and §4 have it: an item that came after A and went before B is no change of the pair
+        d = va == null ? null : deprecationBeforeRemoval(group, lines, a, b, !!member);
+        if (d) change = 'removed';
+      } else if (db === 'removal' && da !== 'removal') change = 'removal';
+      else if (db && !da) change = 'deprecated';
+      else if (da === 'removal' && db === 'deprecated') change = 'unremoval';
+      else if (da && !db) change = 'undeprecated';
+      if (!change) continue;
+      if (change !== 'removed') d = deprecationAt(group, lines, change === 'undeprecated' ? a : b, !!member);
+      // the jar at B, or the last time it was there
+      const jar = jarAt(group, change === 'removed' ? d.at : b);
+      rows.push({
+        classIndex,
+        name: className(classes, classes.classes[classIndex]),
+        member,
+        artifact: classes.artifacts[jar[1]],
+        change,
+        since: d?.since ?? null,
+        from: d?.from ?? null,
+        value: d?.value ?? null,
+        added: change !== 'removed' && change !== 'undeprecated' && va == null,
+      });
+      counts[member ? 'members' : 'classes'][change]++;
+    }
+  }
+  rows.sort((x, y) => cmpText(x.artifact, y.artifact) || cmpText(x.name, y.name) || cmpText(x.member ?? '', y.member ?? ''));
+  return { rows, counts };
+}
+
+/** The API revision of a class row at release `vi` (null when it is not API there, undefined without revision data). */
+export function apiRevisionAt(row, vi) {
+  return Array.isArray(row[3]) ? stateAt(row[3], vi) ?? null : undefined;
+}
+
+/**
+ * Whether a class row is API in some release of a line, `versions` its releases with api data (ascending): by its
+ * revisions, so that its shard in a line where it never is need not be fetched.
+ */
+export function apiInLine(row, versions) {
+  const h = row?.[3];
+  if (!Array.isArray(h) || !versions?.length) return false;
+  const first = versions[0];
+  const last = versions[versions.length - 1];
+  return stateAt(h, first) != null || h.some(([vi, rev]) => vi > first && vi <= last && rev != null);
+}
+
+/**
+ * The classes whose API differs between releases `a` and `b` by their revisions (a class is one row, whatever its
+ * jars): the binary names, sorted. Rows without revision data are left out.
+ */
+export function apiChangedClasses(classes, a, b) {
+  const out = [];
+  for (const row of classes.classes) {
+    if (!Array.isArray(row[3])) continue;
+    const ra = stateAt(row[3], a) ?? null;
+    const rb = stateAt(row[3], b) ?? null;
+    if (ra !== rb) out.push(className(classes, row));
+  }
+  return out.sort(cmpText);
+}
+
+/**
+ * A shard file (`{rows}`, change points keyed by version strings) with its versions mapped to release indices through
+ * `versionIndex` (version string → index; points of unknown versions are dropped): `{rows: [{artifact, name, h,
+ * members: [[key, h]]}], byName}`, `byName` a map from binary name to the rows of that class (one per jar).
+ */
+export function apiShard(json, versionIndex) {
+  const toH = (h) => {
+    const out = [];
+    for (const [v, value] of Array.isArray(h) ? h : []) {
+      const vi = versionIndex.get(v);
+      if (vi != null) out.push([vi, value]);
+    }
+    return out;
+  };
+  const rows = (Array.isArray(json?.rows) ? json.rows : []).map(([artifact, name, h, members]) => ({
+    artifact, name, h: toH(h), members: (Array.isArray(members) ? members : []).map(([key, mh]) => [key, toH(mh)]),
+  }));
+  const byName = new Map();
+  for (const r of rows) {
+    if (!byName.has(r.name)) byName.set(r.name, []);
+    byName.get(r.name).push(r);
+  }
+  return { rows, byName };
+}
+
+/**
+ * The API rows of one class from the shards of several major lines, `parts` = `[{first, rows}]` (the line's first
+ * release with api data and the class's rows in its shard), as one history per jar over all of them:
+ * `[{artifact, name, h, members: Map(key → h)}]` sorted by jar. Each line's histories start afresh, so what one line
+ * ends with gets a null point where the next line starts without it.
+ */
+export function mergeApiRows(parts) {
+  const byJar = new Map();
+  const close = (out, first) => {
+    if (out.length && out[out.length - 1][1] != null && out[out.length - 1][0] < first) out.push([first, null]);
+  };
+  const append = (out, h, first) => {
+    if (out.length && out[out.length - 1][1] != null && (!h.length || h[0][0] !== first)) out.push([first, null]);
+    for (const point of h) if (!out.length || out[out.length - 1][1] !== point[1]) out.push(point);
+  };
+  for (const { first, rows } of [...(parts ?? [])].sort((x, y) => x.first - y.first)) {
+    const seen = new Set();
+    for (const r of rows) {
+      let m = byJar.get(r.artifact);
+      if (!m) byJar.set(r.artifact, (m = { artifact: r.artifact, name: r.name, h: [], members: new Map() }));
+      seen.add(r.artifact);
+      append(m.h, r.h, first);
+      const keys = new Set();
+      for (const [key, mh] of r.members) {
+        keys.add(key);
+        if (!m.members.has(key)) m.members.set(key, []);
+        append(m.members.get(key), mh, first);
+      }
+      for (const [key, out] of m.members) if (!keys.has(key)) close(out, first);
+    }
+    for (const [jar, m] of byJar) {
+      if (seen.has(jar)) continue;
+      close(m.h, first);
+      for (const out of m.members.values()) close(out, first);
+    }
+  }
+  return [...byJar.values()].sort((x, y) => cmpText(x.artifact, y.artifact));
+}
+
+/**
+ * The API of a class at release `vi` from its rows (mergeApiRows), across its jars: the first jar with the class
+ * there, preferring the jars `prefer` (artifactIds); `{artifact, value, members: Map(key → value)}`, or null when it
+ * is not API at `vi`.
+ */
+export function apiAt(rows, vi, prefer = []) {
+  const order = [...rows].sort((x, y) => (prefer.includes(x.artifact) ? 0 : 1) - (prefer.includes(y.artifact) ? 0 : 1));
+  for (const r of order) {
+    const value = stateAt(r.h, vi);
+    if (value == null) continue;
+    const members = new Map();
+    for (const [key, h] of r.members) {
+      const v = stateAt(h, vi);
+      if (v != null) members.set(key, v);
+    }
+    return { artifact: r.artifact, value, members };
+  }
+  return null;
+}
+
+/**
+ * apiAt with the members of every jar that has the class at `vi` (a member several have: the first jar's value), as
+ * the class page lists them (classMembers).
+ */
+export function apiUnionAt(rows, vi) {
+  const now = apiAt(rows, vi);
+  if (!now) return null;
+  for (const r of rows) {
+    for (const [key, h] of r.members) {
+      if (now.members.has(key)) continue;
+      const v = stateAt(h, vi);
+      if (v != null) now.members.set(key, v);
+    }
+  }
+  return now;
+}
+
+const MODIFIER_FLAGS = [
+  ['abstract', 'abstract'], ['final', 'final'], ['static', 'static'], ['default', 'default'], ['enumConstant', 'an enum constant'],
+  ['experimental', 'experimental'],
+];
+const KIND_MODIFIERS = new Set(['abstract', 'final', 'static']);
+
+/**
+ * The modifier changes of a class or member between two parsed values, in words: "became final", "no longer static",
+ * "public → protected", "class → record", "since 3.1 → 3.2" (of a deprecation kept). A class whose kind changed has no
+ * abstract, final or static changes: the grammar writes them for classes of no kind only, the others imply theirs.
+ */
+export function modifierChanges(from, to) {
+  if (!from || !to) return [];
+  const out = [];
+  if (from.access !== to.access) out.push(`${from.access} → ${to.access}`);
+  const kindChanged = !!from.kind && !!to.kind && from.kind !== to.kind;
+  if (kindChanged) out.push(`${from.kind} → ${to.kind}`);
+  for (const [flag, word] of MODIFIER_FLAGS) {
+    if (from[flag] === undefined || to[flag] === undefined || from[flag] === to[flag]) continue;
+    if (kindChanged && KIND_MODIFIERS.has(flag)) continue;
+    out.push(to[flag] ? `became ${word}` : `no longer ${word}`);
+  }
+  if (from.varargs !== undefined && from.varargs !== to.varargs) out.push(to.varargs ? 'became varargs' : 'no longer varargs');
+  if (from.deprecated && to.deprecated && from.since !== to.since) {
+    out.push(from.since == null ? `since ${to.since} declared` : to.since == null ? `since ${from.since} dropped` : `since ${from.since} → ${to.since}`);
+  }
+  return out;
+}
+
+/**
+ * A parsed member value with the modifiers that its class's kind implies, which the grammar leaves out: the fields of
+ * an interface (or annotation) are static and final, its methods without a body abstract; an enum constant is static
+ * and final.
+ */
+function impliedMember(parsed, key, classKind) {
+  if (!parsed) return parsed;
+  const out = { ...parsed };
+  if (parsed.enumConstant) out.static = out.final = true;
+  if (classKind === 'interface' || classKind === 'annotation') {
+    const kind = memberKind(key);
+    if (kind === 'field') out.static = out.final = true;
+    else if (kind === 'method' && !parsed.default && !parsed.static) out.abstract = true;
+  }
+  return out;
+}
+
+/** The modifier changes of a member (modifierChanges) between its values in a class of kind `kindA` and of kind `kindB`. */
+function memberModifierChanges(key, va, vb, kindA, kindB) {
+  return modifierChanges(impliedMember(parseApiValue(va, true), key, kindA), impliedMember(parseApiValue(vb, true), key, kindB));
+}
+
+/**
+ * A parsed class value with the `static` that the grammar leaves out for a class declared in an interface or an
+ * annotation (`enclosingKind`, its enclosing class's kind there), which is implicitly static (JLS 9.5).
+ */
+function impliedClass(parsed, enclosingKind) {
+  if (parsed?.kind !== 'class' || (enclosingKind !== 'interface' && enclosingKind !== 'annotation')) return parsed;
+  return { ...parsed, static: true };
+}
+
+/** The kind of a class at release `vi` from its rows (mergeApiRows), or null when it is not API there (or no rows). */
+function kindAt(rows, vi) {
+  return rows ? parseApiValue(apiAt(rows, vi)?.value)?.kind ?? null : null;
+}
+
+/**
+ * The deprecation change between two values: 'deprecated', 'removal' (newly marked for removal), 'unremoval' (no
+ * longer for removal, still deprecated), 'undeprecated', or null.
+ */
+function deprecationChange(from, to) {
+  const a = deprecationOf(from);
+  const b = deprecationOf(to);
+  if (b === 'removal' && a !== 'removal') return 'removal';
+  if (b && !a) return 'deprecated';
+  if (a === 'removal' && b === 'deprecated') return 'unremoval';
+  if (a && !b) return 'undeprecated';
+  return null;
+}
+
+/** API change kinds in their order on the compare page. */
+export const API_CHANGE_ORDER = [
+  'removed', 'removal', 'deprecated', 'unremoval', 'undeprecated', 'return type', 'signature', 'modifiers', 'supertype', 'added',
+];
+
+/**
+ * The value that a class or member last had before release `b` seen from `a`, from its histories `hs` (one per jar):
+ * the last one of [a, b) when `a` is older, the one at `a` when it is newer; null when it was not there.
+ */
+function lastValueBefore(hs, a, b) {
+  const at = (u) => {
+    for (const h of hs) {
+      const v = stateAt(h, u);
+      if (v != null) return v;
+    }
+    return null;
+  };
+  if (a > b) return at(a);
+  const points = new Set([a]);
+  for (const h of hs) for (const [u] of h) if (u > a && u < b) points.add(u);
+  for (const u of [...points].sort((x, y) => y - x)) {
+    const v = at(u);
+    if (v != null) return v;
+  }
+  return null;
+}
+
+/**
+ * The API changes of the classes `rowsByName` (binary name → mergeApiRows) between releases `a` and `b`, merged across
+ * jars (a class that moved jars is compared with itself). One row per change: `{name, member, artifact, change,
+ * details, nested, protected, constructor, value, text}` with change 'added' or 'removed' (a whole class is one row,
+ * member null), 'deprecated', 'removal', 'unremoval', 'undeprecated', 'modifiers' (details say which), 'supertype'
+ * (classes), 'return type' (a method kept its name and parameters; `member` is the new key, `previous` the old one,
+ * `previousValue` its value) or 'signature' (a possible signature change: a method that went and one of the same name
+ * that came, kept as one row). A member row's `value` is its value at B, or the last one it had for 'removed'; a
+ * removed class or member says in `was` how it was deprecated the last time it was there (deprecationBeforeRemoval's
+ * rule). `prefer` gives the jars of each class at A and B (artifactIds), to pick among several; `enclosing` the rows of
+ * the class a nested class is declared in, whose kind says whether it is implicitly static (impliedClass).
+ */
+export function diffApi(rowsByName, a, b, prefer = () => [[], []], enclosing = () => null) {
+  const out = [];
+  for (const [name, rows] of rowsByName) {
+    const [preferA, preferB] = prefer(name);
+    const A = apiAt(rows, a, preferA);
+    const B = apiAt(rows, b, preferB);
+    if (!A && !B) continue;
+    const nested = isNestedClass(name);
+    const push = (row) => out.push({
+      name, nested, member: null, details: [], previous: null, constructor: false, ...row,
+      text: [name, row.member ?? '', row.artifact].join('\n').toLowerCase(),
+    });
+    if (!A || !B) {
+      const value = (B ?? A).value;
+      const was = A ? deprecationOf(lastValueBefore(rows.map((r) => r.h), a, b)) : null;
+      push({ artifact: (B ?? A).artifact, change: B ? 'added' : 'removed', protected: value.startsWith('#'), details: [], was });
+      continue;
+    }
+    const artifact = B.artifact;
+    const outer = enclosing(name);
+    const ca = impliedClass(parseApiValue(A.value), kindAt(outer, a));
+    const cb = impliedClass(parseApiValue(B.value), kindAt(outer, b));
+    const classProtected = B.value.startsWith('#');
+    const dep = deprecationChange(A.value, B.value);
+    if (dep) push({ artifact, change: dep, protected: classProtected, since: cb?.since ?? null });
+    const mods = modifierChanges(ca, cb);
+    if (mods.length) push({ artifact, change: 'modifiers', protected: classProtected, details: mods });
+    if (ca && cb && (ca.extends !== cb.extends || ca.implements.join(',') !== cb.implements.join(','))) {
+      push({ artifact, change: 'supertype', protected: classProtected, details: supertypeChanges(ca, cb) });
+    }
+    const gone = [...A.members.keys()].filter((k) => !B.members.has(k));
+    const came = [...B.members.keys()].filter((k) => !A.members.has(k));
+    const memberRow = (key, change, value, extra = {}) => push({
+      artifact, member: key, change, protected: String(value).startsWith('#'), constructor: memberKind(key) === 'constructor', value, ...extra,
+    });
+    // a method that kept its name and parameters changed its return type; another of the same name may be a new signature
+    const cameBySignature = groupBy(came.filter((k) => memberKind(k) !== 'field'), memberSignature);
+    const paired = new Set();
+    for (const key of gone) {
+      if (memberKind(key) === 'field') continue;
+      const twin = (cameBySignature.get(memberSignature(key)) ?? []).find((k) => !paired.has(k));
+      if (twin) {
+        paired.add(twin);
+        paired.add(key);
+        memberRow(twin, 'return type', B.members.get(twin), { previous: key, previousValue: A.members.get(key) });
+      }
+    }
+    const cameByName = groupBy(came.filter((k) => !paired.has(k) && memberKind(k) === 'method'), (k) => k.slice(0, k.indexOf('(')));
+    for (const key of gone) {
+      if (paired.has(key) || memberKind(key) !== 'method') continue;
+      const twin = (cameByName.get(key.slice(0, key.indexOf('('))) ?? []).find((k) => !paired.has(k));
+      if (twin) {
+        paired.add(twin);
+        paired.add(key);
+        memberRow(twin, 'signature', B.members.get(twin), { previous: key, previousValue: A.members.get(key) });
+      }
+    }
+    for (const key of gone) {
+      if (paired.has(key)) continue;
+      const last = lastValueBefore(rows.map((r) => r.members.get(key)).filter(Boolean), a, b) ?? A.members.get(key);
+      memberRow(key, 'removed', last, { was: deprecationOf(last) });
+    }
+    for (const key of came) if (!paired.has(key)) memberRow(key, 'added', B.members.get(key));
+    for (const [key, va] of A.members) {
+      const vb = B.members.get(key);
+      if (vb == null || vb === va) continue;
+      const d = deprecationChange(va, vb);
+      if (d) memberRow(key, d, vb, { since: parseApiValue(vb, true)?.since ?? null });
+      const m = memberModifierChanges(key, va, vb, ca?.kind, cb?.kind);
+      if (m.length) memberRow(key, 'modifiers', vb, { details: m });
+    }
+  }
+  const order = (c) => API_CHANGE_ORDER.indexOf(c);
+  return out.sort((x, y) => cmpText(x.artifact, y.artifact) || cmpText(x.name, y.name) || (x.member == null ? -1 : 0) - (y.member == null ? -1 : 0)
+    || order(x.change) - order(y.change) || cmpText(x.member ?? '', y.member ?? ''));
+}
+
+/** "extends Foo → Bar", "implements +Baz −Qux" for the supertype change of a class. */
+function supertypeChanges(from, to) {
+  const out = [];
+  if (from.extends !== to.extends) out.push(`extends ${from.extends ?? 'nothing'} → ${to.extends ?? 'nothing'}`);
+  const gained = to.implements.filter((x) => !from.implements.includes(x));
+  const lost = from.implements.filter((x) => !to.implements.includes(x));
+  if (gained.length || lost.length) out.push(`implements ${[...gained.map((x) => `+${x}`), ...lost.map((x) => `−${x}`)].join(' ')}`);
+  else if (from.implements.join(',') !== to.implements.join(',')) out.push('implements the same interfaces in another order');
+  return out;
+}
+
+/**
+ * The API history of a class over the releases `cvs` (ascending) from its rows (mergeApiRows): one event per release
+ * whose API differs from the previous one shown, `{vi, added, removed, changed, changes}`: members added, removed and
+ * changed in any of its jars (apiUnionAt, as classMembers lists them; each change as diffApi sees it), and the
+ * class's own changes in words (deprecated, marked for removal, no longer marked for removal, undeprecated, became
+ * final, supertype changed, …). The first release with API is `{vi, first: true}`, with `again` when it was API
+ * before; a release where it is no longer API (gone, or no longer public or protected) says 'no longer public API'.
+ * `enclosing`: the rows of the class a nested class is declared in (impliedClass). A release whose values differ only
+ * in what is implicit has no event.
+ */
+export function classApiHistory(rows, cvs, enclosing = null) {
+  const events = [];
+  let prev = null;
+  let prevVi = null;
+  let seen = false;
+  const DEPRECATION_WORDS = { removal: 'marked for removal', unremoval: 'no longer marked for removal' };
+  for (const vi of cvs) {
+    const now = apiUnionAt(rows, vi);
+    if (!now) {
+      if (prev) events.push({ vi, first: false, added: 0, removed: prev.members.size, changed: 0, changes: ['no longer public API'] });
+      prev = null;
+      continue;
+    }
+    if (!prev) {
+      events.push({ vi, first: true, ...(seen ? { again: true } : {}), added: now.members.size, removed: 0, changes: [] });
+    } else if (prev.value !== now.value || !sameMembers(prev.members, now.members)) {
+      const added = [...now.members.keys()].filter((k) => !prev.members.has(k)).length;
+      const removed = [...prev.members.keys()].filter((k) => !now.members.has(k)).length;
+      const changes = [];
+      const dep = deprecationChange(prev.value, now.value);
+      if (dep) changes.push(DEPRECATION_WORDS[dep] ?? dep);
+      const ca = impliedClass(parseApiValue(prev.value), kindAt(enclosing, prevVi));
+      const cb = impliedClass(parseApiValue(now.value), kindAt(enclosing, vi));
+      changes.push(...modifierChanges(ca, cb));
+      if (ca && cb && (ca.extends !== cb.extends || ca.implements.join(',') !== cb.implements.join(','))) changes.push('supertype changed');
+      let memberChanges = 0;
+      for (const [key, v] of prev.members) {
+        const w = now.members.get(key);
+        if (w == null || w === v) continue;
+        if (deprecationChange(v, w) || memberModifierChanges(key, v, w, ca?.kind, cb?.kind).length) memberChanges++;
+      }
+      if (added || removed || memberChanges || changes.length) events.push({ vi, first: false, added, removed, changed: memberChanges, changes });
+    }
+    seen = true;
+    prev = now;
+    prevVi = vi;
+  }
+  return events;
+}
+
+const sameMembers = (x, y) => x.size === y.size && [...x].every(([k, v]) => y.get(k) === v);
+
+/**
+ * The members of a class at release `vi` and how they got there over the releases `cvs` (ascending, `vi` the last
+ * one shown): `members`, `{key, value, parsed, pretty, since}` for each member at `vi` in any of its jars (the first
+ * jar's value), `since` the first release of `cvs` from which it is there without a break; and `removed`, `{key,
+ * value, parsed, pretty, last}` for each member that some release of `cvs` had and no jar has at `vi`, `last` the
+ * last release that had it (its value there). `value` and `artifact` are the class's at `vi` (apiAt).
+ */
+export function classMembers(rows, cvs, vi, className = '') {
+  const now = apiAt(rows, vi);
+  const members = [];
+  const removed = [];
+  const histories = new Map(); // member key → its histories, one per jar
+  for (const r of rows) {
+    for (const [key, h] of r.members) {
+      if (!histories.has(key)) histories.set(key, []);
+      histories.get(key).push(h);
+    }
+  }
+  const valueAt = (key, u) => {
+    for (const h of histories.get(key) ?? []) {
+      const v = stateAt(h, u);
+      if (v != null) return v;
+    }
+    return null;
+  };
+  const shown = cvs.filter((u) => u <= vi);
+  const pretty = (key, value) => prettyMember(key, { className, varargs: !!parseApiValue(value, true)?.varargs });
+  for (const key of now ? histories.keys() : []) {
+    const value = valueAt(key, vi);
+    if (value == null) continue;
+    let since = vi;
+    for (let k = shown.length - 1; k >= 0; k--) {
+      if (valueAt(key, shown[k]) == null) break;
+      since = shown[k];
+    }
+    members.push({ key, value, parsed: parseApiValue(value, true), pretty: pretty(key, value), since });
+  }
+  for (const key of histories.keys()) {
+    if (valueAt(key, vi) != null) continue;
+    let last = null;
+    for (const u of shown) if (valueAt(key, u) != null) last = u;
+    if (last == null) continue;
+    const value = valueAt(key, last);
+    removed.push({ key, value, parsed: parseApiValue(value, true), pretty: pretty(key, value), last });
+  }
+  const byKey = (x, y) => cmpText(x.key, y.key);
+  return { members: members.sort(byKey), removed: removed.sort(byKey), value: now?.value ?? null, artifact: now?.artifact ?? null };
+}
+
+/**
+ * Whether a member is one the compiler writes for an enum or a record, not its author: an enum's `values()` and
+ * `valueOf(String)`, a record's `toString()`, `hashCode()` and `equals(Object)`.
+ */
+export function implicitMember(key, classKind, name = '') {
+  const self = `L${String(name).replace(/\./g, '/')};`;
+  if (classKind === 'enum') return key === `values()[${self}` || key === `valueOf(Ljava/lang/String;)${self}`;
+  if (classKind === 'record') return key === 'toString()Ljava/lang/String;' || key === 'hashCode()I' || key === 'equals(Ljava/lang/Object;)Z';
+  return false;
 }
 
 /* ========================================================================== */
@@ -1306,9 +2216,11 @@ export function buildSearchIndex({ config, bom, extensions, classes, versions } 
   if (classes) {
     const lvs = classes.versions ?? [];
     const lastClasses = lvs.length ? lvs[lvs.length - 1] : null;
-    for (const row of classes.classes) {
+    const avs = classes.api?.versions ?? [];
+    const lastApi = avs.length ? avs[avs.length - 1] : null;
+    classes.classes.forEach((row, classIndex) => {
       const name = className(classes, row);
-      if (isAnonymousClass(name)) continue;
+      if (isAnonymousClass(name)) return;
       const now = lastClasses == null ? [] : jarsOf(stateAt(row[2], lastClasses));
       const lastSeen = lastPresence(row[2], lvs);
       entries.push({
@@ -1320,8 +2232,10 @@ export function buildSearchIndex({ config, bom, extensions, classes, versions } 
         current: now.length > 0,
         jars: (now.length ? now : jarsOf(latestValue(row[2]))).map((j) => classes.artifacts[j]),
         lastSeen,
+        // deprecated or marked for removal in the newest release with api data
+        deprecation: lastApi == null || !now.length ? null : deprecationOf(depValueAt(depRowsOf(classes, classIndex), lastApi)),
       });
-    }
+    });
   }
   return { entries };
 }

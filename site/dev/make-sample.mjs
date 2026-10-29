@@ -7,7 +7,7 @@
 import { mkdirSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { canonicalKey, compareVersions, isFinal, stream } from '../assets/core.js';
+import { canonicalKey, compareVersions, deprecationOf, isFinal, memberShardOf, stream } from '../assets/core.js';
 
 const OUT = join(dirname(fileURLToPath(import.meta.url)), 'sample');
 const LTS = ['3.2', '3.8', '3.15', '3.20', '3.27', '3.33'];
@@ -466,6 +466,7 @@ const extensionsJson = { states: extIntern.states, exts };
 // A snapshot takes the last point at or before its release; nothing is recorded before the first point.
 const CLASS_LINES = [
   ['io.quarkus.runtime.Application', [['3.0.0.Final', 'quarkus-core']]],
+  ['io.quarkus.runtime.LaunchMode', [['3.0.0.Final', 'quarkus-core']]],
   ['io.quarkus.runtime.Quarkus', [['3.0.0.Final', 'quarkus-core']]],
   ['io.quarkus.runtime.Quarkus$1', [['3.0.0.Final', 'quarkus-core'], ['3.20.0', '-']]],
   ['io.quarkus.runtime.util.ClassPathUtils', [['3.0.0.Final', 'quarkus-core'], ['3.15.1', 'quarkus-classloader-commons']]],
@@ -514,6 +515,185 @@ for (const major of [...new Set(CLASS_VIS.map(majorOfRelease))]) {
   classesFiles.set(major, classesFile(CLASS_VIS.filter((i) => majorOfRelease(i) === major)));
 }
 
+/* ---------- API: the public API of a few classes, at the classes snapshots ---------- */
+// [binary name, class points, {member key: points}]: points [[release, value]] in the api grammar, '-' for not API
+// (or gone); a class is API only while a jar has it, and its members only while it is API. Each line's classes file
+// gets `api` (its releases, its number of shards, the dep rows of what is API in the line and deprecated in some
+// release of any line, with `from` when its deprecation began in an earlier line and still holds at the line's first
+// release) and a revision history per API class; its members go to api-<major>-<k>.json, k =
+// core.memberShardOf(name, shards).
+const QUT_TYPE = 'Lio/quarkus/test/QuarkusUnitTest;';
+const JUNIT_CALLBACKS = 'implements org.junit.jupiter.api.extension.BeforeAllCallback,org.junit.jupiter.api.extension.AfterAllCallback';
+const API_CLASSES = [
+  ['io.quarkus.runtime.Application', [['3.0.0.Final', '+a implements java.io.Closeable']], {
+    '<init>()V': [['3.0.0.Final', '#']],
+    'start([Ljava/lang/String;)V': [['3.0.0.Final', '+fv']],
+    'stop()V': [['3.0.0.Final', '+f']],
+    'close()V': [['3.0.0.Final', '+f']],
+    'currentApplication()Lio/quarkus/runtime/Application;': [['3.0.0.Final', '+s']],
+    'getName()Ljava/lang/String;': [['3.15.1', '+']],
+    'isStarted()Z': [['3.0.0.Final', '+'], ['3.20.0', '+D since 3.20'], ['3.33.0', '-']],
+    'doStart([Ljava/lang/String;)V': [['3.0.0.Final', '#av']],
+  }],
+  ['io.quarkus.runtime.LaunchMode', [['3.0.0.Final', '+e']], {
+    'NORMAL:Lio/quarkus/runtime/LaunchMode;': [['3.0.0.Final', '+e']],
+    'DEVELOPMENT:Lio/quarkus/runtime/LaunchMode;': [['3.0.0.Final', '+e']],
+    'TEST:Lio/quarkus/runtime/LaunchMode;': [['3.0.0.Final', '+e']],
+    'values()[Lio/quarkus/runtime/LaunchMode;': [['3.0.0.Final', '+s']],
+    'valueOf(Ljava/lang/String;)Lio/quarkus/runtime/LaunchMode;': [['3.0.0.Final', '+s']],
+    'isDevOrTest()Z': [['3.0.0.Final', '+']],
+    'current()Lio/quarkus/runtime/LaunchMode;': [['3.8.1', '+s']],
+  }],
+  ['io.quarkus.runtime.Quarkus', [['3.0.0.Final', '+f']], {
+    'run([Ljava/lang/String;)V': [['3.0.0.Final', '+sv']],
+    'run(Ljava/lang/Class;[Ljava/lang/String;)V': [['3.0.0.Final', '+sv']],
+    'asyncExit()V': [['3.0.0.Final', '+s']],
+    'blockingExit()V': [['3.0.0.Final', '+s'], ['3.27.0', '+sD'], ['3.40.0', '+sR since 3.40']],
+    'waitForExit()V': [['3.0.0.Final', '+s']],
+    'manualInitialize()V': [['3.9.0', '+sX']],
+  }],
+  ['io.quarkus.runtime.util.ClassPathUtils', [['3.0.0.Final', '+'], ['3.15.1', '+f']], {
+    'consumeAsPaths(Ljava/lang/String;Ljava/util/function/Consumer;)V': [['3.0.0.Final', '+s']],
+    // deprecated in 3.x, no longer in 4.0
+    'toLocalPath(Ljava/net/URL;)Ljava/nio/file/Path;': [['3.0.0.Final', '+s'], ['3.27.0', '+sD'], ['4.0.0.Beta1', '+s']],
+    'readStream(Ljava/net/URL;Ljava/util/function/Function;)Ljava/lang/Object;': [['3.0.0.Final', '+s'], ['3.20.0', '+sD since 3.20'], ['3.33.0', '+sD since 3.20.1']],
+  }],
+  ['io.quarkus.arc.runtime.ArcRecorder', [['3.0.0.Final', '+']], {
+    '<init>()V': [['3.0.0.Final', '+']],
+    // deprecated in 4.0 only
+    'initContainer(Lio/quarkus/runtime/ShutdownContext;)Lio/quarkus/arc/ArcContainer;': [['3.0.0.Final', '+'], ['4.0.0.Beta1', '+D since 4.0']],
+    'initStaticSupplierBeans(Ljava/util/Map;)V': [['3.0.0.Final', '+'], ['3.33.0', '+D']],
+  }],
+  ['io.quarkus.opentracing.runtime.TracingRecorder', [['3.0.0.Final', '+'], ['3.9.0', '+D since 3.9']], {
+    '<init>()V': [['3.0.0.Final', '+']],
+    'setupResources()V': [['3.0.0.Final', '+'], ['3.9.0', '+D since 3.9']],
+  }],
+  ['io.quarkus.resteasy.reactive.server.runtime.ResteasyReactiveRecorder', [['3.0.0.Final', '+']], {
+    '<init>()V': [['3.0.0.Final', '+']],
+    'createDeployment(Ljava/lang/Object;)Ljava/util/function/Supplier;': [['3.0.0.Final', '+']],
+  }],
+  ['io.quarkus.amazon.lambda.http.LambdaHttpHandler', [['3.2.0.Final', '+ implements com.amazonaws.services.lambda.runtime.RequestHandler']], {
+    '<init>()V': [['3.2.0.Final', '+']],
+    'handleRequest(Ljava/lang/Object;Lcom/amazonaws/services/lambda/runtime/Context;)Ljava/lang/Object;': [['3.2.0.Final', '+']],
+  }],
+  ['io.quarkus.test.junit.QuarkusTest', [['3.0.0.Final', '+n']], {}],
+  ['io.quarkus.test.QuarkusUnitTest', [['3.0.0.Final', `+ ${JUNIT_CALLBACKS}`], ['3.40.0', `+R ${JUNIT_CALLBACKS} since 3.40`]], {
+    '<init>()V': [['3.0.0.Final', '+']],
+    [`withApplicationRoot(Ljava/util/function/Consumer;)${QUT_TYPE}`]: [['3.0.0.Final', '+']],
+    [`setArchiveProducer(Ljava/util/function/Supplier;)${QUT_TYPE}`]: [['3.0.0.Final', '+'], ['3.20.0', '+D'], ['3.33.0', '-']],
+    [`assertException(Ljava/util/function/Consumer;)${QUT_TYPE}`]: [['3.0.0.Final', '+']],
+    [`overrideConfigKey(Ljava/lang/String;Ljava/lang/String;)${QUT_TYPE}`]: [['3.2.0.Final', '+']],
+    [`withEmptyApplication()${QUT_TYPE}`]: [['3.9.0', '+']],
+    [`setLogRecordPredicate(Ljava/util/function/Predicate;)${QUT_TYPE}`]: [['3.0.0.Final', '+'], ['3.27.0', '-']],
+    'setLogRecordPredicate(Ljava/util/function/Predicate;)V': [['3.27.0', '+']],
+    [`debugBytecode(Z)${QUT_TYPE}`]: [['3.0.0.Final', '+'], ['3.33.0', '-']],
+    [`debugBytecode(ZZ)${QUT_TYPE}`]: [['3.33.0', '+']],
+    [`setFlatClassPath(Z)${QUT_TYPE}`]: [['3.0.0.Final', '+'], ['3.15.1', '+D since 3.15'], ['3.27.0', '+R since 3.15']],
+    'beforeAll(Lorg/junit/jupiter/api/extension/ExtensionContext;)V': [['3.0.0.Final', '+']],
+    'afterAll(Lorg/junit/jupiter/api/extension/ExtensionContext;)V': [['3.0.0.Final', '+']],
+    'RUNNING:Ljava/lang/String;': [['3.0.0.Final', '#sf']],
+  }],
+  ['io.quarkus.test.QuarkusUnitTest$Builder', [['3.27.0', '+s'], ['3.40.0', '+sR since 3.40'], ['4.0.0.Beta1', '+sD since 3.40']], {
+    '<init>()V': [['3.27.0', '+']],
+    [`build()${QUT_TYPE}`]: [['3.27.0', '+']],
+  }],
+  ['io.quarkus.test.QuarkusExtensionTest', [['3.40.0', `+X ${JUNIT_CALLBACKS}`]], {
+    '<init>()V': [['3.40.0', '+']],
+    'withApplicationRoot(Ljava/util/function/Consumer;)Lio/quarkus/test/QuarkusExtensionTest;': [['3.40.0', '+']],
+    'assertException(Ljava/util/function/Consumer;)Lio/quarkus/test/QuarkusExtensionTest;': [['3.40.0', '+']],
+  }],
+];
+const API_SHARDS = { 3: 4, 4: 2 };
+/** The value of a point list at a release: the last point at or before it, null before the first or for '-'. */
+const pointAt = (points, release) => {
+  let value = null;
+  for (const [from, v] of points) if (compareVersions(from, release) <= 0) value = v === '-' ? null : v;
+  return value;
+};
+/** Change points `[[key(i), value]]` of the values over `vis`: nothing before the first non-null, changes only. */
+const changePoints = (vis, valueAt, key) => {
+  const h = [];
+  vis.forEach((i) => {
+    const value = valueAt(i);
+    if (h.length ? h[h.length - 1][1] !== value : value != null) h.push([key(i), value]);
+  });
+  return h;
+};
+/** The jars of a class row of a classes file at release i. */
+const jarsIn = (file, row, i) => {
+  let value;
+  for (const [vi, v] of row[2]) if (vi <= i) value = v;
+  return value == null ? [] : (Array.isArray(value) ? value : [value]).map((j) => file.artifacts[j]);
+};
+/** The value of a class (key null) or of one of its members at release i, whatever its jar; null when no jar has it. */
+const itemValue = ([name, classPoints, members], key, i) => {
+  const file = classesFiles.get(majorOfRelease(i));
+  const row = file?.classes.find((r) => `${file.packages[r[0]]}.${r[1]}` === name);
+  if (!row || !jarsIn(file, row, i).length) return null;
+  const value = pointAt(classPoints, RELEASES[i][0]);
+  return key == null || value == null ? value : pointAt(members[key], RELEASES[i][0]);
+};
+const deprecatedAt = (spec, key, i) => deprecationOf(itemValue(spec, key, i)) != null;
+/** A dep row's `from` in the line starting at `first`: where the item's deprecation began, when in an earlier line. */
+const fromBefore = (spec, key, first) => {
+  let k = CLASS_VIS.indexOf(first);
+  if (k <= 0 || !deprecatedAt(spec, key, first) || !deprecatedAt(spec, key, CLASS_VIS[k - 1])) return null;
+  while (k > 0 && deprecatedAt(spec, key, CLASS_VIS[k - 1])) k--;
+  return CLASS_VIS[k];
+};
+const apiShards = new Map(); // `api-<major>-<k>` → {rows}
+const revisions = new Map(); // binary name → Map(API state → revision), numbered across the lines in release order
+for (const [major, file] of classesFiles) {
+  const vis = file.versions;
+  const n = API_SHARDS[major];
+  const jarsAt = (row, i) => jarsIn(file, row, i);
+  const dep = [];
+  const shardRows = Array.from({ length: n }, () => []);
+  file.classes.forEach((row, classIndex) => {
+    const name = `${file.packages[row[0]]}.${row[1]}`;
+    const spec = API_CLASSES.find(([x]) => x === name);
+    if (!spec) return;
+    const [, classPoints, members] = spec;
+    const classValue = (i) => (jarsAt(row, i).length ? pointAt(classPoints, RELEASES[i][0]) : null);
+    const memberValue = (key, i) => (classValue(i) == null ? null : pointAt(members[key], RELEASES[i][0]));
+    const keys = Object.keys(members).sort();
+    // the revision: the distinct API states of the class, numbered in order of first appearance
+    if (!revisions.has(name)) revisions.set(name, new Map());
+    const states = revisions.get(name);
+    const rev = (i) => {
+      if (classValue(i) == null) return null;
+      const state = JSON.stringify([classValue(i), keys.map((k) => [k, memberValue(k, i)])]);
+      if (!states.has(state)) states.set(state, states.size + 1);
+      return states.get(state);
+    };
+    row[3] = changePoints(vis, rev, (i) => i);
+    // per jar: the dep rows of what is API there and deprecated in some release of any line, and the shard rows
+    const jars = [...new Set(vis.flatMap((i) => jarsAt(row, i)))].sort();
+    for (const jar of jars) {
+      const inJar = (i, value) => (jarsAt(row, i).includes(jar) ? value : null);
+      const cls = (i) => inJar(i, classValue(i));
+      const ai = file.artifacts.indexOf(jar);
+      const depRow = (key, valueAt) => {
+        if (!vis.some((i) => valueAt(i) != null) || !CLASS_VIS.some((i) => deprecatedAt(spec, key, i))) return;
+        const from = fromBefore(spec, key, vis[0]);
+        dep.push([classIndex, ai, key, changePoints(vis, valueAt, (i) => i), ...(from == null ? [] : [from])]);
+      };
+      depRow(null, cls);
+      for (const key of keys) depRow(key, (i) => inJar(i, memberValue(key, i)));
+      const version = (i) => RELEASES[i][0];
+      const memberRows = keys.map((key) => [key, changePoints(vis, (i) => inJar(i, memberValue(key, i)), version)]).filter(([, h]) => h.length);
+      shardRows[memberShardOf(name, n)].push([jar, name, changePoints(vis, cls, version), memberRows]);
+    }
+  });
+  dep.sort((x, y) => x[0] - y[0] || x[1] - y[1] || ((x[2] ?? '') < (y[2] ?? '') ? -1 : (x[2] ?? '') > (y[2] ?? '') ? 1 : 0));
+  file.api = { versions: vis, shards: n, dep };
+  shardRows.forEach((rows, k) => {
+    rows.sort((x, y) => (x[1] < y[1] ? -1 : x[1] > y[1] ? 1 : 0) || (x[0] < y[0] ? -1 : x[0] > y[0] ? 1 : 0));
+    apiShards.set(`api-${major}-${k}`, { rows });
+  });
+}
+for (const entry of versionsJson.versions) if (entry.classes) entry.api = true;
+
 /* ---------- write (one array element per line: compact but diffable) ---------- */
 
 function write(name, obj) {
@@ -544,6 +724,8 @@ write('bom', bomJson);
 write('config', configJson);
 write('extensions', extensionsJson);
 for (const [major, file] of classesFiles) write(`classes-${major}`, file);
+for (const [name, shard] of apiShards) write(name, shard);
 console.log(`wrote ${OUT}: ${RELEASES.length} releases, ${CONFIG_VIS.length} config snapshots, ${props.length} properties ` +
   `(${config.states.length} states), ${bomJson.artifacts.length} artifacts, ${exts.length} extensions (${extIntern.states.length} states), ` +
-  `classes of ${classesFiles.size} major lines (${[...classesFiles].map(([major, f]) => `${major}.x: ${f.classes.length}`).join(', ')})`);
+  `classes of ${classesFiles.size} major lines (${[...classesFiles].map(([major, f]) => `${major}.x: ${f.classes.length}`).join(', ')}), ` +
+  `API of ${API_CLASSES.length} classes in ${apiShards.size} shards`);
