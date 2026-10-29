@@ -6,7 +6,7 @@
 
   <groupId>io.quarkiverse.almanac</groupId>
   <artifactId>quarkus-almanac</artifactId>
-  <version>0.1.0-SNAPSHOT</version>
+  <version>0.1.0</version>
   <name>Quarkus Almanac</name>
   <description>Extracts per-release Quarkus config, BOM and extension data from Maven Central.</description>
 
