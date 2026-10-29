@@ -179,7 +179,7 @@ function debounce(fn, ms) {
 }
 
 const fmt = (n) => Number(n).toLocaleString('en-US');
-const short = (v) => core.shortVersion(v);
+const versionText = (v) => core.versionText(v);
 const plural = (n, one, many = `${one}s`) => `${fmt(n)} ${n === 1 ? one : many}`;
 const reducedMotion = () => {
   try {
@@ -294,6 +294,11 @@ function prepareVersions(json) {
     g.items.push(i);
     if (x.lts) g.lts = true;
   });
+  // the pre-launch releases with no data, which the Releases page lists for reference in their streams
+  const reference = json.reference ?? [];
+  for (const r of reference) {
+    if (!byStream.has(r.stream)) byStream.set(r.stream, { stream: r.stream, lts: false, upcoming: false, items: [] });
+  }
   const streams = [...byStream.values()].sort((a, b) => core.compareVersions(b.stream, a.stream)); // newest first
   const configVis = core.configVersionsOf(list);
   // releases with extension snapshots: every config snapshot, plus releases with extensions only
@@ -307,6 +312,7 @@ function prepareVersions(json) {
     json,
     list,
     streams,
+    reference,
     configVis,
     extVis,
     clsVis,
@@ -760,7 +766,7 @@ function hiddenCount(hidden, what = 'release') {
  */
 function newestRelease(vi, what) {
   const shown = currentVis().indices;
-  return `${short(store.V.list[vi].v)}, the newest release${vi === shown[shown.length - 1] ? '' : ` with ${what}`}`;
+  return `${versionText(store.V.list[vi].v)}, the newest release${vi === shown[shown.length - 1] ? '' : ` with ${what}`}`;
 }
 
 /** "the first release of this dataset", or, while releases before the first that has data of one kind (`snaps`) lack it, "the first release with config data" (`what`). */
@@ -861,15 +867,15 @@ function hrefFor(r) {
 
 const link = {
   home: () => '#/',
-  compare: (a, b) => hrefFor({ page: 'compare', from: short(a), to: short(b) }),
+  compare: (a, b) => hrefFor({ page: 'compare', from: versionText(a), to: versionText(b) }),
   property: (key) => hrefFor({ page: 'property', key }),
   artifact: (id) => hrefFor({ page: 'artifact', id }),
   extension: (artifactId) => hrefFor({ page: 'artifact', id: `io.quarkus:${artifactId}` }),
   class: (name) => hrefFor({ page: 'class', name }),
   member: (name, key) => hrefFor({ page: 'class', name, member: key }),
-  deprecated: (v) => hrefFor({ page: 'deprecated', v: short(v) }),
+  deprecated: (v) => hrefFor({ page: 'deprecated', v: versionText(v) }),
   versions: () => '#/versions',
-  version: (v) => hrefFor({ page: 'version', v: short(v) }),
+  version: (v) => hrefFor({ page: 'version', v: versionText(v) }),
 };
 
 function writeHash(hash, replace) {
@@ -1029,7 +1035,7 @@ function buildShell() {
         shell.searchWrap)));
   const footer = h('footer', { class: 'foot' },
     h('div', { class: 'wrap foot-in' },
-      h('p', null, 'Data extracted from artifacts published on Maven Central. Source and issues on GitHub: ',
+      h('p', null, 'Data extracted from artifacts published on Maven Central, and for the pre-launch releases never published there, from the poms at their git tags. Source and issues on GitHub: ',
         h('a', { href: ALMANAC_REPO }, 'quarkusio/almanac'), '.'),
       shell.footData),
     legalBar());
@@ -1196,7 +1202,7 @@ function updateDataNotice() {
   const V = store.V;
   shell.footData.textContent = [
     V.generatedAt ? `Data generated ${core.formatDate(V.generatedAt)}` : null,
-    `${plural(V.list.length, 'release')} from ${short(V.list[0].v)} to ${short(V.list[V.list.length - 1].v)}`,
+    `${plural(V.list.length, 'release')} from ${versionText(V.list[0].v)} to ${versionText(V.list[V.list.length - 1].v)}`,
   ].filter(Boolean).join(' · ');
 }
 
@@ -1268,7 +1274,49 @@ function dateEl(iso) {
 }
 
 function versionChips(x) {
-  return [x.lts ? chip('lts', 'LTS', 'Long-term support stream') : null, preChip(x)];
+  return [x.lts ? chip('lts', 'LTS', 'Long-term support stream') : null, preChip(x), gitChip(x)];
+}
+
+/** "never published" for a pre-launch release, whose BOM comes from the poms at its git tag; else null. */
+function gitChip(x) {
+  return x.git ? chip('neutral', 'never published', `A pre-launch release, never published on Maven Central: its BOM, ${x.git.bom}, comes from the poms at its git tag ${x.git.tag}`) : null;
+}
+
+/** The BOM of a release: `io.quarkus:quarkus-bom`, or the one at the git tag of a pre-launch release. */
+function bomIdOf(x) {
+  return x.git?.bom ?? 'io.quarkus:quarkus-bom';
+}
+
+/** What the modules that follow the release version are called in a comparison: Shamrock ones before 0.10.0. */
+function moduleWord(cmp) {
+  return bomIdOf(cmp.A).startsWith('org.jboss.shamrock:') ? 'Shamrock' : 'Quarkus';
+}
+
+/** "0.10.0 (f260571)", a link to the commit that a pre-launch release's git tag names. */
+function gitTagLink(git) {
+  return h('a', { href: `https://github.com/quarkusio/quarkus/tree/${git.commit}`, target: '_blank', rel: 'noopener noreferrer', class: 'ext-link' },
+    `${git.tag} (${git.commit.slice(0, 7)})`, icon('external'));
+}
+
+/**
+ * What the pre-launch releases among `xs` are, as a note, or null when there is none: never published on Maven Central,
+ * their BOM from the poms at their git tag (linked for one or two), managing only the project's own modules.
+ */
+function preLaunchNote(xs) {
+  const sides = [...new Map(xs.filter((x) => x?.git).map((x) => [x.v, x])).values()];
+  if (!sides.length) return null;
+  const one = sides.length === 1;
+  const shamrock = sides.some((x) => x.git.bom.startsWith('org.jboss.shamrock:'));
+  const after = [`, and ${one ? 'manages' : 'manage'} only the project's own modules: the third-party versions came into the BOM with 0.11.0.`,
+    shamrock ? ' Before 0.10.0, Quarkus was named Shamrock, with the groupId org.jboss.shamrock.' : null];
+  if (sides.length > 2) {
+    return h('p', { class: 'note' }, `The ${sides.length} pre-launch releases ${versionText(sides[0].v)} to ${versionText(sides[sides.length - 1].v)} `
+      + 'were never published on Maven Central: deployed only to a private repository, their BOMs come from the poms at their git tags', ...after);
+  }
+  const tags = sides.map((x) => gitTagLink(x.git)).flatMap((a, k) => (k ? [' and ', a] : [a]));
+  return h('p', { class: 'note' },
+    `${andList(sides.map((x) => versionText(x.v)))} ${one ? 'was' : 'were'} never published on Maven Central: ${one ? 'a pre-launch release' : 'pre-launch releases'}, deployed only to a private repository. ${one ? 'Its BOM comes' : 'Their BOMs come'} from the poms at ${one ? 'its git tag' : 'their git tags'} `,
+    ...tags, ...after);
 }
 
 const QUALIFIER_TITLE = { Alpha: 'Alpha pre-release', Beta: 'Beta pre-release', CR: 'Candidate release (CR): the last pre-release step before the final' };
@@ -1294,7 +1342,7 @@ function upcomingChip() {
 }
 
 function verLink(v) {
-  return h('a', { class: 'ver', href: link.version(v) }, short(v));
+  return h('a', { class: 'ver', href: link.version(v) }, versionText(v));
 }
 
 function valueEl(v) {
@@ -1583,7 +1631,7 @@ function versionSelect(selected) {
       const og = h('optgroup', { label: optgroupLabel(g) });
       for (let j = items.length - 1; j >= 0; j--) {
         const x = V.list[items[j]];
-        og.append(h('option', { value: String(items[j]) }, `${short(x.v)}${core.isPreRelease(x) ? ' (pre-release)' : ''}`));
+        og.append(h('option', { value: String(items[j]) }, `${versionText(x.v)}${core.isPreRelease(x) ? ' (pre-release)' : ''}${x.git ? ' (never published)' : ''}`));
       }
       f.append(og);
     }
@@ -1605,7 +1653,7 @@ function pickerField(label, sel) {
   const meta = h('span', { class: 'picker-date', 'aria-hidden': 'true' });
   const sync = () => {
     const x = store.V.list[Number(sel.value)];
-    meta.textContent = x ? [x.date ? core.formatDate(x.date) : null, x.lts ? 'LTS' : null, preLabel(x)].filter(Boolean).join(' · ') : '';
+    meta.textContent = x ? [x.date ? core.formatDate(x.date) : null, x.lts ? 'LTS' : null, preLabel(x), x.git ? 'never published' : null].filter(Boolean).join(' · ') : '';
   };
   sel.addEventListener('change', sync);
   sync();
@@ -1636,7 +1684,7 @@ function pickerForm({ from, to }) {
     e.preventDefault();
     const a = store.V.list[Number(fromSel.value)];
     const b = store.V.list[Number(toSel.value)];
-    if (a && b) navigate({ page: 'compare', from: short(a.v), to: short(b.v) });
+    if (a && b) navigate({ page: 'compare', from: versionText(a.v), to: versionText(b.v) });
   });
   return form;
 }
@@ -1656,17 +1704,17 @@ function resultSub(it) {
   if (it.type === 'member') return it.sub;
   if (it.type === 'property') {
     const parts = [it.ext];
-    if (!it.current && it.lastSeen != null) parts.push(`no longer present; last seen in ${short(V.list[it.lastSeen].v)}`);
+    if (!it.current && it.lastSeen != null) parts.push(`no longer present; last seen in ${versionText(V.list[it.lastSeen].v)}`);
     return parts.filter(Boolean).join(' · ');
   }
   if (it.type === 'artifact') {
-    if (!it.current) return 'no longer managed by quarkus-bom';
-    return it.follows ? `${short(it.value)} (versioned with Quarkus)` : `managed at ${it.value}`;
+    if (!it.current) return it.preLaunch ? 'managed only by pre-launch releases, never published' : 'no longer managed by quarkus-bom';
+    return it.follows ? `${versionText(it.value)} (versioned with Quarkus)` : `managed at ${it.value}`;
   }
   if (it.type === 'class') {
     const jars = it.jars.join(', ');
     if (it.current) return `in ${jars}`;
-    return it.lastSeen != null ? `no longer present; last in ${jars} (${short(V.list[it.lastSeen].v)})` : jars;
+    return it.lastSeen != null ? `no longer present; last in ${jars} (${versionText(V.list[it.lastSeen].v)})` : jars;
   }
   const parts = [it.name, it.status];
   if (it.relocatedTo) parts.push(`relocated to ${it.relocatedTo}`);
@@ -1899,7 +1947,7 @@ async function renderHome() {
   const last = V.list[V.list.length - 1];
 
   const hero = h('section', { class: 'hero band', 'aria-labelledby': 'home-title' },
-    h('p', { class: 'kicker' }, 'Release almanac · Quarkus ', h('span', { class: 'ver' }, short(first.v)), ' to ', h('span', { class: 'ver' }, short(last.v))),
+    h('p', { class: 'kicker' }, 'Release almanac · Quarkus ', h('span', { class: 'ver' }, versionText(first.v)), ' to ', h('span', { class: 'ver' }, versionText(last.v))),
     h('h1', { class: 'display', id: 'home-title', tabindex: '-1' }, 'What changed between Quarkus releases?'),
     h('p', { class: 'lede' },
       'Pick two releases to see which ', h('code', null, 'quarkus.*'), ' config properties were added, removed or changed, ',
@@ -1943,12 +1991,12 @@ function quickSpan(p) {
   if (p.span) {
     const a = V.list[p.span.from];
     const b = V.list[p.span.to];
-    return h('span', { class: 'quick-span', title: `Time between the streams: ${short(a.v)} (${core.formatDate(a.date)}) to ${short(b.v)} (${core.formatDate(b.date)})` },
+    return h('span', { class: 'quick-span', title: `Time between the streams: ${versionText(a.v)} (${core.formatDate(a.date)}) to ${versionText(b.v)} (${core.formatDate(b.date)})` },
       p.span.label, h('span', { class: 'sr-only' }, ' between the two streams'));
   }
   const B = V.list[p.to];
   if (!B.date) return null;
-  return h('span', { class: 'quick-span', title: `${p.toStream} has no final release yet; ${short(B.v)} was released ${core.formatDate(B.date)}` },
+  return h('span', { class: 'quick-span', title: `${p.toStream} has no final release yet; ${versionText(B.v)} was released ${core.formatDate(B.date)}` },
     h('span', { class: 'sr-only' }, 'released '), core.formatDate(B.date));
 }
 
@@ -1960,7 +2008,7 @@ function quickPickItem(p) {
   return h('li', null,
     h('a', { class: 'quick-link', href: link.compare(A.v, B.v) },
       h('span', { class: 'quick-title' }, title),
-      h('span', { class: 'quick-vers' }, short(A.v), h('span', { class: 'arrow', 'aria-hidden': 'true' }, ' → '), h('span', { class: 'sr-only' }, ' to '), short(B.v)),
+      h('span', { class: 'quick-vers' }, versionText(A.v), h('span', { class: 'arrow', 'aria-hidden': 'true' }, ' → '), h('span', { class: 'sr-only' }, ' to '), versionText(B.v)),
       quickSpan(p)));
 }
 
@@ -1978,7 +2026,7 @@ function coverageFacts() {
     const latest = cvs[cvs.length - 1];
     const current = c.raw.props.filter((p) => core.stateAt(p.h, latest) != null).length;
     propsN.textContent = fmt(c.raw.props.length);
-    propsSub.textContent = `${fmt(current)} present in ${short(V.list[latest].v)}`;
+    propsSub.textContent = `${fmt(current)} present in ${versionText(V.list[latest].v)}`;
   }).catch(() => {
     propsN.textContent = '—';
     propsSub.textContent = 'config.json unavailable';
@@ -1993,16 +2041,18 @@ function coverageFacts() {
       if (raw === '=') modules++;
     }
     artsN.textContent = fmt(b.raw.artifacts.length);
-    artsSub.textContent = `${fmt(current)} managed in ${short(last.v)}, ${fmt(modules)} of them Quarkus modules`;
+    artsSub.textContent = `${fmt(current)} managed in ${versionText(last.v)}, ${fmt(modules)} of them Quarkus modules`;
   }).catch(() => {
     artsN.textContent = '—';
     artsSub.textContent = 'bom.json unavailable';
   });
   const preCount = V.visOff.pre.filter(Boolean).length;
+  const gitCount = V.list.filter((x) => x.git).length;
   return h('section', { class: 'facts', 'aria-labelledby': 'facts-h' },
     h('h2', { class: 'label-h', id: 'facts-h' }, 'Coverage'),
     h('dl', { class: 'facts-grid' },
-      fact(fmt(V.list.length), 'releases', `${short(first.v)} to ${short(last.v)}${preCount ? `, ${plural(preCount, 'pre-release')} among them` : ''}`),
+      fact(fmt(V.list.length), 'releases', `${versionText(first.v)} to ${versionText(last.v)}${preCount ? `, ${plural(preCount, 'pre-release')} among them` : ''}`
+        + `${gitCount ? `; ${gitCount} pre-launch, never published, with their BOM alone` : ''}`),
       fact(propsN, 'config properties tracked', propsSub),
       fact(artsN, 'managed artifacts tracked', artsSub),
       fact(V.generatedAt ? core.formatDate(V.generatedAt) : '—', 'data generated', null, 'fact--date')));
@@ -2068,7 +2118,7 @@ async function renderCompare(r) {
     return notFoundView('Unknown release', `This dataset has no release ${missing.join(' or ')}. Pick two releases instead:`,
       pickerForm({ from: ia >= 0 ? ia : pair.from, to: ib >= 0 ? ib : pair.to }));
   }
-  const canonical = { page: 'compare', from: short(V.list[ia].v), to: short(V.list[ib].v) };
+  const canonical = { page: 'compare', from: versionText(V.list[ia].v), to: versionText(V.list[ib].v) };
   if (hrefFor(canonical) !== hrefFor(r)) canonicalize(canonical);
   // the classes files of the API section start loading with the rest, though the page does not wait for them
   const classLines = linesSpanning(core.classLinesOf(V.list, [ia, ib]));
@@ -2132,7 +2182,7 @@ function platformSides(ia, ib, data) {
 function withoutPlatformBom(cmp) {
   const V = store.V;
   return [cmp.platform.a ? null : cmp.ia, cmp.platform.b || cmp.ib === cmp.ia ? null : cmp.ib]
-    .filter((i) => i != null).map((i) => short(V.list[i].v)).join(' and ');
+    .filter((i) => i != null).map((i) => versionText(V.list[i].v)).join(' and ');
 }
 
 /**
@@ -2151,8 +2201,9 @@ function platformRow(cmp) {
     return switchRow('page-tools cmp-tools', [prefSwitch('platform', 'platform-bom', { text })], { rerender: true, names: ['platformBom'] });
   }
   if (!prefs.platformBom) return null;
+  const boms = [...new Set([cmp.A, cmp.B].map(bomIdOf))];
   return h('p', { class: 'page-tools cmp-tools muted' },
-    `No platform BOM of ${withoutPlatformBom(cmp)}, so the core BOM, io.quarkus:quarkus-bom, is compared.`);
+    `No platform BOM of ${withoutPlatformBom(cmp)}, so the core ${boms.length === 1 ? `BOM, ${boms[0]}, is` : `BOMs, ${boms.join(' and ')}, are`} compared.`);
 }
 
 /** "com.fasterxml.jackson…: 2.21.7 instead of 2.21.6" for the version changes of a platform BOM, three pairs at most. */
@@ -2177,8 +2228,8 @@ function platformNote(cmp) {
     platformChangesText(d), '.');
   const key = (d) => JSON.stringify(core.platformChangeSummary(d.changed).map((s) => [s.label, s.core, s.platform, s.count]));
   const text = sides.length === 2 && key(sides[0][1]) === key(sides[1][1])
-    ? [sentence(`${short(V.list[sides[0][0]].v)} and ${short(V.list[sides[1][0]].v)}`, sides[0][1])]
-    : sides.map(([i, d]) => sentence(short(V.list[i].v), d));
+    ? [sentence(`${versionText(V.list[sides[0][0]].v)} and ${versionText(V.list[sides[1][0]].v)}`, sides[0][1])]
+    : sides.map(([i, d]) => sentence(versionText(V.list[i].v), d));
   const toggle = p.a && p.b
     ? h('button', { type: 'button', class: 'btn', 'data-pref-slot': 'platform-bom-note', onclick: () => setPlatformBom(!p.used) },
       p.used ? 'Compare the core BOMs' : 'Compare the platform BOMs')
@@ -2201,15 +2252,16 @@ function compareHeader(cmp) {
   return h('header', { class: 'cmp-head band' },
     h('p', { class: 'kicker' }, 'Comparison'),
     h('h1', { class: 'cmp-title', tabindex: '-1' },
-      h('span', { class: 'ver' }, short(A.v)),
+      h('span', { class: 'ver' }, versionText(A.v)),
       h('span', { class: 'cmp-arrow', 'aria-hidden': 'true' }, '→'),
       h('span', { class: 'sr-only' }, ' to '),
-      h('span', { class: 'ver' }, short(B.v))),
+      h('span', { class: 'ver' }, versionText(B.v))),
     h('div', { class: 'cmp-sides' },
       side('From', A),
       side('To', B),
       dir !== 0 && A.date && B.date ? h('span', { class: 'cmp-span' }, core.releasedApart(A.date, B.date)) : null),
     dir > 0 ? h('p', { class: 'note note--warn' }, 'To is older than From, so upgrades read as downgrades and additions as removals.') : null,
+    preLaunchNote([A, B]),
     h('div', { class: 'cmp-actions' },
       h('a', { class: 'btn', href: link.compare(B.v, A.v) }, icon('swap'), 'Swap'),
       toggle),
@@ -2242,19 +2294,24 @@ function gapText(cmp, kind) {
   if (s.a == null) missing.push(cmp.ia);
   if (s.b == null && cmp.ib !== cmp.ia) missing.push(cmp.ib);
   if (!missing.length) return null;
-  const names = (list) => list.map((i) => short(V.list[i].v)).join(' and ');
-  const pre = missing.filter((i) => core.isPreRelease(V.list[i]));
-  const fin = missing.filter((i) => !core.isPreRelease(V.list[i]));
+  const names = (list) => list.map((i) => versionText(V.list[i].v)).join(' and ');
+  // a pre-launch release has its BOM alone: it was never published
+  const unpublished = missing.filter((i) => V.list[i].git);
+  const pre = missing.filter((i) => !V.list[i].git && core.isPreRelease(V.list[i]));
+  const fin = missing.filter((i) => !V.list[i].git && !core.isPreRelease(V.list[i]));
   const parts = [];
-  if (pre.length) parts.push(`No ${s.what} for ${names(pre)}`);
+  if (unpublished.length) parts.push(`no ${s.what} for ${names(unpublished)}, never published`);
+  if (pre.length) parts.push(`no ${s.what} for ${names(pre)}`);
   if (fin.length) {
-    const first = s.all.length ? short(V.list[s.all[0]].v) : null;
-    parts.push(`${pre.length ? 'no' : 'No'} ${s.what} for ${names(fin)}${first ? ` (the ${s.what} starts at ${first})` : ''}`);
+    const first = s.all.length ? versionText(V.list[s.all[0]].v) : null;
+    parts.push(`no ${s.what} for ${names(fin)}${first ? ` (the ${s.what} starts at ${first})` : ''}`);
   }
-  if (kind === 'api') return `${parts.join(', and ')}.`;
+  const text = parts.join(', and ');
+  const sentence = `${text.charAt(0).toUpperCase()}${text.slice(1)}`;
+  if (kind === 'api') return `${sentence}.`;
   // config needs extensions, so only a config gap can leave an extension diff to show
   const shown = kind === 'config' && cmp.ext ? 'dependency and extension changes only' : 'dependency changes only';
-  return `${parts.join(', and ')}: ${shown}.`;
+  return `${sentence}: ${shown}.`;
 }
 
 /** Both releases use the data of one release for a kind ('config', 'extension' or 'api'), so there is no diff of it to show. */
@@ -2263,7 +2320,7 @@ function sameSnapshotText(cmp, kind) {
   const { A, B } = cmp;
   const s = snapshotsOf(cmp, kind);
   const finalsOfOneStream = !core.isPreRelease(A) && !core.isPreRelease(B) && streamOfEntry(A) === streamOfEntry(B);
-  return `Both releases use the ${s.what} of ${short(V.list[s.a].v)}. ${finalsOfOneStream
+  return `Both releases use the ${s.what} of ${versionText(V.list[s.a].v)}. ${finalsOfOneStream
     ? `${s.title} ${kind === 'config' || kind === 'api' ? 'is' : 'are'} captured once per stream, so changes between patches of one stream are not tracked.`
     : 'Changes between them are not tracked.'}`;
 }
@@ -2299,7 +2356,7 @@ function summaryLedger(cmp, data) {
     const b = cmp.bom.counts;
     const kinds = ['downgrade', 'major', 'minor', 'patch', 'other'].filter((k) => b[k]).map((k) => `${fmt(b[k])} ${KIND_LABEL[k]}`);
     cells.push(cell('Dependencies', 'sec-deps', [[b.changed, 'changed', 'chg'], [b.added, 'added', 'add'], [b.removed, 'removed', 'rem']],
-      [cmp.platform?.used ? 'Platform BOM' : null, kinds.length ? kinds.join(' · ') : null, cmp.bom.modules ? `plus ${fmt(cmp.bom.modules)} Quarkus modules` : null].filter(Boolean).join('; ')));
+      [cmp.platform?.used ? 'Platform BOM' : null, kinds.length ? kinds.join(' · ') : null, cmp.bom.modules ? `plus ${fmt(cmp.bom.modules)} ${moduleWord(cmp)} modules` : null].filter(Boolean).join('; ')));
   } else {
     cells.push(cell('Dependencies', 'sec-deps', [], 'bom.json is unavailable.'));
   }
@@ -2355,7 +2412,7 @@ function snapshotReason(cmp, kind) {
   const borrowed = [[cmp.ia, s.a], [cmp.ib, s.b]].filter(([i, c]) => i !== c);
   if (!borrowed.length) return null;
   const inStream = borrowed.every(([i, c]) => !core.isPreRelease(V.list[c]) && streamOfEntry(V.list[c]) === streamOfEntry(V.list[i]));
-  const names = [...new Set(borrowed.map(([i]) => short(V.list[i].v)))];
+  const names = [...new Set(borrowed.map(([i]) => versionText(V.list[i].v)))];
   const own = `${names.join(' and ')} ${names.length === 1 ? 'has' : 'have'} no ${s.what} of ${names.length === 1 ? 'its' : 'their'} own`;
   return inStream ? ` (${own}: the newest patch of the stream stands in)` : ` (${own}; the nearest release with it is used)`;
 }
@@ -2369,7 +2426,7 @@ function comparedAt(cmp, kind) {
   const V = store.V;
   const s = snapshotsOf(cmp, kind);
   if (s.a == null || s.b == null || s.a === s.b || (s.a === cmp.ia && s.b === cmp.ib)) return null;
-  return frag(' compared at ', h('span', { class: 'ver' }, short(V.list[s.a].v)), ' → ', h('span', { class: 'ver' }, short(V.list[s.b].v)), snapshotReason(cmp, kind));
+  return frag(' compared at ', h('span', { class: 'ver' }, versionText(V.list[s.a].v)), ' → ', h('span', { class: 'ver' }, versionText(V.list[s.b].v)), snapshotReason(cmp, kind));
 }
 
 function configSection(cmp, data) {
@@ -2668,7 +2725,8 @@ function depsSection(cmp, data) {
   const sec = h('section', { class: 'sec', id: 'sec-deps', 'aria-labelledby': 'sec-deps-h' },
     sectionHead(2, 'Dependencies', 'sec-deps-h',
       h('p', { class: 'sec-note' }, 'Versions managed by ',
-        cmp.platform?.used ? frag('the platform BOM, ', h('code', null, 'io.quarkus.platform:quarkus-bom')) : h('code', null, 'io.quarkus:quarkus-bom'),
+        cmp.platform?.used ? frag('the platform BOM, ', h('code', null, 'io.quarkus.platform:quarkus-bom'))
+          : [...new Set([cmp.A, cmp.B].map(bomIdOf))].flatMap((id, k) => [k ? ' and ' : null, h('code', null, id)]),
         '. Artifacts that share a groupId and the same version change are listed together.')));
   if (!cmp.bom) return add(sec, [missingData('bom.json', data.errors.bom)]);
   const pnote = platformNote(cmp);
@@ -2677,9 +2735,9 @@ function depsSection(cmp, data) {
   if (d.modules) {
     sec.append(h('p', { class: 'modules-line' },
       h('span', { class: 'modules-n' }, fmt(d.modules)),
-      h('span', null, ' Quarkus modules '), h('span', { class: 'ver' }, short(cmp.A.v)), h('span', { class: 'arrow', 'aria-hidden': 'true' }, ' → '), h('span', { class: 'sr-only' }, ' to '),
-      h('span', { class: 'ver' }, short(cmp.B.v)), '.',
-      h('span', { class: 'muted' }, ' These io.quarkus artifacts follow the platform version in both releases and are not listed below.')));
+      h('span', null, ` ${moduleWord(cmp)} modules `), h('span', { class: 'ver' }, versionText(cmp.A.v)), h('span', { class: 'arrow', 'aria-hidden': 'true' }, ' → '), h('span', { class: 'sr-only' }, ' to '),
+      h('span', { class: 'ver' }, versionText(cmp.B.v)), '.',
+      h('span', { class: 'muted' }, ` These ${bomIdOf(cmp.A).split(':')[0]} artifacts follow the platform version in both releases and are not listed below.`)));
   }
   if (!d.groups.length) return add(sec, [emptyNote('No other managed dependency changed version.')]);
   const state = { tags: new Set(), text: '' };
@@ -3243,7 +3301,7 @@ async function renderProperty(r) {
   const statusLine = hist.present
     ? h('p', { class: 'status-line' }, chip('added', 'current'), ` Present in ${newestRelease(lastCv, 'config data')}.`)
     : h('p', { class: 'status-line' }, chip('removed', 'removed'), lastRange
-      ? ` Not in ${newestRelease(lastCv, 'config data')}; last seen in ${short(V.list[lastRange.to].v)}.`
+      ? ` Not in ${newestRelease(lastCv, 'config data')}; last seen in ${versionText(V.list[lastRange.to].v)}.`
       : ' Not in any release shown.');
   const widenedNote = hist.widened
     ? h('p', { class: 'note' }, `This property only appears in ${widenedKinds(hist.widenedBy)}, so they are shown here although they are hidden elsewhere.`)
@@ -3263,7 +3321,7 @@ async function renderProperty(r) {
   if (prop.k !== name) row('Key', h('code', { class: 'val' }, prop.k), h('span', { class: 'kv-sub' }, 'Canonical key used to track this property: quoted segments become *.'));
   row('Extension', s.e ? h('a', { class: 'mono', href: link.extension(s.e) }, s.e) : h('em', { class: 'none' }, 'unknown'));
   row('Present in', h('span', { class: 'mono' }, presentInLabel(hist)), hist.present ? h('span', { class: 'muted' }, ' (current)') : null,
-    h('span', { class: 'kv-sub' }, `Releases: ${hist.ranges.map((x) => (x.from === x.to ? short(V.list[x.from].v) : `${short(V.list[x.from].v)} … ${short(V.list[x.to].v)}`)).join(', ')}`));
+    h('span', { class: 'kv-sub' }, `Releases: ${hist.ranges.map((x) => (x.from === x.to ? versionText(V.list[x.from].v) : `${versionText(V.list[x.from].v)} … ${versionText(V.list[x.to].v)}`)).join(', ')}`));
 
   const nameEl = h('span', { class: 'prop-name' }, name);
   return frag(
@@ -3317,7 +3375,7 @@ function presenceStrip(prop, hist, cvs, states) {
     }
     const what = s ? (s.x != null ? 'present, deprecated' : 'present') : 'absent';
     const evText = ev ? (ev.type === 'changed' ? `changed: ${ev.kinds.map((k) => KIND_LABEL[k]).join(', ')}` : ev.type) : '';
-    const label = `${short(V.list[vi].v)}${pre ? ` (${pre})` : ''}: ${what}${evText ? ` (${evText})` : ''}`;
+    const label = `${versionText(V.list[vi].v)}${pre ? ` (${pre})` : ''}: ${what}${evText ? ` (${evText})` : ''}`;
     strip.append(h('li', { class: cls.join(' '), title: label }, h('span', { class: 'sr-only' }, label)));
   }
   const first = V.list[cvs[0]];
@@ -3325,7 +3383,7 @@ function presenceStrip(prop, hist, cvs, states) {
   return frag(
     h('div', { class: 'strip-wrap', style: `max-width:${Math.max(240, cvs.length * 46)}px` },
       strip,
-      h('div', { class: 'strip-axis', 'aria-hidden': 'true' }, h('span', null, short(first.v)), h('span', null, short(last.v)))),
+      h('div', { class: 'strip-axis', 'aria-hidden': 'true' }, h('span', null, versionText(first.v)), h('span', null, versionText(last.v)))),
     h('p', { class: dense ? 'legend legend--dense' : 'legend', 'aria-hidden': 'true' },
       h('span', null, h('i', { class: 'lg lg-on' }), 'present'),
       h('span', null, h('i', { class: 'lg lg-dep' }), 'deprecated'),
@@ -3399,15 +3457,18 @@ async function renderArtifact(r) {
         ? frag(' at ', h('code', { class: 'val' }, hist.current.value), ', the Quarkus release version.')
         : frag(' at ', h('code', { class: 'val' }, hist.current.value), '.'));
     } else {
-      status = h('p', { class: 'status-line' }, chip('removed', 'not managed'), ` Not managed in ${short(last.v)}`,
+      status = h('p', { class: 'status-line' }, chip('removed', 'not managed'), ` Not managed in ${versionText(last.v)}`,
         hist.lastManaged != null ? frag('; last managed in ', verLink(V.list[hist.lastManaged].v), '.') : '.');
     }
   }
+  // the pre-launch releases shown whose BOM manages it: where their BOM comes from
+  const preLaunch = hist && art ? preLaunchNote(hist.indices.filter((k) => core.stateAt(art.h, k) != null).map((k) => V.list[k])) : null;
   return frag(
     h('header', { class: 'page-head band' },
       h('p', { class: 'kicker' }, extEntry ? 'Quarkus extension · managed dependency' : 'Managed dependency', ' · ', group),
       h('h1', { class: 'page-title page-title--mono', tabindex: '-1' }, idEl, copyButton(id, { label: 'Copy coordinates', target: idEl }))),
     status,
+    preLaunch,
     hist ? withPlatformRuns(artifactRanges(hist, tools), bom, platform, id, hist.indices) : emptyNote(`${id} never appears in quarkus-bom in this dataset.`),
     extEntry ? extensionPanel(extEntry, more, hist ? null : tools) : null);
 }
@@ -3446,7 +3507,7 @@ function platformRunsTable(runs) {
       h('thead', null, h('tr', null, h('th', { scope: 'col' }, 'Quarkus releases'), h('th', { scope: 'col' }, 'Platform BOM'), h('th', { scope: 'col' }, 'Core BOM'))),
       h('tbody', null, runs.map((r) => h('tr', null,
         h('th', { scope: 'row', class: 'mono' }, rangeLabel(r.from, r.to), h('span', { class: 'cell-sub' }, plural(r.count, 'release')),
-          r.without.length ? h('span', { class: 'cell-sub pbom-without' }, `no platform BOM: ${r.without.map((i) => short(V.list[i].v)).join(', ')}`) : null),
+          r.without.length ? h('span', { class: 'cell-sub pbom-without' }, `no platform BOM: ${r.without.map((i) => versionText(V.list[i].v)).join(', ')}`) : null),
         h('td', null, value(r.platform, r.platformId)),
         h('td', null, value(r.core, r.coreId)))))));
 }
@@ -3503,7 +3564,7 @@ function platformOnlyArtifact(id, bom, platform) {
 
 function rangeLabel(from, to) {
   const V = store.V;
-  return from === to ? short(V.list[from].v) : `${short(V.list[from].v)} – ${short(V.list[to].v)}`;
+  return from === to ? versionText(V.list[from].v) : `${versionText(V.list[from].v)} – ${versionText(V.list[to].v)}`;
 }
 
 /** "5 releases", "5 releases, 1 pre-release", "1 pre-release". */
@@ -3529,7 +3590,7 @@ function artifactRanges(hist, tools) {
     const value = !r.managed
       ? h('em', { class: 'none' }, r.before ? 'not yet managed' : 'not managed')
       : r.follows
-        ? frag(h('span', { class: 'follows' }, 'same as the Quarkus release'), h('span', { class: 'cell-sub' }, `${short(V.list[r.from].v)} … ${short(V.list[r.to].v)}`))
+        ? frag(h('span', { class: 'follows' }, 'same as the Quarkus release'), h('span', { class: 'cell-sub' }, `${versionText(V.list[r.from].v)} … ${versionText(V.list[r.to].v)}`))
         : h('code', { class: 'val' }, r.value);
     tbody.append(h('tr', { class: r.managed ? null : 'is-same' },
       h('th', { scope: 'row', class: 'mono' }, rangeLabel(r.from, r.to), h('span', { class: 'cell-sub' }, rangeCount(r))),
@@ -3545,7 +3606,7 @@ function artifactRanges(hist, tools) {
       tools),
     hist.widened ? h('p', { class: 'note' }, `Only ${widenedKinds(hist.widenedBy)} manage this artifact, so they are shown here although they are hidden elsewhere.`) : null,
     lane,
-    h('div', { class: 'strip-axis', 'aria-hidden': 'true' }, h('span', null, short(first.v)), h('span', null, short(last.v))),
+    h('div', { class: 'strip-axis', 'aria-hidden': 'true' }, h('span', null, versionText(first.v)), h('span', null, versionText(last.v))),
     h('div', { class: 'table-scroll' },
       h('table', { class: 'tbl tbl-ranges' },
         h('thead', null, h('tr', null, h('th', { scope: 'col' }, 'Quarkus releases'), h('th', { scope: 'col' }, 'Managed version'), h('th', { scope: 'col' }, 'Change'))),
@@ -3613,7 +3674,7 @@ function extensionPanel(x, data, tools) {
       sectionHead(4, 'Config properties', 'ext-props-h', h('p', { class: 'sec-note' }, `Attributed to ${x.id} in ${newestRelease(latest, 'config data')}.`)),
       owned.length
         ? cappedList('plist', owned, (o) => h('li', null, h('a', { class: 'prop', href: link.property(o.k) }, o.s.n ?? o.k), phaseBadge(o.s.p)))
-        : emptyNote(`None in ${short(V.list[latest].v)}.`));
+        : emptyNote(`None in ${versionText(V.list[latest].v)}.`));
   }
   return frag(
     h('section', { class: 'sec', 'aria-labelledby': 'ext-h' },
@@ -3687,7 +3748,7 @@ async function renderClass(r) {
     ? h('p', { class: 'status-line' }, chip('added', 'current'),
       h('span', null, 'In ', jarLinks(jarNames(hist.jars)), ` in ${newestRelease(lastCv, 'class data')}.`))
     : h('p', { class: 'status-line' }, chip('removed', 'removed'), lastRange
-      ? h('span', null, `Not in ${newestRelease(lastCv, 'class data')}; last seen in ${short(V.list[lastRange.to].v)}, in `, jarLinks(jarNames(lastJars)), '.')
+      ? h('span', null, `Not in ${newestRelease(lastCv, 'class data')}; last seen in ${versionText(V.list[lastRange.to].v)}, in `, jarLinks(jarNames(lastJars)), '.')
       : ' Not in any release shown.');
   const tools = switchRow('sec-tools', snapshotSwitches('timeline', V.clsVis), { rerender: true });
   const widenedNote = hist.widened
@@ -3836,7 +3897,7 @@ function classDeprecationLine(info) {
   if (info.now) {
     const { kind, from, kindFrom } = info.now;
     const removal = kind === 'removal';
-    const at = `${short(V.list[info.at].v)}, ${apiAtWhat(info)}`;
+    const at = `${versionText(V.list[info.at].v)}, ${apiAtWhat(info)}`;
     // the releases from `start` on; for a class gone since, up to the last time it was API ("in" it, when only that)
     const run = (start) => (start == null ? (info.gone ? ` in ${at}` : null)
       : info.gone ? (start === info.at ? ` in ${at}` : frag(' from ', verLink(V.list[start].v), ` to ${at}`))
@@ -3875,7 +3936,7 @@ function deprecatedMembersSection(name, info) {
   const V = store.V;
   return h('section', { class: 'sec', 'aria-labelledby': 'cls-dep-h' },
     sectionHead(0, 'Deprecated members', 'cls-dep-h',
-      h('p', { class: 'sec-note' }, `The fields, methods and constructors of the class deprecated in ${short(V.list[info.at].v)}, ${apiAtWhat(info)}.`)),
+      h('p', { class: 'sec-note' }, `The fields, methods and constructors of the class deprecated in ${versionText(V.list[info.at].v)}, ${apiAtWhat(info)}.`)),
     cappedList('mlist', info.members, (m) => h('li', { class: 'mrow' },
       memberSignature(name, m.key, m.now.value),
       h('span', { class: 'mchips' }, deprecationChip(m.now.kind)),
@@ -3929,7 +3990,7 @@ function classMemberSections(name, info, classes, member, kicker, move = true) {
   const historyBody = h('div', { class: 'members-slot' }, h('p', { class: 'empty', role: 'status' }, 'Loading the API history…'));
   const members = h('section', { class: 'sec', id: 'sec-members', 'aria-labelledby': 'cls-members-h' },
     sectionHead(0, 'Members', 'cls-members-h',
-      h('p', { class: 'sec-note' }, `The public and protected fields, constructors and methods in ${short(V.list[info.at].v)}, ${apiAtWhat(info)}. `,
+      h('p', { class: 'sec-note' }, `The public and protected fields, constructors and methods in ${versionText(V.list[info.at].v)}, ${apiAtWhat(info)}. `,
         '“Since” is the first release shown from which a member is there without a break.')),
     membersBody);
   const history = h('section', { class: 'sec', 'aria-labelledby': 'cls-api-h' },
@@ -4008,7 +4069,7 @@ function membersView(name, m, parsed, target, at) {
         h('span', { class: 'msince' }, 'from ', classRef(x.from, x.key), '; last declared here in ', verLink(V.list[x.last].v))))))
     : null;
   // a class gone since, or no longer API: what it had in the releases shown
-  if (!m.value) return frag(emptyNote(`The class is not public API in ${short(V.list[at].v)}.`), removed);
+  if (!m.value) return frag(emptyNote(`The class is not public API in ${versionText(V.list[at].v)}.`), removed);
   const state = { text: '' };
   const groupsEl = h('div', { class: 'mgroups' });
   const status = h('p', { class: 'filter-status', 'aria-live': 'polite' });
@@ -4141,7 +4202,7 @@ function classRuns(hist, jarNames) {
   });
   return frag(
     lane,
-    h('div', { class: 'strip-axis', 'aria-hidden': 'true' }, h('span', null, short(first.v)), h('span', null, short(last.v))),
+    h('div', { class: 'strip-axis', 'aria-hidden': 'true' }, h('span', null, versionText(first.v)), h('span', null, versionText(last.v))),
     h('div', { class: 'table-scroll' },
       h('table', { class: 'tbl tbl-ranges' },
         h('thead', null, h('tr', null, h('th', { scope: 'col' }, 'Quarkus releases'), h('th', { scope: 'col' }, 'Jar'), h('th', { scope: 'col' }, 'Change'))),
@@ -4185,18 +4246,25 @@ async function renderVersions() {
   const vis = currentVis();
   const shownStreams = V.streams.filter((g) => g.items.some((i) => vis.visible[i]));
   const ltsCount = shownStreams.filter((g) => g.lts).length;
+  // the pre-launch releases with no data, listed for reference in their (old) streams when old releases are shown
+  const references = V.reference.filter((r) => prefs.showOld || core.compareVersions(r.stream, OLDEST_SHOWN_STREAM) >= 0);
   const tbody = h('tbody');
   for (const g of V.streams) {
     const items = g.items.filter((i) => vis.visible[i]);
-    if (!items.length) continue;
+    const refs = references.filter((r) => r.stream === g.stream);
+    if (!items.length && !refs.length) continue;
+    const entries = [...items.map((i) => ({ v: V.list[i].v, i })), ...refs.map((r) => ({ v: r.v, r }))]
+      .sort((a, b) => core.compareVersions(b.v, a.v));
     tbody.append(h('tr', { class: g.lts ? 'is-lts' : null },
       h('th', { scope: 'row' }, h('span', { class: 'stream' }, g.stream), g.lts ? chip('lts', 'LTS', 'Long-term support stream') : null, g.upcoming ? upcomingChip() : null),
-      h('td', null, h('ul', { class: 'rel-list' }, [...items].reverse().map((i) => {
+      h('td', null, h('ul', { class: 'rel-list' }, entries.map(({ i, r }) => {
+        if (r) return referenceItem(r);
         const x = V.list[i];
         return h('li', { class: core.isPreRelease(x) ? 'is-pre' : null }, h('a', { class: 'rel', href: link.version(x.v) },
-          h('span', { class: 'ver' }, short(x.v)),
+          h('span', { class: 'ver' }, versionText(x.v)),
           dateEl(x.date),
-          preChip(x)));
+          preChip(x),
+          gitChip(x)));
       })))));
   }
   const tools = switchRow('page-tools', releaseSwitches('releases'), { rerender: true });
@@ -4206,7 +4274,8 @@ async function renderVersions() {
       h('p', { class: 'kicker' }, 'Releases'),
       h('h1', { class: 'page-title', tabindex: '-1' }, 'All releases'),
       h('p', { class: 'lede' }, `${plural(vis.indices.length, 'release')} in ${plural(shownStreams.length, 'stream')}, newest first`,
-        hiddenNow.length ? `, ${hiddenCount(hiddenNow)} hidden` : null, `. ${plural(ltsCount, 'stream')} marked LTS.`),
+        hiddenNow.length ? `, ${hiddenCount(hiddenNow)} hidden` : null, `. ${plural(ltsCount, 'stream')} marked LTS.`,
+        references.length ? ` ${plural(references.length, 'other pre-launch release')}, with no data, ${references.length === 1 ? 'is' : 'are'} listed for reference.` : null),
       tools),
     h('div', { class: 'table-scroll' },
       h('table', { class: 'tbl tbl-streams' },
@@ -4214,12 +4283,25 @@ async function renderVersions() {
         tbody)));
 }
 
+/** A pre-launch release with no data, listed for reference: tagged in git, but with no BOM, or canceled. */
+function referenceItem(r) {
+  const why = r.why === 'canceled'
+    ? chip('neutral', 'canceled', 'Canceled during its release, never published: the Almanac has no data for it')
+    : chip('neutral', 'no BOM', 'A pre-launch release without a BOM (projects gave each dependency its version), never published: the Almanac has no data for it');
+  return h('li', { class: 'is-ref' }, h('span', { class: 'rel rel--ref' },
+    h('span', { class: 'ver' }, versionText(r.v)),
+    dateEl(r.date),
+    why,
+    h('a', { href: `https://github.com/quarkusio/quarkus/tree/${r.commit}`, target: '_blank', rel: 'noopener noreferrer', class: 'ext-link', title: `Its git tag, ${r.v}` },
+      'tag', icon('external'))));
+}
+
 async function renderVersion(r) {
   const V = store.V;
   const i = core.findVersionIndex(V.list, r.v);
   if (i < 0) return notFoundView('Unknown release', `This dataset has no release ${r.v || '(empty)'}.`, h('p', null, h('a', { href: '#/versions' }, 'See all releases')));
   const x = V.list[i];
-  if (short(x.v) !== r.v) canonicalize({ page: 'version', v: short(x.v) });
+  if (versionText(x.v) !== r.v) canonicalize({ page: 'version', v: versionText(x.v) });
   const isPre = core.isPreRelease(x);
   // the page of an old release, opened while old releases are hidden, still lists the old releases around it
   const nb = core.versionNeighbours(V.json, i, { vis: V.visOn.old[i] ? V.visBy[prefs.showPre ? 1 : 0][1] : currentVis() });
@@ -4246,20 +4328,23 @@ async function renderVersion(r) {
       const A = V.list[j];
       return h('li', null, h('a', { class: 'quick-link', href: link.compare(A.v, x.v) },
         h('span', { class: 'quick-title' }, label, h('span', { class: 'quick-note' }, ` · ${note}`)),
-        h('span', { class: 'quick-vers' }, short(A.v), h('span', { class: 'arrow', 'aria-hidden': 'true' }, ' → '), h('span', { class: 'sr-only' }, ' to '), short(x.v)),
+        h('span', { class: 'quick-vers' }, versionText(A.v), h('span', { class: 'arrow', 'aria-hidden': 'true' }, ' → '), h('span', { class: 'sr-only' }, ' to '), versionText(x.v)),
         h('span', { class: 'quick-span' }, core.spanApart(A.date, x.date))));
     }))
     : i === 0
       ? emptyNote('This is the oldest release in the dataset, so there is nothing earlier to compare with.')
       : emptyNote(frag('The earlier releases are hidden. Show them with the switches on ', h('a', { href: '#/versions' }, 'All releases'), '.'));
   const forward = newestFinal >= 0 && newestFinal !== i && core.compareVersions(V.list[newestFinal].v, x.v) > 0
-    ? h('p', { class: 'forward' }, h('a', { href: link.compare(x.v, V.list[newestFinal].v) }, `Compare ${short(x.v)} with the newest release, ${short(V.list[newestFinal].v)}`))
+    ? h('p', { class: 'forward' }, h('a', { href: link.compare(x.v, V.list[newestFinal].v) }, `Compare ${versionText(x.v)} with the newest release, ${versionText(V.list[newestFinal].v)}`))
     : null;
 
   const kv = h('dl', { class: 'kv' });
   const row = (k, ...v) => kv.append(h('dt', null, k), h('dd', null, v));
-  row('Released', dateEl(x.date) ?? h('em', { class: 'none' }, 'unknown'));
+  row('Released', dateEl(x.date) ?? h('em', { class: 'none' }, 'unknown'),
+    x.git ? h('span', { class: 'kv-sub' }, 'The day of its tagged commit: it was never published.') : null);
   row('Stream', h('span', { class: 'mono' }, x.stream || core.stream(x.v)), x.lts ? frag(' ', chip('lts', 'LTS')) : null);
+  // a pre-launch release: its BOM from the poms at its git tag
+  if (x.git) row('BOM', h('span', { class: 'mono' }, x.git.bom), h('span', { class: 'kv-sub' }, 'From the poms at git tag ', gitTagLink(x.git), '.'));
   // the release's config, as it was extracted; in a data set where it has none of its own, whose its comparisons use
   // (the counts below say "at" which release when they are another's)
   const source = cv != null && V.list[cv].configSource ? SOURCE_TITLE[V.list[cv].configSource] ?? V.list[cv].configSource : null;
@@ -4273,7 +4358,7 @@ async function renderVersion(r) {
     const shown = ev == null ? 'dependency changes only' : 'dependency and extension changes only';
     row('Config', isPre
       ? frag(h('em', { class: 'none' }, 'none'), h('span', { class: 'kv-sub' }, `Pre-releases are compared only with their own config data, so comparisons with this release show ${shown}.`))
-      : h('em', { class: 'none' }, 'none: no config data for this release'));
+      : h('em', { class: 'none' }, x.git ? 'none: never published' : 'none: no config data for this release'));
   }
   const managedN = h('span', null, '…');
   const propsN = h('span', null, '…');
@@ -4289,42 +4374,43 @@ async function renderVersion(r) {
       if (raw != null) n++;
       if (raw === '=') modules++;
     }
-    managedN.textContent = `${fmt(n)} (${fmt(modules)} Quarkus modules)`;
+    managedN.textContent = `${fmt(n)} (${fmt(modules)} ${x.git?.bom.startsWith('org.jboss.shamrock:') ? 'Shamrock' : 'Quarkus'} modules)`;
   }).catch(() => {
     managedN.textContent = 'bom.json unavailable';
   });
   if (cv == null) {
-    propsN.textContent = 'no config data';
+    propsN.textContent = x.git ? 'none: never published' : 'no config data';
   } else {
     loadFile('config').then((c) => {
-      propsN.textContent = `${fmt(c.raw.props.filter((p) => core.stateAt(p.h, cv) != null).length)}${cv === i ? '' : `, at ${short(V.list[cv].v)}`}`;
+      propsN.textContent = `${fmt(c.raw.props.filter((p) => core.stateAt(p.h, cv) != null).length)}${cv === i ? '' : `, at ${versionText(V.list[cv].v)}`}`;
     }).catch(() => {
       propsN.textContent = 'config.json unavailable';
     });
   }
   if (ev == null) {
-    extsN.textContent = 'no extension data';
+    extsN.textContent = x.git ? 'none: never published' : 'no extension data';
   } else {
     loadFile('extensions').then((e) => {
-      extsN.textContent = `${fmt(e.raw.exts.filter((xx) => core.stateAt(xx.h, ev) != null).length)}${ev === i ? '' : `, at ${short(V.list[ev].v)}`}`;
+      extsN.textContent = `${fmt(e.raw.exts.filter((xx) => core.stateAt(xx.h, ev) != null).length)}${ev === i ? '' : `, at ${versionText(V.list[ev].v)}`}`;
     }).catch(() => {
       extsN.textContent = 'extensions.json unavailable';
     });
   }
   // the deprecated API, when the data has API: a fact, all of it, with a page of its own
   const av = V.apiVis.length ? core.apiVersionFor(i, V.list, V.apiVis) : null;
-  const [baseLabel, base] = compares[0] ?? [];
+  // the first release it is compared with that has API data (a pre-launch release has none)
+  const [baseLabel, base] = compares.find(([, j]) => core.apiVersionFor(j, V.list, V.apiVis) != null) ?? [];
   const avBase = base == null ? null : core.apiVersionFor(base, V.list, V.apiVis);
   if (V.apiVis.length) {
     const depN = h('span', null, '…');
     kv.append(h('dt', null, 'Deprecated API'), h('dd', null, depN));
     if (av == null) {
-      depN.replaceChildren(h('em', { class: 'none' }, 'no API data for this release'));
+      depN.replaceChildren(h('em', { class: 'none' }, x.git ? 'none: never published' : 'no API data for this release'));
     } else {
       // the lines that the API section loads too, which have this release's own
       loadClasses(avBase == null ? apiLinesFor(av) : linesSpanning(core.classLinesOf(V.list, [avBase, av]))).then((classes) => {
         const items = core.deprecationsAt(classes.raw, av);
-        depN.replaceChildren(items.length ? frag(deprecatedCounts(items), av === i ? null : h('span', { class: 'muted' }, ` (API data of ${short(V.list[av].v)})`),
+        depN.replaceChildren(items.length ? frag(deprecatedCounts(items), av === i ? null : h('span', { class: 'muted' }, ` (API data of ${versionText(V.list[av].v)})`),
           h('span', { class: 'kv-sub' }, h('a', { href: link.deprecated(x.v) }, 'The deprecated API on a page of its own'))) : 'none');
       }).catch(() => depN.replaceChildren('the API data is unavailable'));
     }
@@ -4352,7 +4438,7 @@ async function renderVersion(r) {
     }
     const d = core.platformDifferences(b.raw, p.raw, V.list, i);
     const n = d.changed.length;
-    platformN.replaceChildren(h('span', { class: 'mono' }, `io.quarkus.platform:quarkus-bom ${short(x.v)}`),
+    platformN.replaceChildren(h('span', { class: 'mono' }, `io.quarkus.platform:quarkus-bom ${versionText(x.v)}`),
       h('span', { class: 'kv-sub' }, n ? `${plural(n, 'managed version')} differ${n === 1 ? 's' : ''} from the core BOM.` : 'No managed version differs from the core BOM.'));
     add(platformSec, platformSection(x, d));
     platformSec.hidden = false;
@@ -4364,7 +4450,7 @@ async function renderVersion(r) {
   // numbered now, without the platform BOM until it shows
   const sections = [
     h('section', { class: 'sec', 'aria-labelledby': 'vq-h' },
-      sectionHead(1, 'Compare with', 'vq-h', h('p', { class: 'sec-note' }, `What changed on the way to ${short(x.v)}.`)),
+      sectionHead(1, 'Compare with', 'vq-h', h('p', { class: 'sec-note' }, `What changed on the way to ${versionText(x.v)}.`)),
       quick, forward),
     h('section', { class: 'sec', 'aria-labelledby': 'vf-h' }, sectionHead(2, 'Facts', 'vf-h'), kv),
     platformSec,
@@ -4373,13 +4459,14 @@ async function renderVersion(r) {
   numberSections(sections);
   return frag(
     h('header', { class: 'page-head band' },
-      h('p', { class: 'kicker' }, isPre ? 'Pre-release' : 'Release', ' · stream ', x.stream || core.stream(x.v)),
-      h('h1', { class: 'page-title page-title--ver', tabindex: '-1' }, short(x.v)),
+      h('p', { class: 'kicker' }, isPre ? 'Pre-release' : x.git ? 'Pre-launch release' : 'Release', ' · stream ', x.stream || core.stream(x.v)),
+      h('h1', { class: 'page-title page-title--ver', tabindex: '-1' }, versionText(x.v)),
       h('div', { class: 'badges' }, dateEl(x.date), versionChips(x), V.visOff.upcoming[i] ? upcomingChip() : null)),
+    x.git ? frag(preLaunchNote([x]), h('p', { class: 'note' }, 'The Almanac has its BOM alone: no config, extension, class or API data.')) : null,
     ...sections,
     h('nav', { class: 'pager', 'aria-label': 'Neighbouring releases' },
-      nb.older >= 0 ? h('a', { class: 'pager-link', href: link.version(V.list[nb.older].v) }, h('span', { class: 'pager-k' }, 'Older'), h('span', { class: 'ver' }, short(V.list[nb.older].v))) : h('span'),
-      nb.newer >= 0 ? h('a', { class: 'pager-link pager-link--next', href: link.version(V.list[nb.newer].v) }, h('span', { class: 'pager-k' }, 'Newer'), h('span', { class: 'ver' }, short(V.list[nb.newer].v))) : h('span')));
+      nb.older >= 0 ? h('a', { class: 'pager-link', href: link.version(V.list[nb.older].v) }, h('span', { class: 'pager-k' }, 'Older'), h('span', { class: 'ver' }, versionText(V.list[nb.older].v))) : h('span'),
+      nb.newer >= 0 ? h('a', { class: 'pager-link pager-link--next', href: link.version(V.list[nb.newer].v) }, h('span', { class: 'pager-k' }, 'Newer'), h('span', { class: 'ver' }, versionText(V.list[nb.newer].v))) : h('span')));
 }
 
 /**
@@ -4388,7 +4475,7 @@ async function renderVersion(r) {
  * the artifacts only one of them manages in a collapsed list.
  */
 function platformSection(x, d) {
-  const v = short(x.v);
+  const v = versionText(x.v);
   const rows = d.changed.map((r) => {
     const id = r.coreId ?? r.id; // the core BOM's id has an artifact page
     return { id, ...core.splitId(id), from: r.core, to: r.platform, kind: core.bomChangeKind(r.core, r.platform) };
@@ -4471,18 +4558,18 @@ async function renderDeprecated(r) {
   const i = core.findVersionIndex(V.list, r.v);
   if (i < 0) return notFoundView('Unknown release', `This dataset has no release ${r.v || '(empty)'}.`, h('p', null, h('a', { href: '#/versions' }, 'See all releases')));
   const x = V.list[i];
-  if (short(x.v) !== r.v) canonicalize({ page: 'deprecated', v: short(x.v) });
+  if (versionText(x.v) !== r.v) canonicalize({ page: 'deprecated', v: versionText(x.v) });
   const head = h('header', { class: 'page-head band' },
-    h('p', { class: 'kicker' }, 'Deprecated API · ', h('a', { href: link.version(x.v) }, `release ${short(x.v)}`)),
-    h('h1', { class: 'page-title page-title--ver', tabindex: '-1' }, short(x.v)));
+    h('p', { class: 'kicker' }, 'Deprecated API · ', h('a', { href: link.version(x.v) }, `release ${versionText(x.v)}`)),
+    h('h1', { class: 'page-title page-title--ver', tabindex: '-1' }, versionText(x.v)));
   const av = core.apiVersionFor(i, V.list, V.apiVis);
-  if (av == null) return frag(head, emptyNote(V.apiVis.length ? `No API data for ${short(x.v)}.` : 'This dataset has no API data.'));
+  if (av == null) return frag(head, emptyNote(V.apiVis.length ? `No API data for ${versionText(x.v)}.` : 'This dataset has no API data.'));
   const classes = await loadClasses(apiLinesFor(av));
   const items = core.deprecationsAt(classes.raw, av);
   return frag(
     head,
-    h('p', { class: 'lede' }, `The public and protected classes and members of the io.quarkus jars deprecated in ${short(x.v)}`,
-      av === i ? '' : `, from the API data of ${short(V.list[av].v)}`, `: ${deprecatedCounts(items)}.`),
+    h('p', { class: 'lede' }, `The public and protected classes and members of the io.quarkus jars deprecated in ${versionText(x.v)}`,
+      av === i ? '' : `, from the API data of ${versionText(V.list[av].v)}`, `: ${deprecatedCounts(items)}.`),
     h('section', { class: 'sec', 'aria-labelledby': 'dep-h' }, sectionHead(1, 'By jar', 'dep-h',
       h('p', { class: 'sec-note' }, '@Deprecated(since = …) is the annotation as the code declares it; “deprecated from” and “for removal from” are the first releases, of those in a row up to this one, that mark it so.')),
     deprecatedList(items, `deprecated:${x.v}`)));

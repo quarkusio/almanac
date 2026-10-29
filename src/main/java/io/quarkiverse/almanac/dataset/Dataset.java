@@ -13,6 +13,7 @@ import io.quarkiverse.almanac.model.ConfigProperty;
 import io.quarkiverse.almanac.model.ConfigSnapshot;
 import io.quarkiverse.almanac.model.ExtensionInfo;
 import io.quarkiverse.almanac.model.ExtensionsSnapshot;
+import io.quarkiverse.almanac.model.GitSource;
 import io.quarkiverse.almanac.model.ManagedDep;
 import io.quarkiverse.almanac.model.MemberApi;
 import io.quarkiverse.almanac.util.Json;
@@ -55,15 +56,17 @@ public final class Dataset {
     /// One line of `releases.jsonl`.
     ///
     /// @param version    the release
-    /// @param date       UTC day of the BOM's `Last-Modified`, null when unknown
+    /// @param date       UTC day of the BOM's `Last-Modified` (of the tag's commit for a release never published on
+    ///                   Maven Central), null when unknown
     /// @param bom        whether the dataset holds the release's BOM snapshot
+    /// @param git        where the BOM of a release never published on Maven Central comes from, null for the others
     /// @param config     what `releases.jsonl` says about the config snapshot, null when the dataset has none
     /// @param extensions whether the dataset holds the release's extensions snapshot
     /// @param classes    whether the dataset holds the release's classes snapshot
     /// @param platform   what `releases.jsonl` says about the platform BOM snapshot, null when the dataset has none
     /// @param api        what `releases.jsonl` says about the API snapshot, null when the dataset has none
-    public record Release(String version, String date, boolean bom, ConfigInfo config, boolean extensions,
-            boolean classes, PlatformInfo platform, ApiInfo api) {
+    public record Release(String version, String date, boolean bom, GitSource git, ConfigInfo config,
+            boolean extensions, boolean classes, PlatformInfo platform, ApiInfo api) {
 
         /// Whether the dataset holds this release's snapshot of the given kind.
         public boolean has(Kind kind) {
@@ -406,7 +409,7 @@ public final class Dataset {
                 deps.add(new ManagedDep(row.getKey(), value.equals(DatasetFormat.SAME_AS_RELEASE) ? version : value));
             }
         }
-        return new BomSnapshot(version, release.date(), Collections.unmodifiableList(deps));
+        return new BomSnapshot(version, release.date(), release.git(), Collections.unmodifiableList(deps));
     }
 
     /// Restores the platform BOM snapshot of a release: its BOM with the differences of `platform-bom.jsonl` at the
@@ -622,7 +625,20 @@ public final class Dataset {
                 }
                 apiInfo = new ApiInfo(optionalText(api, "reader"));
             }
-            Release release = new Release(version, optionalText(row, "date"), row.path("bom").asBoolean(false), info,
+            JsonNode git = row.get("git");
+            GitSource gitSource = null;
+            boolean bom = row.path("bom").asBoolean(false);
+            if (git != null && !git.isNull()) {
+                if (!git.isObject()) {
+                    throw error(DatasetFormat.RELEASES, i + 1, "git is not an object");
+                }
+                if (!bom) {
+                    throw error(DatasetFormat.RELEASES, i + 1, version + " has git but no BOM, which is all it gives");
+                }
+                gitSource = new GitSource(optionalText(git, "tag"), optionalText(git, "commit"),
+                        optionalText(git, "bom"));
+            }
+            Release release = new Release(version, optionalText(row, "date"), bom, gitSource, info,
                     row.path("extensions").asBoolean(false), row.path("classes").asBoolean(false), platformInfo,
                     apiInfo);
             if (releases.put(version, release) != null) {

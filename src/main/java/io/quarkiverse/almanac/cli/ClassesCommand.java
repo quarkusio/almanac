@@ -64,9 +64,11 @@ public final class ClassesCommand implements Callable<Integer> {
         }
     }
 
-    /// The releases whose classes the dataset does not have (all of them with `force`), logging how many it has.
+    /// The releases whose classes the dataset does not have (all of them with `force`), logging how many it has. A
+    /// release never published on Maven Central has no jars to read, even with `force`.
     static List<QuarkusVersion> notInDataset(Workspace workspace, List<QuarkusVersion> versions, boolean force)
             throws IOException {
+        versions = Workspace.published(versions, "classes");
         if (force) {
             return versions;
         }

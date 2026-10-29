@@ -9,6 +9,7 @@ import com.fasterxml.jackson.databind.node.TextNode;
 import io.quarkiverse.almanac.api.ApiGrammar;
 import io.quarkiverse.almanac.config.ConfigProperties;
 import io.quarkiverse.almanac.maven.BomDifferences;
+import io.quarkiverse.almanac.maven.GitReleases;
 import io.quarkiverse.almanac.maven.QuarkusVersion;
 import io.quarkiverse.almanac.maven.VersionSelector;
 import io.quarkiverse.almanac.model.ApiSnapshot;
@@ -63,6 +64,11 @@ import java.util.stream.Stream;
 /// flagged `api`; see [#classesDocument]) and the API shards `api-<major>-<k>.json` (the API of the classes, a few
 /// classes per file; see [#apiShards]), so that a page loads the classes of the lines it shows only, and the members of
 /// the classes it shows.
+///
+/// A release never published on Maven Central has `git` (`tag`, `commit`, `bom`) in its `versions.json` row: its BOM
+/// comes from the poms at its git tag ([GitReleases]). When there is one, `versions.json` also has `reference`, the
+/// pre-launch releases with nothing for the dataset (`v`, `date`, `stream`, `commit`, `why`: `no-bom` or `canceled`),
+/// which the Releases page lists for reference.
 ///
 /// Releases are [added][#add] in ascending version order, then [#build] produces the documents.
 /// Before building config histories, each snapshot is normalised by [unnamed-key folding][#foldUnnamedKeys].
@@ -200,6 +206,8 @@ public final class HistoryBuilder {
             "BUILD_TIME", "B", "BUILD_AND_RUN_TIME_FIXED", "F", "RUN_TIME", "R", "BOOTSTRAP", "S");
 
     private final ArrayNode versionRows = NODES.arrayNode();
+    /// Whether a release never published on Maven Central was added: the site then covers the pre-launch releases.
+    private boolean preLaunch;
     private final ChangePoints bomHistory = new ChangePoints();
     private final ChangePoints configHistory = new ChangePoints();
     private final ChangePoints extensionHistory = new ChangePoints();
@@ -336,6 +344,11 @@ public final class HistoryBuilder {
         if (release.hasApi()) {
             row.put("api", true);
         }
+        if (bom.git() != null) {
+            // never published on Maven Central: the BOM comes from the poms at the release's git tag
+            row.putObject("git").put("tag", bom.git().tag()).put("commit", bom.git().commit()).put("bom", bom.git().bom());
+            preLaunch = true;
+        }
 
         Map<String, JsonNode> managed = new HashMap<>();
         for (ManagedDep dep : bom.deps()) {
@@ -449,6 +462,15 @@ public final class HistoryBuilder {
         ArrayNode lts = versions.putArray("lts");
         VersionSelector.LTS_STREAMS.forEach(lts::add);
         versions.set("versions", versionRows.deepCopy());
+        if (preLaunch) {
+            // the pre-launch releases with nothing for the dataset, which the Releases page lists for reference
+            ArrayNode reference = versions.putArray("reference");
+            for (GitReleases.Reference r : GitReleases.references()) {
+                reference.addObject().put("v", r.version()).put("date", r.date())
+                        .put("stream", QuarkusVersion.parse(r.version()).stream()).put("commit", r.commit())
+                        .put("why", r.why());
+            }
+        }
 
         ObjectNode bom = NODES.objectNode();
         bom.set("artifacts", bomHistory.toJson("id"));

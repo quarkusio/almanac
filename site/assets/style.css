@@ -3436,6 +3436,17 @@ p.cmp-tools {
   text-decoration: underline;
 }
 
+/* a pre-launch release with no data, listed for reference: no page to open */
+.rel--ref,
+.rel--ref:hover .ver {
+  color: var(--muted);
+  text-decoration: none;
+}
+
+.rel--ref .ext-link {
+  font-size: 12.5px;
+}
+
 .rel time {
   font-size: 12.5px;
   color: var(--muted);

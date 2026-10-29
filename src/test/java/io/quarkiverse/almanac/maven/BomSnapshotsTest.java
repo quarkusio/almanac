@@ -2,6 +2,7 @@ package io.quarkiverse.almanac.maven;
 
 import io.quarkiverse.almanac.ScratchDir;
 import io.quarkiverse.almanac.model.BomSnapshot;
+import io.quarkiverse.almanac.model.GitSource;
 import io.quarkiverse.almanac.model.ManagedDep;
 import io.quarkiverse.almanac.util.SnapshotStore;
 import org.junit.jupiter.api.Test;
@@ -176,6 +177,38 @@ class BomSnapshotsTest {
             assertEquals(new BomSnapshot("1.0.0.Final", "2019-11-25", RESOLVED), snapshot);
             assertEquals(snapshot, store.read("1.0.0.Final", SnapshotStore.BOM, BomSnapshot.class));
             assertEquals(snapshot, boms.load("1.0.0.Final", false), "reused");
+        }
+    }
+
+    @Test
+    void aReleaseNeverPublishedIsResolvedFromItsGitTagWithoutAskingTheRepository() throws Exception {
+        try (ScratchDir dir = ScratchDir.create(); Http offline = new Http(1, true)) {
+            Path cache = dir.resolve("cache");
+            for (String version : List.of("26", "31", "32")) {
+                cache(cache, "org.jboss:jboss-parent:" + version,
+                        JBOSS_PARENT.replace("<version>35</version>", "<version>" + version + "</version>"));
+            }
+            SnapshotStore store = new SnapshotStore(dir.resolve("snapshots"), null);
+            BomSnapshots boms = boms(cache, store, offline);
+
+            BomSnapshot quarkus = boms.load("0.10.0", false);
+            assertEquals(new GitSource("0.10.0", "f26057191b8217f43b632e2eb5b3541821cf242d", "io.quarkus:quarkus-bom"),
+                    quarkus.git());
+            assertEquals("2019-03-01", quarkus.date(), "the day of the tag's commit");
+            assertEquals(34, quarkus.deps().size());
+            assertTrue(quarkus.deps().stream()
+                    .allMatch(dep -> dep.id().startsWith("io.quarkus:quarkus-") && dep.v().equals("0.10.0")));
+            assertEquals(quarkus, store.read("0.10.0", SnapshotStore.BOM, BomSnapshot.class), "written with its source");
+
+            BomSnapshot shamrock = boms.load("0.2.0", false);
+            assertEquals("org.jboss.shamrock:shamrock-bom", shamrock.git().bom());
+            assertEquals(22, shamrock.deps().size());
+            assertTrue(shamrock.deps().stream()
+                    .allMatch(dep -> dep.id().startsWith("org.jboss.shamrock:") && dep.v().equals("0.2.0")));
+
+            // neither these BOMs nor their parents in the repository were asked of it, nor cached as missing
+            assertFalse(Files.exists(cache.resolve("io/quarkus")));
+            assertFalse(Files.exists(cache.resolve("org/jboss/shamrock")));
         }
     }
 

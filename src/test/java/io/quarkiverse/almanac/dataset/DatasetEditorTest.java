@@ -9,6 +9,7 @@ import io.quarkiverse.almanac.model.BomSnapshot;
 import io.quarkiverse.almanac.model.ClassApi;
 import io.quarkiverse.almanac.model.ClassesSnapshot;
 import io.quarkiverse.almanac.model.ConfigSnapshot;
+import io.quarkiverse.almanac.model.GitSource;
 import io.quarkiverse.almanac.model.ManagedDep;
 import io.quarkiverse.almanac.util.AtomicFiles;
 import io.quarkiverse.almanac.util.SnapshotStore;
@@ -793,6 +794,26 @@ class DatasetEditorTest {
     }
 
     /// A scratch work folder with the sample snapshots.
+    @Test
+    void aReleaseFromItsGitTagKeepsItsBomAlone() throws Exception {
+        try (ScratchDir dir = ScratchDir.create()) {
+            SnapshotStore work = new SnapshotStore(dir.resolve("work").resolve("snapshots"), null);
+            BomSnapshot bom = new BomSnapshot("0.10.0", "2019-03-01",
+                    new GitSource("0.10.0", "f26057191b8217f43b632e2eb5b3541821cf242d", "io.quarkus:quarkus-bom"),
+                    List.of(new ManagedDep("io.quarkus:quarkus-arc-deployment", "0.10.0")));
+            work.write("0.10.0", SnapshotStore.BOM, bom);
+            work.write("0.10.0", Kind.CLASSES.snapshotFile(),
+                    new ClassesSnapshot("0.10.0", Samples.CLASSES_310.artifacts()));
+            DatasetEditor editor = DatasetEditor.open(dir.resolve("dataset"));
+            DatasetEditor.ImportReport report = editor.importSnapshots(all(work), false);
+            assertEquals(List.of("bom 0.10.0"), report.added());
+            assertTrue(reasons(report).get("classes 0.10.0").contains("never published on Maven Central"),
+                    reasons(report).toString());
+            editor.write();
+            assertEquals(bom, Dataset.open(dir.resolve("dataset")).bom("0.10.0"));
+        }
+    }
+
     private static SnapshotStore work(ScratchDir dir) throws IOException {
         SnapshotStore work = new SnapshotStore(dir.resolve("work").resolve("snapshots"), null);
         Samples.writeWork(work);

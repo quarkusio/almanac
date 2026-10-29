@@ -1,0 +1,334 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  ~ Copyright 2018 Red Hat, Inc.
+  ~
+  ~ Licensed under the Apache License, Version 2.0 (the "License");
+  ~ you may not use this file except in compliance with the License.
+  ~ You may obtain a copy of the License at
+  ~
+  ~     http://www.apache.org/licenses/LICENSE-2.0
+  ~
+  ~ Unless required by applicable law or agreed to in writing, software
+  ~ distributed under the License is distributed on an "AS IS" BASIS,
+  ~ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+  ~ See the License for the specific language governing permissions and
+  ~ limitations under the License.
+  -->
+
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+    <parent>
+        <groupId>org.jboss</groupId>
+        <artifactId>jboss-parent</artifactId>
+        <version>31</version>
+    </parent>
+
+    <groupId>org.jboss.shamrock</groupId>
+    <artifactId>shamrock-parent</artifactId>
+    <name>Shamrock - Parent pom</name>
+    <version>0.4.0</version>
+    <packaging>pom</packaging>
+
+    <licenses>
+        <license>
+            <name>The Apache Software License, Version 2.0</name>
+            <url>http://www.apache.org/licenses/LICENSE-2.0.txt</url>
+            <distribution>repo</distribution>
+        </license>
+    </licenses>
+
+    <properties>
+        <graalvmHome>${env.GRAALVM_HOME}</graalvmHome>
+        <postgres.url>${env.DATABASE_URL}</postgres.url>
+    </properties>
+
+    <modules>
+        <module>bom</module>
+        <module>build-parent</module>
+    
+        <!-- Core components -->
+        <module>core</module>
+        <module>test-framework</module>
+
+        <!-- Integration Tests -->
+        <module>integration-tests</module>
+
+        <!-- Extensions -->
+        <module>extensions</module>
+
+        <!-- External projects -->
+        <module>independent-projects/gizmo</module>
+        <module>independent-projects/arc</module>
+        <module>independent-projects/hibernate-orm-protean</module>
+        <module>independent-projects/jboss-logmanager-embedded</module>
+        <module>independent-projects/jboss-logging-embedded</module>
+
+        <!-- Maven -->
+        <module>maven</module>
+
+        <!-- Misc. -->
+        <module>docs</module>
+
+        <!-- Do not add modules after war-launcher. JVM state will fail CI -->
+        <module>war-launcher</module>
+    </modules>
+    <build>
+        <pluginManagement>
+            <plugins>
+                <plugin>
+                    <artifactId>maven-dependency-plugin</artifactId>
+                    <executions>
+                        <execution>
+                            <goals>
+                                <goal>resolve</goal>
+                            </goals>
+                            <phase>compile</phase>
+                            <configuration>
+                                <silent>true</silent>
+                                <outputFile>${project.build.outputDirectory}/dependencies.runtime</outputFile>
+                            </configuration>
+                        </execution>
+                    </executions>
+                </plugin>
+                <plugin>
+                    <groupId>org.apache.maven.plugins</groupId>
+                    <artifactId>maven-enforcer-plugin</artifactId>
+                    <executions>
+                        <execution>
+                            <id>enforce</id>
+                            <configuration>
+                                <rules>
+                                    <dependencyConvergence/>
+                                    <requireMavenVersion>
+                                      <version>3.5.3</version>
+                                    </requireMavenVersion>
+                                    <bannedDependencies>
+                                        <excludes>
+                                            <!-- Use javax.annotation-api -->
+                                            <exclude>org.jboss.spec.javax.annotation:jboss-annotations-api_1.2_spec</exclude>
+                                            <exclude>org.jboss.spec.javax.annotation:jboss-annotations-api_1.3_spec</exclude>
+                                            <!-- use our jboss-logging -->
+                                            <exclude>org.jboss.logging:jboss-logging</exclude>
+                                            <!-- use our jboss-logmanager -->
+                                            <exclude>org.jboss.logging:jboss-logmanager</exclude>
+                                            <!-- We don't want all the API's in one jar-->
+                                            <exclude>javax:javaee-api</exclude>
+                                            <!-- Prevent incompatible config from coming in -->
+                                            <exclude>org.wildfly.client:wildfly-client-config</exclude>
+                                            <!-- Use Jakarta Activation -->
+                                            <exclude>javax.activation:javax-activation-api</exclude>
+                                            <exclude>javax.activation:activation</exclude>
+                                            <exclude>org.jboss.marshalling:jboss-marshalling-osgi</exclude>
+                                        </excludes>
+                                    </bannedDependencies>
+                                </rules>
+                            </configuration>
+                            <goals>
+                                <goal>enforce</goal>
+                            </goals>
+                        </execution>
+                    </executions>
+                </plugin>
+                <plugin>
+                    <groupId>io.fabric8</groupId>
+                    <artifactId>docker-maven-plugin</artifactId>
+                    <version>0.28.0</version>
+                </plugin>
+                <plugin>
+                    <artifactId>maven-javadoc-plugin</artifactId>
+                    <configuration>
+                        <quiet>true</quiet>
+                        <doclint>none</doclint>
+                        <show>package</show>
+                    </configuration>
+                </plugin>
+                <plugin>
+                    <groupId>org.jboss.jandex</groupId>
+                    <artifactId>jandex-maven-plugin</artifactId>
+                    <version>1.0.5</version>
+                </plugin>
+                <!--This plugin's configuration is used to store Eclipse m2e settings only. It has no influence on the Maven build itself.-->
+                <plugin>
+                    <groupId>org.eclipse.m2e</groupId>
+                    <artifactId>lifecycle-mapping</artifactId>
+                    <version>1.0.0</version>
+                    <configuration>
+                        <lifecycleMappingMetadata>
+                            <pluginExecutions>
+                                <pluginExecution>
+                                    <pluginExecutionFilter>
+                                        <groupId>io.fabric8</groupId>
+                                        <artifactId>
+                                            docker-maven-plugin
+                                        </artifactId>
+                                        <versionRange>
+                                            [0.26.1,)
+                                        </versionRange>
+                                        <goals>
+                                            <goal>start</goal>
+                                            <goal>stop</goal>
+                                        </goals>
+                                    </pluginExecutionFilter>
+                                    <action>
+                                        <ignore></ignore>
+                                    </action>
+                                </pluginExecution>
+                                <pluginExecution>
+                                    <pluginExecutionFilter>
+                                        <groupId>
+                                            org.apache.maven.plugins
+                                        </groupId>
+                                        <artifactId>
+                                            maven-antrun-plugin
+                                        </artifactId>
+                                        <versionRange>
+                                            [1.8,)
+                                        </versionRange>
+                                        <goals>
+                                            <goal>run</goal>
+                                        </goals>
+                                    </pluginExecutionFilter>
+                                    <action>
+                                        <ignore></ignore>
+                                    </action>
+                                </pluginExecution>
+                                <pluginExecution>
+                                    <pluginExecutionFilter>
+                                        <groupId>
+                                            org.apache.maven.plugins
+                                        </groupId>
+                                        <artifactId>
+                                            maven-dependency-plugin
+                                        </artifactId>
+                                        <versionRange>
+                                            [3.1.1,)
+                                        </versionRange>
+                                        <goals>
+                                            <goal>resolve</goal>
+                                        </goals>
+                                    </pluginExecutionFilter>
+                                    <action>
+                                        <ignore></ignore>
+                                    </action>
+                                </pluginExecution>
+                                <pluginExecution>
+                                    <pluginExecutionFilter>
+                                        <groupId>
+                                            org.jboss.jandex
+                                        </groupId>
+                                        <artifactId>
+                                            jandex-maven-plugin
+                                        </artifactId>
+                                        <versionRange>
+                                            [1.0.5,)
+                                        </versionRange>
+                                        <goals>
+                                            <goal>jandex</goal>
+                                        </goals>
+                                    </pluginExecutionFilter>
+                                    <action>
+                                        <ignore></ignore>
+                                    </action>
+                                </pluginExecution>
+                            </pluginExecutions>
+                        </lifecycleMappingMetadata>
+                    </configuration>
+                </plugin>
+            </plugins>
+        </pluginManagement>
+    </build>
+
+    <repositories>
+        <repository>
+            <id>central</id>
+            <name>Maven Repository Switchboard</name>
+            <url>http://repo.maven.apache.org/maven2</url>
+        </repository>
+        <repository>
+            <id>jboss</id>
+            <url>http://repository.jboss.org/nexus/content/groups/public/</url>
+            <releases>
+                <enabled>true</enabled>
+            </releases>
+            <snapshots>
+                <enabled>true</enabled>
+            </snapshots>
+        </repository>
+        <repository>
+            <id>redhat-ga-repository</id>
+            <name>Red Hat GA repository</name>
+            <url>http://maven.repository.redhat.com/ga/</url>
+            <layout>default</layout>
+            <releases>
+                <enabled>true</enabled>
+                <updatePolicy>never</updatePolicy>
+            </releases>
+            <snapshots>
+                <enabled>false</enabled>
+                <updatePolicy>daily</updatePolicy>
+            </snapshots>
+        </repository>
+
+        <!-- Forgot the password? see https://github.com/protean-project/hibernate-protean/wiki/Protean-Nexus-credentials -->
+        <repository>
+            <id>protean-nexus-release</id>
+            <name>Protean AWS Nexus - Releases</name>
+            <url>http://ec2-18-234-117-118.compute-1.amazonaws.com:8081/nexus/content/repositories/releases/</url>
+            <layout>default</layout>
+            <releases>
+                <enabled>true</enabled>
+                <updatePolicy>never</updatePolicy>
+            </releases>
+            <snapshots>
+                <enabled>false</enabled>
+            </snapshots>
+        </repository>
+
+        <!-- Forgot the password? see https://github.com/protean-project/hibernate-protean/wiki/Protean-Nexus-credentials -->
+        <repository>
+            <id>protean-nexus-snapshot</id>
+            <name>Protean AWS Nexus - Snapshots</name>
+            <url>http://ec2-18-234-117-118.compute-1.amazonaws.com:8081/nexus/content/repositories/snapshots/</url>
+            <layout>default</layout>
+            <releases>
+                <enabled>true</enabled>
+                <updatePolicy>never</updatePolicy>
+            </releases>
+            <snapshots>
+                <enabled>true</enabled>
+                <!-- 10 minutes. Or enforce refresh by using -U option to Maven -->
+                <updatePolicy>daily</updatePolicy>
+            </snapshots>
+        </repository>
+    </repositories>
+
+    <distributionManagement>
+        <repository>
+            <id>protean-nexus-release</id>
+            <name>Protean AWS Nexus - Releases</name>
+            <url>http://ec2-18-234-117-118.compute-1.amazonaws.com:8081/nexus/content/repositories/releases/</url>
+        </repository>
+        <snapshotRepository>
+            <id>protean-nexus-snapshot</id>
+            <name>Protean AWS Nexus - Snapshots</name>
+            <url>http://ec2-18-234-117-118.compute-1.amazonaws.com:8081/nexus/content/repositories/snapshots/</url>
+        </snapshotRepository>
+    </distributionManagement>
+
+    <profiles>
+        <profile>
+            <id>database-url</id>
+            <activation>
+                <property>
+                    <name>!env.DATABASE_URL</name>
+                </property>
+            </activation>
+            <properties>
+                <postgres.url>jdbc:postgresql:hibernate_orm_test</postgres.url>
+            </properties>
+        </profile>
+    </profiles>
+
+</project>

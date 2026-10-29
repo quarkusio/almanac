@@ -47,9 +47,11 @@ public final class ExtensionsCommand implements Callable<Integer> {
         }
     }
 
-    /// The releases whose extensions the dataset does not have (all of them with `force`), logging how many it has.
+    /// The releases whose extensions the dataset does not have (all of them with `force`), logging how many it has. A
+    /// release never published on Maven Central has no extension catalog to read, even with `force`.
     static List<QuarkusVersion> notInDataset(Workspace workspace, List<QuarkusVersion> versions, boolean force)
             throws IOException {
+        versions = Workspace.published(versions, "extensions");
         if (force) {
             return versions;
         }

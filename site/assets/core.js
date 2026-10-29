@@ -108,9 +108,9 @@ export function stream(v) {
   return parseVersion(v).stream;
 }
 
-/** Display form: drops a trailing `.Final` (`3.2.12.Final` → `3.2.12`). */
-export function shortVersion(v) {
-  return String(v ?? '').replace(/[.-]Final$/i, '');
+/** Display form: the version as published, a `.Final` suffix kept (`1.0.0.Final`, `3.2.12`). */
+export function versionText(v) {
+  return String(v ?? '');
 }
 
 /**
@@ -2402,6 +2402,8 @@ export function buildSearchIndex({ config, bom, extensions, classes, versions } 
     }
   }
   if (bom) {
+    // the releases never published come first (their BOM from their git tag): up to the first published one
+    const published = versions ? versions.findIndex((x) => !x.git) : -1;
     for (const art of bom.artifacts) {
       const { group, artifact } = splitId(art.id);
       const raw = lastRelease == null ? latestValue(art.h) : stateAt(art.h, lastRelease);
@@ -2414,6 +2416,8 @@ export function buildSearchIndex({ config, bom, extensions, classes, versions } 
         current: raw != null,
         value: raw === '=' && versions ? versions[lastRelease].v : raw ?? null,
         follows: raw === '=',
+        // managed only by releases never published: every run of it ends by the first published release
+        preLaunch: published > 0 && art.h.every(([, v], k) => v == null || (k + 1 < art.h.length && art.h[k + 1][0] <= published)),
       });
     }
   }

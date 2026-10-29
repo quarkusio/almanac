@@ -30,6 +30,16 @@ class VersionSelectorTest {
     }
 
     @Test
+    void versionsSelectedByNameOnlyStayOutOfAllAndStreams() {
+        VersionSelector byName = new VersionSelector(List.of("0.11.0", "0.12.0"), List.of("0.10.0", "0.11.0"));
+        QuarkusVersion zero = QuarkusVersion.parse("0.0");
+        assertEquals(List.of("0.11.0", "0.12.0"), texts(byName.all(zero)));
+        assertEquals(List.of("0.11.0", "0.12.0"), texts(byName.streams(zero)));
+        assertEquals(List.of("0.10.0", "0.11.0", "0.12.0"), texts(byName.select("0.12.0,0.10.0,0.11.0", zero)));
+        assertThrows(IllegalArgumentException.class, () -> byName.explicit(List.of("0.9.0")));
+    }
+
+    @Test
     void allWithEachPreReleaseMode() {
         assertEquals(List.of("3.0.0.Final", "3.0.4.Final", "3.2.12.Final", "3.8.6", "3.8.6.1", "3.9.0", "3.40.0",
                 "3.40.1", "3.40.1.1"), texts(selector.all(since, NONE)));

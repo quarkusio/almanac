@@ -13,6 +13,7 @@ import io.quarkiverse.almanac.model.ConfigProperty;
 import io.quarkiverse.almanac.model.ConfigSnapshot;
 import io.quarkiverse.almanac.model.ExtensionInfo;
 import io.quarkiverse.almanac.model.ExtensionsSnapshot;
+import io.quarkiverse.almanac.model.GitSource;
 import io.quarkiverse.almanac.model.ManagedDep;
 import io.quarkiverse.almanac.model.MemberApi;
 import io.quarkiverse.almanac.util.ConfigKeys;
@@ -35,6 +36,10 @@ final class SnapshotChecks {
     private static final Pattern DATE = Pattern.compile("\\d{4}-\\d{2}-\\d{2}");
     /// What `classes.jsonl` can tell apart in `<artifactId> <class>`: no whitespace, and no empty name.
     private static final Pattern NAME = Pattern.compile("\\S+");
+    /// A git commit: its full SHA-1.
+    private static final Pattern COMMIT = Pattern.compile("[0-9a-f]{40}");
+    /// A BOM's `groupId:artifactId`.
+    private static final Pattern COORDINATES = Pattern.compile("[A-Za-z0-9_.-]+:[A-Za-z0-9_.-]+");
     private static final Set<String> CONFIG_SOURCES = Set.of("model", "bytecode");
     /// At most this many problems are listed per snapshot.
     private static final int MAX_PROBLEMS = 5;
@@ -109,6 +114,21 @@ final class SnapshotChecks {
         if (bom.date() != null && !DATE.matcher(bom.date()).matches()) {
             problems.add("date " + bom.date() + " is not yyyy-MM-dd");
         }
+        GitSource git = bom.git();
+        if (git != null) {
+            if (empty(git.tag()) || !NAME.matcher(git.tag()).matches()) {
+                problems.add("git tag " + git.tag() + " is empty or has white space");
+            }
+            if (git.commit() == null || !COMMIT.matcher(git.commit()).matches()) {
+                problems.add("git commit " + git.commit() + " is not 40 lowercase hex digits");
+            }
+            if (git.bom() == null || !COORDINATES.matcher(git.bom()).matches()) {
+                problems.add("git bom " + git.bom() + " is not groupId:artifactId");
+            }
+            if (bom.date() == null) {
+                problems.add("no date, which a release from a git tag takes from the tag's commit");
+            }
+        }
         if (bom.deps() == null || bom.deps().isEmpty()) {
             problems.add("no managed dependencies");
             return;
@@ -129,6 +149,9 @@ final class SnapshotChecks {
     /// A BOM whose versions never read as [BomDifferences#NOT_MANAGED], the mark of its differences from the BOM.
     private static void platform(String release, BomSnapshot platform, List<String> problems) {
         bom(release, platform, problems);
+        if (platform.git() != null) {
+            problems.add("a platform BOM from a git tag: only a release's own BOM may come from one");
+        }
         if (platform.deps() != null) {
             for (ManagedDep dep : platform.deps()) {
                 if (dep != null && BomDifferences.NOT_MANAGED.equals(dep.v())) {

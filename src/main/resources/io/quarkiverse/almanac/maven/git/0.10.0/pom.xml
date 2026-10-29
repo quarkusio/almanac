@@ -1,0 +1,139 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  ~ Copyright 2018 Red Hat, Inc.
+  ~
+  ~ Licensed under the Apache License, Version 2.0 (the "License");
+  ~ you may not use this file except in compliance with the License.
+  ~ You may obtain a copy of the License at
+  ~
+  ~     http://www.apache.org/licenses/LICENSE-2.0
+  ~
+  ~ Unless required by applicable law or agreed to in writing, software
+  ~ distributed under the License is distributed on an "AS IS" BASIS,
+  ~ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+  ~ See the License for the specific language governing permissions and
+  ~ limitations under the License.
+  -->
+
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+    <parent>
+        <groupId>org.jboss</groupId>
+        <artifactId>jboss-parent</artifactId>
+        <version>32</version>
+    </parent>
+
+    <groupId>io.quarkus</groupId>
+    <artifactId>quarkus-parent</artifactId>
+    <name>Quarkus - Parent pom</name>
+    <version>0.10.0</version>
+    <packaging>pom</packaging>
+
+    <licenses>
+        <license>
+            <name>The Apache Software License, Version 2.0</name>
+            <url>http://www.apache.org/licenses/LICENSE-2.0.txt</url>
+            <distribution>repo</distribution>
+        </license>
+    </licenses>
+
+    <properties>
+        <graalvmHome>${env.GRAALVM_HOME}</graalvmHome>
+        <postgres.url>jdbc:postgresql:hibernate_orm_test</postgres.url>
+    </properties>
+
+    <modules>
+        <module>bom</module>
+        <module>build-parent</module>
+    
+        <!-- Core components -->
+        <module>core</module>
+        <module>test-framework</module>
+
+        <!-- Integration Tests -->
+        <module>integration-tests</module>
+
+        <!-- Extensions -->
+        <module>extensions</module>
+
+        <!-- External projects -->
+        <module>independent-projects/arc</module>
+        <module>independent-projects/infinispan-hibernate-cache-quarkus</module>
+        <module>independent-projects/jboss-logmanager-embedded</module>
+
+          <!-- Devtools (Maven, cli, gradle) -->
+        <module>devtools</module>
+
+        <!-- Misc. -->
+        <module>docs</module>
+
+        <!-- Do not add modules after war-launcher. JVM state will fail CI -->
+        <module>war-launcher</module>
+    </modules>
+
+    <repositories>
+        <repository>
+            <id>central</id>
+            <name>Maven Repository Switchboard</name>
+            <url>http://repo.maven.apache.org/maven2</url>
+        </repository>
+        <repository>
+            <id>jboss</id>
+            <url>http://repository.jboss.org/nexus/content/groups/public/</url>
+            <releases>
+                <enabled>true</enabled>
+            </releases>
+            <snapshots>
+                <enabled>true</enabled>
+            </snapshots>
+        </repository>
+
+        <!-- Forgot the password? see https://github.com/quarkus-project/hibernate-quarkus/wiki/Quarkus-Nexus-credentials -->
+        <repository>
+            <id>quarkus-nexus-release</id>
+            <name>Quarkus AWS Nexus - Releases</name>
+            <url>http://ec2-18-234-117-118.compute-1.amazonaws.com:8081/nexus/content/repositories/releases/</url>
+            <layout>default</layout>
+            <releases>
+                <enabled>true</enabled>
+                <updatePolicy>never</updatePolicy>
+            </releases>
+            <snapshots>
+                <enabled>false</enabled>
+            </snapshots>
+        </repository>
+
+        <!-- Forgot the password? see https://github.com/quarkus-project/hibernate-quarkus/wiki/Quarkus-Nexus-credentials -->
+        <repository>
+            <id>quarkus-nexus-snapshot</id>
+            <name>Quarkus AWS Nexus - Snapshots</name>
+            <url>http://ec2-18-234-117-118.compute-1.amazonaws.com:8081/nexus/content/repositories/snapshots/</url>
+            <layout>default</layout>
+            <releases>
+                <enabled>true</enabled>
+                <updatePolicy>never</updatePolicy>
+            </releases>
+            <snapshots>
+                <enabled>true</enabled>
+                <!-- 10 minutes. Or enforce refresh by using -U option to Maven -->
+                <updatePolicy>daily</updatePolicy>
+            </snapshots>
+        </repository>
+    </repositories>
+
+    <distributionManagement>
+        <repository>
+            <id>quarkus-nexus-release</id>
+            <name>Quarkus AWS Nexus - Releases</name>
+            <url>http://ec2-18-234-117-118.compute-1.amazonaws.com:8081/nexus/content/repositories/releases/</url>
+        </repository>
+        <snapshotRepository>
+            <id>quarkus-nexus-snapshot</id>
+            <name>Quarkus AWS Nexus - Snapshots</name>
+            <url>http://ec2-18-234-117-118.compute-1.amazonaws.com:8081/nexus/content/repositories/snapshots/</url>
+        </snapshotRepository>
+    </distributionManagement>
+
+</project>

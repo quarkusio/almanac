@@ -510,6 +510,14 @@ public final class DatasetVerifier {
             if (release.has(Kind.CLASSES) && !release.bom()) {
                 problem("releases", version + " has classes but no BOM");
             }
+            if (release.git() != null) {
+                for (Kind kind : List.of(Kind.CONFIG, Kind.EXTENSIONS, Kind.CLASSES, Kind.PLATFORM, Kind.API)) {
+                    if (release.has(kind)) {
+                        problem("releases", version + " has " + kind + ", but it was never published on Maven "
+                                + "Central: the dataset keeps its BOM alone, from its git tag");
+                    }
+                }
+            }
             if (release.has(Kind.API)) {
                 checkApiRelease(release, contents, apiReaders);
             }
@@ -529,6 +537,11 @@ public final class DatasetVerifier {
                 counts.getOrDefault(Kind.BOM, 0), counts.getOrDefault(Kind.CONFIG, 0),
                 counts.getOrDefault(Kind.EXTENSIONS, 0), counts.getOrDefault(Kind.CLASSES, 0),
                 counts.getOrDefault(Kind.PLATFORM, 0), counts.getOrDefault(Kind.API, 0)));
+        long git = dataset.releases().stream().filter(release -> release.git() != null).count();
+        if (git > 0) {
+            summary.add(String.format(Locale.ROOT, "%d releases never published on Maven Central, with the BOM of "
+                    + "their git tag", git));
+        }
     }
 
     /// A release with API data: it has the BOM and the classes, every API class among the classes in the same jar, and

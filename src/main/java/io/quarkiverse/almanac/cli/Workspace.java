@@ -2,6 +2,7 @@ package io.quarkiverse.almanac.cli;
 
 import io.quarkiverse.almanac.dataset.Dataset;
 import io.quarkiverse.almanac.maven.BomSnapshots;
+import io.quarkiverse.almanac.maven.GitReleases;
 import io.quarkiverse.almanac.maven.Http;
 import io.quarkiverse.almanac.maven.MavenRepo;
 import io.quarkiverse.almanac.maven.QuarkusVersion;
@@ -109,6 +110,21 @@ final class Workspace implements AutoCloseable {
                     e.getMessage());
             return new VersionSelector(withBom).all(since, preReleases);
         }
+    }
+
+    /// The releases among `versions` that were published on Maven Central. A release whose BOM comes from its git tag
+    /// ([GitReleases]) has no jar and no extension catalog to read, so `label` (config, classes, extensions) leaves it
+    /// out, saying so, instead of asking the repository for artifacts that never were in it.
+    static List<QuarkusVersion> published(List<QuarkusVersion> versions, String label) {
+        List<QuarkusVersion> published = versions.stream()
+                .filter(version -> GitReleases.source(version.text()).isEmpty())
+                .toList();
+        int left = versions.size() - published.size();
+        if (left > 0) {
+            Log.info("%s: %d of %d selected releases never published on Maven Central left out (the dataset keeps "
+                    + "their BOM alone, from their git tags)", label, left, versions.size());
+        }
+        return published;
     }
 
     @Override

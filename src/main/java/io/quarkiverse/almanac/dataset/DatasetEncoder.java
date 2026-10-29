@@ -14,6 +14,7 @@ import io.quarkiverse.almanac.model.ConfigProperty;
 import io.quarkiverse.almanac.model.ConfigSnapshot;
 import io.quarkiverse.almanac.model.ExtensionInfo;
 import io.quarkiverse.almanac.model.ExtensionsSnapshot;
+import io.quarkiverse.almanac.model.GitSource;
 import io.quarkiverse.almanac.model.ManagedDep;
 import io.quarkiverse.almanac.model.MemberApi;
 
@@ -108,6 +109,10 @@ final class DatasetEncoder {
             }
             if (contents.has(version, Kind.BOM)) {
                 row.put("bom", true);
+                GitSource git = contents.boms().get(version).git();
+                if (git != null) {
+                    row.putObject("git").put("tag", git.tag()).put("commit", git.commit()).put("bom", git.bom());
+                }
             }
             ConfigSnapshot config = contents.configs().get(version);
             if (config != null) {

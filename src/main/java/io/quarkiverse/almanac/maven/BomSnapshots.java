@@ -1,6 +1,7 @@
 package io.quarkiverse.almanac.maven;
 
 import io.quarkiverse.almanac.model.BomSnapshot;
+import io.quarkiverse.almanac.model.GitSource;
 import io.quarkiverse.almanac.model.ManagedDep;
 import io.quarkiverse.almanac.util.Log;
 import io.quarkiverse.almanac.util.SnapshotStore;
@@ -42,8 +43,11 @@ public final class BomSnapshots {
         this.groupId = groupId;
         this.snapshotFile = snapshotFile;
         this.label = label;
-        this.resolver = new BomResolver((g, artifactId, version) ->
-                repo.artifact(g, artifactId, version, "pom").map(MavenRepo.Download::content));
+        // the poms of a release never published on Maven Central come from its git tag, never from the repository
+        this.resolver = new BomResolver((g, artifactId, version) -> {
+            Optional<byte[]> git = GitReleases.pom(g, artifactId, version);
+            return git.isPresent() ? git : repo.artifact(g, artifactId, version, "pom").map(MavenRepo.Download::content);
+        });
     }
 
     /// The `platform-bom.json` snapshots of `io.quarkus.platform:quarkus-bom`, the platform release of the same version
@@ -68,7 +72,9 @@ public final class BomSnapshots {
     /// Every published `io.quarkus:quarkus-bom` version (the Quarkus releases, whichever BOM these snapshots are of):
     /// the versions of `maven-metadata.xml` (cached, or fetched when stale unless offline) together with the releases
     /// the committed dataset knows (`releases.jsonl`). Without a
-    /// readable `maven-metadata.xml`, as offline on a fresh clone, the dataset's list alone.
+    /// readable `maven-metadata.xml`, as offline on a fresh clone, the dataset's list alone. The releases never
+    /// published whose BOM comes from their git tag ([GitReleases]) are selected by name only, until the dataset has
+    /// them.
     ///
     /// @throws IOException when neither list is available
     public VersionSelector selector() throws IOException {
@@ -82,14 +88,14 @@ public final class BomSnapshots {
             }
             Log.info("release list: maven-metadata.xml not available (%s); using the %d releases of the dataset",
                     e.getMessage(), known.size());
-            return new VersionSelector(known);
+            return new VersionSelector(known, GitReleases.versions());
         }
         if (known.isEmpty()) {
-            return new VersionSelector(published);
+            return new VersionSelector(published, GitReleases.versions());
         }
         Set<String> union = new LinkedHashSet<>(published);
         union.addAll(known);
-        return new VersionSelector(union);
+        return new VersionSelector(union, GitReleases.versions());
     }
 
     /// The snapshot of a release: the existing snapshot (work folder, else the committed dataset) unless `force`,
@@ -110,23 +116,37 @@ public final class BomSnapshots {
             Log.debug("%s %s: reusing snapshot", label, version);
             return existing.get();
         }
-        MavenRepo.Download pom = repo.artifact(groupId, BOM_ARTIFACT_ID, version, "pom")
-                .orElseThrow(() -> new IOException((groupId.equals(GROUP_ID) ? "" : groupId + ":") + BOM_ARTIFACT_ID
-                        + " " + version + " not found in the repository"));
+        // a release never published on Maven Central: its BOM as at its git tag, dated by the tag's commit
+        GitSource git = groupId.equals(GROUP_ID) ? GitReleases.source(version).orElse(null) : null;
+        byte[] content;
         String date = null;
-        if (pom.lastModified() != null) {
-            date = DateTimeFormatter.ISO_LOCAL_DATE.format(pom.lastModified().atOffset(ZoneOffset.UTC));
+        if (git != null) {
+            content = GitReleases.bom(version);
+            date = GitReleases.date(version);
         } else {
-            Log.warn("%s %s: no Last-Modified date known", label, version);
+            MavenRepo.Download pom = repo.artifact(groupId, BOM_ARTIFACT_ID, version, "pom")
+                    .orElseThrow(() -> new IOException((groupId.equals(GROUP_ID) ? "" : groupId + ":")
+                            + BOM_ARTIFACT_ID + " " + version + " not found in the repository"));
+            content = pom.content();
+            if (pom.lastModified() != null) {
+                date = DateTimeFormatter.ISO_LOCAL_DATE.format(pom.lastModified().atOffset(ZoneOffset.UTC));
+            } else {
+                Log.warn("%s %s: no Last-Modified date known", label, version);
+            }
         }
-        BomResolver.Result result = resolve(version, pom.content());
-        BomSnapshot snapshot = new BomSnapshot(version, date, result.deps());
+        BomResolver.Result result = resolve(version, content);
+        BomSnapshot snapshot = new BomSnapshot(version, date, git, result.deps());
         store.write(version, snapshotFile, snapshot);
         result.describeUnresolved().ifPresent(unresolved ->
                 Log.warn("%s %s: %s; they are kept as written, as Maven keeps them", label, version, unresolved));
-        long quarkus = snapshot.deps().stream().map(ManagedDep::id).filter(id -> id.startsWith(GROUP_ID + ":")).count();
-        Log.info("%s %s: %d managed dependencies (%d io.quarkus), released %s", label, version,
-                snapshot.deps().size(), quarkus, date);
+        String own = git == null ? GROUP_ID : git.bom().substring(0, git.bom().indexOf(':'));
+        long modules = snapshot.deps().stream().map(ManagedDep::id).filter(id -> id.startsWith(own + ":")).count();
+        Log.info("%s %s: %d managed dependencies (%d %s), %s %s", label, version, snapshot.deps().size(), modules, own,
+                git == null ? "released" : "tagged", date);
+        if (git != null) {
+            Log.info("%s %s: never published on Maven Central; %s from git tag %s (commit %s)", label, version,
+                    git.bom(), git.tag(), git.commit().substring(0, 7));
+        }
         if (result.poms() > 1) {
             Log.info("%s %s: resolved from %d poms (parents: %s; imported BOMs: %d; entries imported: %d%s)", label,
                     version, result.poms(), String.join(", ", result.parents()), result.imports().size(),

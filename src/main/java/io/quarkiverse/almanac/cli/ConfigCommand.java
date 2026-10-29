@@ -62,9 +62,10 @@ public final class ConfigCommand implements Callable<Integer> {
     /// The releases whose config the dataset does not have (all of them with `force`), logging how many it has. The
     /// dataset has a release's config when it holds its config and extensions snapshots from the reader `source`
     /// asks for (any reader for `auto`); `both` always extracts, since the dataset keeps neither `config-model.json`
-    /// nor `config-bytecode.json`.
+    /// nor `config-bytecode.json`. A release never published on Maven Central has no jars to read, even with `force`.
     static List<QuarkusVersion> notInDataset(Workspace workspace, List<QuarkusVersion> versions,
             ConfigExtractor.Source source, boolean force) throws IOException {
+        versions = Workspace.published(versions, "config");
         if (force || source == ConfigExtractor.Source.BOTH) {
             return versions;
         }

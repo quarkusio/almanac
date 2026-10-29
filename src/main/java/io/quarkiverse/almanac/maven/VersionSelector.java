@@ -17,7 +17,8 @@ import java.util.function.BinaryOperator;
 /// - `all`: every final release of the streams from `since` on, plus the pre-releases that [PreReleases] asks for;
 /// - `streams`: the newest final of each `major.minor` stream from `since` on, plus the pre-releases that
 ///   [PreReleases] asks for;
-/// - an explicit comma-separated list of published versions, taken as given.
+/// - an explicit comma-separated list of published versions, taken as given, which may also name the versions given
+///   to select by name only.
 ///
 /// `since` compares by stream (`major.minor`), so `--since 3.0` keeps `3.0.0.Alpha1` and `--since 4.0` keeps
 /// `4.0.0.Beta1`; a longer `since` such as `3.8.6` counts as its stream.
@@ -54,12 +55,26 @@ public final class VersionSelector {
     public static final String DEFAULT_SINCE = "3.0";
 
     private final List<QuarkusVersion> available;
+    private final List<QuarkusVersion> byNameOnly;
 
     /// @param published every published version (e.g. from maven-metadata.xml); unparsable ones are ignored
     public VersionSelector(Collection<String> published) {
+        this(published, List.of());
+    }
+
+    /// @param published  every published version (e.g. from maven-metadata.xml); unparsable ones are ignored
+    /// @param byNameOnly versions that only an explicit list selects, such as the releases never published whose BOM
+    ///                   comes from their git tag; those also in `published` are selected as any other
+    public VersionSelector(Collection<String> published, Collection<String> byNameOnly) {
+        this.available = parse(published);
+        List<String> availableTexts = available.stream().map(QuarkusVersion::text).toList();
+        this.byNameOnly = parse(byNameOnly.stream().filter(text -> !availableTexts.contains(text.strip())).toList());
+    }
+
+    private static List<QuarkusVersion> parse(Collection<String> texts) {
         TreeSet<String> seen = new TreeSet<>();
         List<QuarkusVersion> versions = new ArrayList<>();
-        for (String text : published) {
+        for (String text : texts) {
             Optional<QuarkusVersion> version = QuarkusVersion.tryParse(text);
             if (version.isEmpty()) {
                 Log.debug("ignoring unparsable version %s", text);
@@ -68,7 +83,7 @@ public final class VersionSelector {
             }
         }
         versions.sort(Comparator.naturalOrder());
-        this.available = List.copyOf(versions);
+        return List.copyOf(versions);
     }
 
     public static boolean isLts(QuarkusVersion version) {
@@ -134,8 +149,9 @@ public final class VersionSelector {
         return List.copyOf(selected);
     }
 
-    /// Resolves explicitly named versions against the published ones: an exact match first, otherwise a version that
-    /// compares equal (so `3.0.4` finds `3.0.4.Final`). Returns them ascending without duplicates.
+    /// Resolves explicitly named versions against the published ones, then those selected by name only: an exact
+    /// match first, otherwise a version that compares equal (so `3.0.4` finds `3.0.4.Final`). Returns them ascending
+    /// without duplicates.
     public List<QuarkusVersion> explicit(List<String> requested) {
         TreeSet<QuarkusVersion> selected = new TreeSet<>(Comparator.naturalOrder());
         for (String text : requested) {
@@ -144,12 +160,17 @@ public final class VersionSelector {
                 continue;
             }
             QuarkusVersion parsed = QuarkusVersion.parse(wanted);
-            QuarkusVersion match = available.stream().filter(v -> v.text().equals(wanted)).findFirst()
-                    .or(() -> available.stream().filter(v -> v.compareTo(parsed) == 0).findFirst())
+            QuarkusVersion match = find(available, wanted, parsed)
+                    .or(() -> find(byNameOnly, wanted, parsed))
                     .orElseThrow(() -> new IllegalArgumentException("unknown Quarkus version: " + wanted));
             selected.add(match);
         }
         return List.copyOf(selected);
+    }
+
+    private static Optional<QuarkusVersion> find(List<QuarkusVersion> versions, String wanted, QuarkusVersion parsed) {
+        return versions.stream().filter(v -> v.text().equals(wanted)).findFirst()
+                .or(() -> versions.stream().filter(v -> v.compareTo(parsed) == 0).findFirst());
     }
 
     private List<QuarkusVersion> finalsSince(QuarkusVersion since) {

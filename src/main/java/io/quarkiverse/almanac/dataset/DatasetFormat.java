@@ -231,9 +231,10 @@ public final class DatasetFormat {
 
 
                 Release data of Quarkus, extracted from Maven Central by `quarkus-almanac` and committed so that no
-                published (immutable) release is ever downloaded again. Written by the `quarkus-almanac dataset`
-                commands (`import`, `remove`, `refresh-releases`) and by `all`; do not edit by hand.
-                `quarkus-almanac dataset verify` checks it.
+                published (immutable) release is ever downloaded again. The pre-launch releases of December 2018 to
+                March 2019, never published there, have their BOM alone, read from the poms at their git tag. Written
+                by the `quarkus-almanac dataset` commands (`import`, `remove`, `refresh-releases`) and by `all`; do not
+                edit by hand. `quarkus-almanac dataset verify` checks it.
 
                 ## Files
 
@@ -242,7 +243,7 @@ public final class DatasetFormat {
 
                 | File | One line per | Fields |
                 |---|---|---|
-                | `releases.jsonl` | known release (all versions of `io.quarkus:quarkus-bom`), in version order | `version`; `date` (UTC day of the BOM's `Last-Modified`, when known); `bom: true`, `config: {source, extractor, roots}`, `extensions: true`, `classes: true`, `platform: {date}` (the UTC day of the platform BOM's `Last-Modified`, when known) and `api: {reader}` (the reader of the API data, e.g. `api/1`) for the kinds this dataset holds |
+                | `releases.jsonl` | known release (all versions of `io.quarkus:quarkus-bom` on Maven Central, and the releases never published there whose BOM comes from their git tag), in version order | `version`; `date` (UTC day of the BOM's `Last-Modified`, when known; for a release from a git tag, of the tag's commit); `bom: true`, `git: {tag, commit, bom}` (for a release never published on Maven Central: its tag in github.com/quarkusio/quarkus, the commit the tag names, and the BOM's `groupId:artifactId` there, e.g. `org.jboss.shamrock:shamrock-bom` before 0.10.0; the BOM is resolved from the poms at that commit, with the parents and imported BOMs that Maven Central has, and the release has no other kind), `config: {source, extractor, roots}`, `extensions: true`, `classes: true`, `platform: {date}` (the UTC day of the platform BOM's `Last-Modified`, when known) and `api: {reader}` (the reader of the API data, e.g. `api/1`) for the kinds this dataset holds |
                 | `bom.jsonl` | managed artifact (`groupId:artifactId[:type][:classifier]`), by id | `id`, `h` |
                 | `platform-bom.jsonl` | artifact that the platform BOM `io.quarkus.platform:quarkus-bom` of the same version manages otherwise than the release's BOM, by id | `id`, `h` |
                 | `config.jsonl` | canonical config key, by key | `key`, `h` (values are config state ids) |
@@ -301,8 +302,8 @@ public final class DatasetFormat {
 
                 ## Restoring release R (lossless)
 
-                - `bom.json` = `{version: R, date: <date of R>, deps}`: every id whose value at R is not null, sorted by id,
-                  `"="` read as R.
+                - `bom.json` = `{version: R, date: <date of R>, git: <git of R, when its line has one>, deps}`: every id
+                  whose value at R is not null, sorted by id, `"="` read as R.
                 - `platform-bom.json` = `{version: R, date: <platform date of R>, deps}`: the deps of `bom.json` with
                   every value of `platform-bom.jsonl` at R that is not null applied (a version replaces or adds the id,
                   `"="` read as R, `"-"` removes it), sorted by id.

@@ -20,7 +20,8 @@ import picocli.CommandLine.Spec;
 /// Entry point of `quarkus-almanac.jar`.
 @Command(name = "quarkus-almanac", mixinStandardHelpOptions = true, version = "quarkus-almanac 0.1.0",
         description = "Extracts Quarkus release data (BOM, platform BOM, config properties, extensions, classes, "
-                + "API) from Maven Central into a committed dataset and assembles the data files of the Quarkus "
+                + "API) from Maven Central, and the BOMs of the pre-launch releases never published there from the "
+                + "poms at their git tags, into a committed dataset, and assembles the data files of the Quarkus "
                 + "Almanac site.",
         subcommands = {VersionsCommand.class, BomCommand.class, PlatformCommand.class, ConfigCommand.class,
                 ExtensionsCommand.class, ClassesCommand.class, ApiCommand.class, AssembleCommand.class,

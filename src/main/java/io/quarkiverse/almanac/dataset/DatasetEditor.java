@@ -249,6 +249,16 @@ public final class DatasetEditor {
     private void requirePrerequisites(SortedMap<String, Map<Kind, Object>> accepted,
             Map<String, Refusal> refusedExtensions, List<Refusal> refusals) {
         accepted.forEach((version, kinds) -> {
+            // a release never published on Maven Central has its BOM alone, from its git tag
+            BomSnapshot bom = kinds.get(Kind.BOM) instanceof BomSnapshot imported ? imported : contents.boms().get(version);
+            if (bom != null && bom.git() != null) {
+                for (Kind kind : List.of(Kind.CONFIG, Kind.EXTENSIONS, Kind.CLASSES, Kind.PLATFORM, Kind.API)) {
+                    if (kinds.remove(kind) != null) {
+                        refusals.add(new Refusal(version, kind, "the release was never published on Maven Central: "
+                                + "the dataset keeps its BOM alone, from git tag " + bom.git().tag(), false));
+                    }
+                }
+            }
             if (!kinds.containsKey(Kind.BOM) && !contents.has(version, Kind.BOM)) {
                 for (Kind kind : List.of(Kind.CONFIG, Kind.EXTENSIONS, Kind.CLASSES, Kind.PLATFORM, Kind.API)) {
                     if (kinds.remove(kind) != null) {

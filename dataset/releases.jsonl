@@ -1,3 +1,12 @@
+{"version":"0.2.0","date":"2018-12-19","bom":true,"git":{"tag":"0.2.0","commit":"97a42b3fc1fd62b8e7a8ba61b9016324e9bcd20c","bom":"org.jboss.shamrock:shamrock-bom"}}
+{"version":"0.3.0","date":"2018-12-26","bom":true,"git":{"tag":"0.3.0","commit":"4cc3f9a5a99c59edd557a0ee24c2ce34d5200287","bom":"org.jboss.shamrock:shamrock-bom"}}
+{"version":"0.4.0","date":"2019-01-03","bom":true,"git":{"tag":"0.4.0","commit":"7f0d51974ce65ba542c78b8dfc82dad3cdc1c534","bom":"org.jboss.shamrock:shamrock-bom"}}
+{"version":"0.5.0","date":"2019-01-09","bom":true,"git":{"tag":"0.5.0","commit":"9da3f3765157250d69006c2dc3140a3154755bb9","bom":"org.jboss.shamrock:shamrock-bom"}}
+{"version":"0.6.0","date":"2019-01-16","bom":true,"git":{"tag":"0.6.0","commit":"60956b81580f0b71cfc426e326ba6447cc070ec0","bom":"org.jboss.shamrock:shamrock-bom"}}
+{"version":"0.7.0","date":"2019-01-23","bom":true,"git":{"tag":"0.7.0","commit":"6f59964c352201375fd206098548bf039d71ab2b","bom":"org.jboss.shamrock:shamrock-bom"}}
+{"version":"0.8.0","date":"2019-02-06","bom":true,"git":{"tag":"0.8.0","commit":"6bc09b3962edbbff15e20f32b47d8483cfeaca2c","bom":"org.jboss.shamrock:shamrock-bom"}}
+{"version":"0.9.1","date":"2019-02-14","bom":true,"git":{"tag":"0.9.1","commit":"66ab40ef2921a6dd839ef7d815a3c57c8aeecadd","bom":"org.jboss.shamrock:shamrock-bom"}}
+{"version":"0.10.0","date":"2019-03-01","bom":true,"git":{"tag":"0.10.0","commit":"f26057191b8217f43b632e2eb5b3541821cf242d","bom":"io.quarkus:quarkus-bom"}}
 {"version":"0.11.0","date":"2019-03-06","bom":true,"config":{"source":"bytecode","extractor":"bytecode/2","roots":8},"classes":true,"api":{"reader":"api/1"}}
 {"version":"0.12.0","date":"2019-03-20","bom":true,"config":{"source":"bytecode","extractor":"bytecode/2","roots":9},"classes":true,"api":{"reader":"api/1"}}
 {"version":"0.13.0","date":"2019-04-08","bom":true,"config":{"source":"bytecode","extractor":"bytecode/2","roots":12},"classes":true,"api":{"reader":"api/1"}}

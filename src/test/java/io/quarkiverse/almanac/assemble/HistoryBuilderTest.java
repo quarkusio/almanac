@@ -10,6 +10,7 @@ import io.quarkiverse.almanac.model.ArtifactApi;
 import io.quarkiverse.almanac.model.ArtifactClasses;
 import io.quarkiverse.almanac.model.BomSnapshot;
 import io.quarkiverse.almanac.model.ClassApi;
+import io.quarkiverse.almanac.model.GitSource;
 import io.quarkiverse.almanac.model.ClassesSnapshot;
 import io.quarkiverse.almanac.model.ConfigProperty;
 import io.quarkiverse.almanac.model.ConfigSnapshot;
@@ -118,6 +119,26 @@ class HistoryBuilderTest {
         assertEquals("{\"v\":\"3.2.0.Final\",\"date\":\"2023-07-05\",\"stream\":\"3.2\",\"pre\":false,\"lts\":true,"
                 + "\"config\":true,\"configSource\":\"bytecode\",\"ext\":true,\"classes\":false}",
                 data.versions().get("versions").get(1).toString());
+    }
+
+    @Test
+    void aReleaseFromItsGitTagSaysSoAndThePreLaunchReleasesAreListedForReference() throws IOException {
+        HistoryBuilder builder = new HistoryBuilder();
+        builder.add(new HistoryBuilder.Release(new BomSnapshot("0.10.0", "2019-03-01",
+                new GitSource("0.10.0", "f26057191b8217f43b632e2eb5b3541821cf242d", "io.quarkus:quarkus-bom"),
+                List.of(dep("io.quarkus:quarkus-arc-deployment", "0.10.0"))), null, null));
+        RELEASES.forEach(builder::add);
+        HistoryBuilder.SiteData data = builder.build(NOW);
+
+        assertEquals("{\"v\":\"0.10.0\",\"date\":\"2019-03-01\",\"stream\":\"0.10\",\"pre\":false,\"lts\":false,"
+                        + "\"config\":false,\"ext\":false,\"classes\":false,\"git\":{\"tag\":\"0.10.0\",\"commit\":"
+                        + "\"f26057191b8217f43b632e2eb5b3541821cf242d\",\"bom\":\"io.quarkus:quarkus-bom\"}}",
+                data.versions().get("versions").get(0).toString());
+        assertEquals("{\"v\":\"0.9.0\",\"date\":\"2019-02-14\",\"stream\":\"0.9\",\"commit\":"
+                        + "\"01ddfa0e920a39b7ddb541408ff5341405c5fe00\",\"why\":\"canceled\"}",
+                data.versions().get("reference").get(2).toString());
+        assertEquals(3, data.versions().get("reference").size());
+        assertFalse(build().versions().has("reference"), "listed only next to releases from git tags");
     }
 
     @Test

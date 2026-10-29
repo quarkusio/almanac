@@ -7,7 +7,7 @@ import { fileURLToPath } from 'node:url';
 import * as core from '../assets/core.js';
 
 const {
-  parseVersion, compareVersions, sortVersions, isFinal, stream, shortVersion, findVersionIndex,
+  parseVersion, compareVersions, sortVersions, isFinal, stream, versionText, findVersionIndex,
   parseLibVersion, compareLibVersions, bomChangeKind, splitId, canonicalKey, envVar, lastSegment,
   stateAt, latestValue, configVersionsOf, configVersionFor, phaseInfo, typeLabel, configChangeKinds, enumDelta,
   diffConfig, configRows, tagCounts, filterRows, groupBy, resolveBomValue, diffBom, groupBomRows,
@@ -80,16 +80,17 @@ describe('Quarkus versions', () => {
     assert.equal(compareVersions(parseVersion('3.1.0'), parseVersion('3.0.9')), 1);
   });
 
-  test('sortVersions, isFinal, stream, shortVersion', () => {
+  test('sortVersions, isFinal, stream, versionText', () => {
     assert.deepEqual(sortVersions(['4.0.0.Beta1', '3.8.6.1', '3.8.6', '3.40.1']), ['3.8.6', '3.8.6.1', '3.40.1', '4.0.0.Beta1']);
     assert.equal(isFinal('3.0.0'), true);
     assert.equal(isFinal('3.0.0.Final'), true);
     assert.equal(isFinal('4.0.0.Beta1'), false);
     assert.equal(stream('3.20.6'), '3.20');
     assert.equal(stream('3'), '3.0');
-    assert.equal(shortVersion('3.2.12.Final'), '3.2.12');
-    assert.equal(shortVersion('4.0.0.Beta1'), '4.0.0.Beta1');
-    assert.equal(shortVersion('3.40.1.1'), '3.40.1.1');
+    assert.equal(versionText('1.0.0.Final'), '1.0.0.Final', 'as published, .Final kept');
+    assert.equal(versionText('4.0.0.Beta1'), '4.0.0.Beta1');
+    assert.equal(versionText('3.40.1.1'), '3.40.1.1');
+    assert.equal(versionText(null), '');
   });
 
   test('findVersionIndex: exact, then version equality', () => {
@@ -928,6 +929,26 @@ describe('search', () => {
     assert.equal(matchTier('quarkus.http.export', 'port'), 3);
     assert.equal(matchTier('quarkus.http.port', 'nope'), -1);
     assert.equal(matchTier('', 'x'), -1);
+  });
+
+  test('an artifact managed only by pre-launch releases, never published, says so', () => {
+    const git = (tag, bom) => ({ tag, commit: '0'.repeat(40), bom });
+    const early = [{ v: '0.9.1', git: git('0.9.1', 'org.jboss.shamrock:shamrock-bom') }, { v: '0.10.0', git: git('0.10.0', 'io.quarkus:quarkus-bom') },
+      { v: '0.11.0' }, { v: '0.12.0' }];
+    const artifacts = [
+      { id: 'org.jboss.shamrock:shamrock-core-deployment', h: [[0, '='], [1, null]] },
+      { id: 'io.quarkus:quarkus-agroal-deployment', h: [[1, '='], [2, null]] },
+      { id: 'io.quarkus:quarkus-junit4', h: [[1, '='], [3, null]] },
+      { id: 'io.quarkus:quarkus-core', h: [[2, '=']] },
+    ];
+    const entries = buildSearchIndex({ bom: { artifacts }, versions: early }).entries;
+    assert.deepEqual(entries.map((e) => [e.id, e.current, e.preLaunch]), [
+      ['org.jboss.shamrock:shamrock-core-deployment', false, true],
+      ['io.quarkus:quarkus-agroal-deployment', false, true],
+      ['io.quarkus:quarkus-junit4', false, false],
+      ['io.quarkus:quarkus-core', true, false],
+    ]);
+    assert.equal(buildSearchIndex({ bom, versions }).entries.some((e) => e.preLaunch), false, 'none without pre-launch releases');
   });
 
   test('index covers properties, artifacts and extensions', () => {

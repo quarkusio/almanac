@@ -3,6 +3,8 @@ package io.quarkiverse.almanac.dataset;
 import io.quarkiverse.almanac.model.BomSnapshot;
 import io.quarkiverse.almanac.model.ConfigSnapshot;
 import io.quarkiverse.almanac.model.ExtensionInfo;
+import io.quarkiverse.almanac.model.GitSource;
+import io.quarkiverse.almanac.model.ManagedDep;
 import org.junit.jupiter.api.Test;
 
 import java.io.IOException;
@@ -433,6 +435,28 @@ class DatasetCodecTest {
     }
 
     /// Decoding the encoded files with one file replaced fails with a message containing `expected`.
+    @Test
+    void aReleaseFromItsGitTagKeepsWhereItsBomComesFrom() throws IOException {
+        GitSource git = new GitSource("0.10.0", "f26057191b8217f43b632e2eb5b3541821cf242d", "io.quarkus:quarkus-bom");
+        BomSnapshot bom = new BomSnapshot("0.10.0", "2019-03-01", git,
+                List.of(new ManagedDep("io.quarkus:quarkus-arc-deployment", "0.10.0")));
+        Contents contents = Samples.contents();
+        contents.put("0.10.0", Kind.BOM, bom);
+        Map<String, String> files = DatasetEncoder.encode(contents);
+        String line = "{\"version\":\"0.10.0\",\"date\":\"2019-03-01\",\"bom\":true,\"git\":{\"tag\":\"0.10.0\","
+                + "\"commit\":\"f26057191b8217f43b632e2eb5b3541821cf242d\",\"bom\":\"io.quarkus:quarkus-bom\"}}\n";
+        assertTrue(files.get(DatasetFormat.RELEASES).startsWith(line), files.get(DatasetFormat.RELEASES));
+
+        Dataset dataset = Dataset.of(files);
+        assertEquals(bom, dataset.bom("0.10.0"));
+        assertEquals(git, dataset.release("0.10.0").orElseThrow().git());
+        assertEquals(null, dataset.release("3.2.0").orElseThrow().git());
+        assertEquals(contents, dataset.contents());
+        // a git source says where the BOM comes from: a line without a BOM cannot have one
+        assertRefused(files, DatasetFormat.RELEASES, files.get(DatasetFormat.RELEASES).replace(line,
+                line.replace("\"bom\":true,", "")), "has git but no BOM");
+    }
+
     private static void assertRefused(Map<String, String> encoded, String file, String content, String expected) {
         assertFalse(content.equals(encoded.get(file)), "the replacement changes " + file);
         Map<String, String> files = new HashMap<>(encoded);

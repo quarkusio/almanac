@@ -1,3 +1,6 @@
 # dataset/ is written with LF line ends and checked byte for byte by `dataset verify`:
 # keep it LF in every checkout, whatever core.autocrlf says.
 dataset/** text eol=lf
+# the poms of the releases never published on Maven Central, copied byte for byte from their git tags (GitReleases
+# checks their git blob ids): never converted.
+src/main/resources/io/quarkiverse/almanac/maven/git/** -text
