@@ -6,7 +6,8 @@ their API and deprecations. Every config property, managed artifact and class al
 
 **Site:** https://quarkus.io/almanac/
 
-It covers every Quarkus release on Maven Central, from 0.11.0 on, pre-releases included.
+It covers every Quarkus release whose BOM (`io.quarkus:quarkus-bom`) is on Maven Central, from 0.11.0 on, pre-releases
+included.
 
 ## How it works
 
@@ -47,7 +48,8 @@ java -jar target/quarkus-almanac.jar dataset verify --offline
 java -jar target/quarkus-almanac.jar assemble --offline --pre-releases all
 ```
 
-Then commit `dataset/` and `site/data/`. `--help` lists every command, and `<command> --help` its options.
+Then commit `dataset/` and `site/data/`; the workflow adds the release's platform BOM when it comes out. `--help` lists
+the commands, and `<command> --help` their options (`dataset --help` its own commands).
 
 ## Limitations
 
@@ -57,9 +59,9 @@ Then commit `dataset/` and `site/data/`. `--help` lists every command, and `<com
 - Descriptions are the first sentence of each property's documentation.
 - Extensions start at 0.27, platform BOMs at 2.0. The platform BOM of a release is the platform release of the same
   version, and some releases have none (3.4.0, for example).
-- The classes include the copies of other projects that some jars bundle. The API leaves out those of
-  `quarkus-grpc-cli` and `quarkus-bootstrap-gradle-resolver`, those of `quarkus-ide-launcher` outside
-  `io.quarkus.launcher`, and the packages with a `shaded` segment.
+- The classes include the copies of other projects that some jars bundle. The API leaves out `quarkus-grpc-cli` and
+  `quarkus-bootstrap-gradle-resolver` entirely, `quarkus-ide-launcher` outside `io.quarkus.launcher`, and the packages
+  with a `shaded` segment.
 - The API is everything public or protected in the class files, Quarkus internals included. Signatures are erased and
   `throws` clauses are not read, so a change of generics or `throws` alone does not show.
 - Deprecation is the mark javac writes into a class file for `@Deprecated` or a javadoc `@deprecated`. As `@Deprecated`
