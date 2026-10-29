@@ -40,9 +40,9 @@ public final class CommonOptions {
     @Option(names = "--offline", description = "Use cached files only; fail when something is not cached.")
     boolean offline;
 
-    @Option(names = "--since", defaultValue = "3.0", paramLabel = "STREAM",
+    @Option(names = "--since", defaultValue = "0.0", paramLabel = "STREAM",
             description = "Oldest stream (major.minor) of the all and streams selections, its pre-releases included; "
-                    + "a longer version counts as its stream (default: ${DEFAULT-VALUE}).")
+                    + "a longer version counts as its stream (default: ${DEFAULT-VALUE}, every release).")
     String since;
 
     @Option(names = "--pre-releases", defaultValue = "upcoming", paramLabel = "none|upcoming|all",

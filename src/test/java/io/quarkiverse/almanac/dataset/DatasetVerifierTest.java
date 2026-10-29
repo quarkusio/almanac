@@ -1,7 +1,10 @@
 package io.quarkiverse.almanac.dataset;
 
 import io.quarkiverse.almanac.ScratchDir;
+import io.quarkiverse.almanac.model.ApiSnapshot;
+import io.quarkiverse.almanac.model.ArtifactApi;
 import io.quarkiverse.almanac.model.BomSnapshot;
+import io.quarkiverse.almanac.model.ClassApi;
 import io.quarkiverse.almanac.util.AtomicFiles;
 import io.quarkiverse.almanac.util.SnapshotStore;
 import org.junit.jupiter.api.Test;
@@ -9,6 +12,8 @@ import org.junit.jupiter.api.Test;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
 
@@ -28,9 +33,10 @@ class DatasetVerifierTest {
             DatasetVerifier.Report report = DatasetVerifier.verify(datasetDir, work);
             assertEquals(List.of(), report.problems());
             assertTrue(report.summary().contains("5 known releases: 4 with bom, 2 with config, 2 with extensions, "
-                    + "0 with classes, 0 with platform"), report.summary().toString());
+                    + "0 with classes, 0 with platform, 0 with api"), report.summary().toString());
             assertTrue(report.summary().contains("compared with " + work.root() + ": bom 4 (0 different) config 2 "
-                    + "(0 different) extensions 2 (0 different) classes 0 (0 different) platform 0 (0 different)"),
+                    + "(0 different) extensions 2 (0 different) classes 0 (0 different) platform 0 (0 different) api 0 "
+                    + "(0 different)"),
                     report.summary().toString());
 
             // a work snapshot that differs from the dataset's is reported
@@ -175,7 +181,7 @@ class DatasetVerifierTest {
             DatasetVerifier.Report report = DatasetVerifier.verify(datasetDir, null);
             assertEquals(List.of(), report.problems());
             assertTrue(report.summary().contains("5 known releases: 4 with bom, 2 with config, 3 with extensions, "
-                    + "0 with classes, 0 with platform"), report.summary().toString());
+                    + "0 with classes, 0 with platform, 0 with api"), report.summary().toString());
             assertTrue(report.summary().stream().anyMatch(line -> line.startsWith("round trip: 9 of 9 files")),
                     report.summary().toString());
 
@@ -197,8 +203,9 @@ class DatasetVerifierTest {
             DatasetVerifier.Report report = DatasetVerifier.verify(datasetDir, work);
             assertEquals(List.of(), report.problems());
             assertTrue(report.summary().contains("5 known releases: 4 with bom, 2 with config, 2 with extensions, "
-                    + "0 with classes, 2 with platform"), report.summary().toString());
-            assertTrue(report.summary().stream().anyMatch(line -> line.endsWith("platform 2 (0 different)")),
+                    + "0 with classes, 2 with platform, 0 with api"), report.summary().toString());
+            assertTrue(report.summary().stream().anyMatch(line -> line.endsWith("platform 2 (0 different) api 0 "
+                    + "(0 different)")),
                     report.summary().toString());
 
             // a platform BOM whose release lost its BOM: the history files cannot hold it, releases.jsonl can
@@ -228,7 +235,7 @@ class DatasetVerifierTest {
             DatasetVerifier.Report sound = DatasetVerifier.verify(datasetDir, null);
             assertEquals(List.of(), sound.problems());
             assertTrue(sound.summary().contains("6 known releases: 5 with bom, 2 with config, 2 with extensions, "
-                    + "4 with classes, 0 with platform"), sound.summary().toString());
+                    + "4 with classes, 0 with platform, 0 with api"), sound.summary().toString());
             assertTrue(sound.summary().stream().anyMatch(line -> line.startsWith("classes/4.x.jsonl")),
                     sound.summary().toString());
 
@@ -242,6 +249,138 @@ class DatasetVerifierTest {
                     + "of the 4.x line"), report.problems().toString());
             assertTrue(report.summary().contains("(not part of the dataset: classes/notes.txt)"),
                     report.summary().toString());
+        }
+    }
+
+    @Test
+    void aDatasetWithApiIsSoundAndMatchesItsWorkSnapshots() throws Exception {
+        try (ScratchDir dir = ScratchDir.create()) {
+            Path datasetDir = dir.resolve("dataset");
+            writeFiles(datasetDir, Samples.contentsWithApi());
+            SnapshotStore work = new SnapshotStore(dir.resolve("work/snapshots"), null);
+            for (ApiSnapshot api : List.of(Samples.API_300, Samples.API_310, Samples.API_320,
+                    Samples.API_400_ALPHA1)) {
+                work.write(api.version(), SnapshotStore.API, api);
+            }
+            DatasetVerifier.Report report = DatasetVerifier.verify(datasetDir, work);
+            assertEquals(List.of(), report.problems());
+            assertTrue(report.summary().contains("6 known releases: 5 with bom, 2 with config, 2 with extensions, "
+                    + "4 with classes, 0 with platform, 4 with api"), report.summary().toString());
+            assertTrue(report.summary().stream().anyMatch(line -> line.endsWith("api 4 (0 different)")),
+                    report.summary().toString());
+            assertTrue(report.summary().stream().anyMatch(line -> line.startsWith("round trip: 13 of 13 files")),
+                    report.summary().toString());
+
+            // a work snapshot whose member changed
+            work.write("3.1.0", SnapshotStore.API, new ApiSnapshot("3.1.0", "api/1", Samples.API_300.artifacts()));
+            assertTrue(DatasetVerifier.verify(datasetDir, work).problems().stream().anyMatch(problem ->
+                    problem.startsWith("work: api 3.1.0 differs from ")), "the work snapshot differs");
+        }
+    }
+
+    @Test
+    void namesApiValuesOutsideTheGrammarAndMembersWithoutTheirClass() throws Exception {
+        try (ScratchDir dir = ScratchDir.create()) {
+            Path datasetDir = dir.resolve("dataset");
+            writeFiles(datasetDir, Samples.contentsWithApi());
+            Path api3 = datasetDir.resolve(DatasetFormat.apiFile(3));
+            String lines = Files.readString(api3);
+            AtomicFiles.writeString(api3, lines
+                    .replace("[[\"3.0.0.Final\",\"+v\"]]", "[[\"3.0.0.Final\",\"+vs\"]]")
+                    .replace("QuarkusExtensionTest\",\"h\":[[\"3.2.0\",\"+X\"]]}",
+                            "QuarkusExtensionTest\",\"h\":[[\"3.2.0\",\"+Xi\"]]}"));
+            List<String> problems = DatasetVerifier.verify(datasetDir, null).problems();
+            String file = DatasetFormat.apiFile(3);
+            assertTrue(problems.contains(file + ": " + file + ":5: quarkus-core io.quarkus.runtime.Application "
+                    + "start([Ljava/lang/String;)V: value '+vs' of member start([Ljava/lang/String;)V does not follow "
+                    + "the grammar"), problems.toString());
+            assertTrue(problems.contains(file + ": " + file + ":9: quarkus-junit-internal "
+                    + "io.quarkus.test.QuarkusExtensionTest: class value '+Xi' does not follow the grammar"),
+                    problems.toString());
+            assertTrue(problems.contains("snapshots: api 3.2.0 restores inconsistently: quarkus-junit-internal "
+                    + "io.quarkus.test.QuarkusExtensionTest: class value '+Xi' does not follow the grammar"),
+                    problems.toString());
+
+            // a member whose class line has no value at one of its releases
+            writeFiles(datasetDir, Samples.contentsWithApi());
+            AtomicFiles.writeString(api3, Files.readString(api3).replace(
+                    "[[\"3.1.0\",\"+sf\"],[\"3.2.0\",null]]", "[[\"3.0.0.Final\",\"+sf\"],[\"3.2.0\",null]]"));
+            problems = DatasetVerifier.verify(datasetDir, null).problems();
+            assertTrue(problems.contains(file + ": " + file + ":8: quarkus-core io.quarkus.runtime.Old COUNT:I has a "
+                    + "value at 3.0.0.Final, where its class line has none"), problems.toString());
+        }
+    }
+
+    @Test
+    void namesMemberClassesOfAnInterfaceMarkedStaticAtEveryRelease() throws Exception {
+        try (ScratchDir dir = ScratchDir.create()) {
+            String context = "io.quarkus.runtime.ShutdownContext";
+            Path datasetDir = dir.resolve("dataset");
+            writeFiles(datasetDir, withShutdownContext("+ implements java.lang.Runnable", "+"));
+            assertEquals(List.of(), DatasetVerifier.verify(datasetDir, null).problems());
+
+            // CloseRunnable keeps the value it had in the abstract class, and a member class in another jar says s
+            writeFiles(datasetDir, withShutdownContext("+s implements java.lang.Runnable", "+s"));
+            assertEquals(List.of("snapshots: api 3.2.0 restores inconsistently: quarkus-core " + context
+                    + "$CloseRunnable: class value '+s implements java.lang.Runnable' marks it static, which a member "
+                    + "class of the interface " + context + " is implicitly", "snapshots: api 3.2.0 restores "
+                    + "inconsistently: quarkus-junit-internal " + context + "$Hook: class value '+s' marks it static, "
+                    + "which a member class of the interface " + context + " is implicitly"),
+                    DatasetVerifier.verify(datasetDir, null).problems());
+        }
+    }
+
+    /// [Samples#contentsWithApi()] with `io.quarkus.runtime.ShutdownContext` in quarkus-core: at 3.1.0 an abstract
+    /// class with the static member class `CloseRunnable`, at 3.2.0 an interface whose member classes `CloseRunnable`
+    /// and `Hook` (in quarkus-junit-internal) have these values.
+    private static Contents withShutdownContext(String closeRunnable, String hook) {
+        String context = "io.quarkus.runtime.ShutdownContext";
+        Contents contents = Samples.contentsWithApi();
+        contents.put("3.1.0", Kind.CLASSES, Samples.classes("3.1.0",
+                "quarkus-core", new String[] {"io.quarkus.runtime.Application", "io.quarkus.runtime.Old", context,
+                        context + "$CloseRunnable"},
+                "quarkus-junit5-internal", new String[] {Samples.UNIT_TEST, Samples.UNIT_TEST + "$1"}));
+        contents.put("3.2.0", Kind.CLASSES, Samples.classes("3.2.0",
+                "quarkus-amazon-lambda-http", new String[] {"io.quarkus.amazon.lambda.http.LambdaHttpHandler"},
+                "quarkus-amazon-lambda-rest", new String[] {"io.quarkus.amazon.lambda.http.LambdaHttpHandler"},
+                "quarkus-core", new String[] {"io.quarkus.runtime.Application", context, context + "$CloseRunnable"},
+                "quarkus-junit-internal", new String[] {Samples.UNIT_TEST, Samples.UNIT_TEST + "$1",
+                        "io.quarkus.test.QuarkusExtensionTest", context + "$Hook"}));
+        contents.put("3.1.0", Kind.API, with(Samples.API_310, "quarkus-core", Samples.type(context, "+a"),
+                Samples.type(context + "$CloseRunnable", "+s implements java.lang.Runnable")));
+        contents.put("3.2.0", Kind.API, with(with(Samples.API_320, "quarkus-core", Samples.type(context, "+i"),
+                Samples.type(context + "$CloseRunnable", closeRunnable)), "quarkus-junit-internal",
+                Samples.type(context + "$Hook", hook)));
+        return contents;
+    }
+
+    /// An API snapshot with more classes in one of its jars.
+    private static ApiSnapshot with(ApiSnapshot api, String artifactId, ClassApi... added) {
+        List<ArtifactApi> artifacts = new ArrayList<>();
+        for (ArtifactApi artifact : api.artifacts()) {
+            List<ClassApi> classes = new ArrayList<>(artifact.classes());
+            if (artifact.id().equals(artifactId)) {
+                classes.addAll(List.of(added));
+                classes.sort(Comparator.comparing(ClassApi::name));
+            }
+            artifacts.add(new ArtifactApi(artifact.id(), List.copyOf(classes)));
+        }
+        return new ApiSnapshot(api.version(), api.reader(), List.copyOf(artifacts));
+    }
+
+    @Test
+    void namesApiWithoutClassesOrOutsideThem() throws Exception {
+        try (ScratchDir dir = ScratchDir.create()) {
+            Contents contents = Samples.contentsWithApi();
+            contents.remove("3.0.0.Final", Kind.CLASSES);
+            contents.put("3.1.0", Kind.API, Samples.api("3.1.0", Samples.artifact("quarkus-core",
+                    Samples.type("io.quarkus.runtime.Missing", "+"))));
+            Path datasetDir = dir.resolve("dataset");
+            writeFiles(datasetDir, contents);
+            List<String> problems = DatasetVerifier.verify(datasetDir, null).problems();
+            assertTrue(problems.contains("releases: 3.0.0.Final has api but no classes"), problems.toString());
+            assertTrue(problems.contains("releases: api 3.1.0: API class quarkus-core io.quarkus.runtime.Missing is "
+                    + "not one of the release's classes"), problems.toString());
         }
     }
 

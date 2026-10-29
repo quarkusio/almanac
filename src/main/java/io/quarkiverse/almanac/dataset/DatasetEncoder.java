@@ -4,14 +4,18 @@ import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.fasterxml.jackson.databind.node.JsonNodeFactory;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import io.quarkiverse.almanac.maven.BomDifferences;
+import io.quarkiverse.almanac.model.ApiSnapshot;
+import io.quarkiverse.almanac.model.ArtifactApi;
 import io.quarkiverse.almanac.model.ArtifactClasses;
 import io.quarkiverse.almanac.model.BomSnapshot;
+import io.quarkiverse.almanac.model.ClassApi;
 import io.quarkiverse.almanac.model.ClassesSnapshot;
 import io.quarkiverse.almanac.model.ConfigProperty;
 import io.quarkiverse.almanac.model.ConfigSnapshot;
 import io.quarkiverse.almanac.model.ExtensionInfo;
 import io.quarkiverse.almanac.model.ExtensionsSnapshot;
 import io.quarkiverse.almanac.model.ManagedDep;
+import io.quarkiverse.almanac.model.MemberApi;
 
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -28,8 +32,8 @@ import java.util.function.BiFunction;
 
 /// Writes [Contents] as the files of format 1. The output depends only on the contents, never on the
 /// order in which releases were added, so encoding the same contents always gives the same bytes and adding a release
-/// changes only the lines whose history changes, plus the lines of that release. The classes go to one file per major
-/// version line, each over the releases of its line, so a release never changes the classes file of another line.
+/// changes only the lines whose history changes, plus the lines of that release. The classes and the API go to one file
+/// per major version line each, over the releases of its line, so a release never changes the file of another line.
 final class DatasetEncoder {
 
     /// One line of `config-meta.jsonl`: a config snapshot without its properties.
@@ -41,7 +45,8 @@ final class DatasetEncoder {
     private DatasetEncoder() {
     }
 
-    /// File name → content, in [DatasetFormat#FILES] order with the classes files (by major line) before `README.md`.
+    /// File name → content, in [DatasetFormat#FILES] order with the classes files, then the API files (by major line)
+    /// before `README.md`.
     static Map<String, String> encode(Contents contents) {
         Map<String, String> files = new LinkedHashMap<>();
         files.put(DatasetFormat.RELEASES, releases(contents));
@@ -84,6 +89,11 @@ final class DatasetEncoder {
                 major -> new TreeMap<>(ReleaseOrder.COMPARATOR)).put(version, snapshot));
         classesByLine.forEach((major, snapshots) -> files.put(DatasetFormat.classesFile(major),
                 histories("id", snapshots, DatasetEncoder::classValues)));
+        SortedMap<Integer, SortedMap<String, ApiSnapshot>> apiByLine = new TreeMap<>();
+        contents.apis().forEach((version, snapshot) -> apiByLine.computeIfAbsent(DatasetFormat.majorOf(version),
+                major -> new TreeMap<>(ReleaseOrder.COMPARATOR)).put(version, snapshot));
+        apiByLine.forEach((major, snapshots) -> files.put(DatasetFormat.apiFile(major),
+                histories("id", snapshots, new ApiValues()::of)));
         files.put(DatasetFormat.README, DatasetFormat.readme());
         return files;
     }
@@ -123,6 +133,13 @@ final class DatasetEncoder {
                     info.put("date", platform.date());
                 }
             }
+            ApiSnapshot api = contents.apis().get(version);
+            if (api != null) {
+                ObjectNode info = row.putObject("api");
+                if (api.reader() != null) {
+                    info.put("reader", api.reader());
+                }
+            }
             appendLine(out, row);
         }
         return out.toString();
@@ -152,6 +169,45 @@ final class DatasetEncoder {
             }
         }
         return values;
+    }
+
+    /// API history values of the releases of a line: the class value of every `<artifactId> <class>`, the member value
+    /// of every `<artifactId> <class> <member>`. Restored snapshots share a class record across the releases where it
+    /// does not change, so the ids of each record are made once.
+    private static final class ApiValues {
+        /// Per artifactId, the ids of each class record: the class line's, then those of its members in order.
+        private final Map<String, Map<ClassApi, String[]>> ids = new HashMap<>();
+
+        Map<String, String> of(String version, ApiSnapshot snapshot) {
+            Map<String, String> values = new HashMap<>();
+            for (ArtifactApi artifact : snapshot.artifacts()) {
+                Map<ClassApi, String[]> known = ids.computeIfAbsent(artifact.id(), a -> new IdentityHashMap<>());
+                for (ClassApi type : artifact.classes()) {
+                    String[] lineIds = known.computeIfAbsent(type, t -> lineIds(artifact.id(), t));
+                    if (values.put(lineIds[0], type.v()) != null) {
+                        throw new IllegalArgumentException("api " + version + ": " + type.name() + " twice in "
+                                + artifact.id());
+                    }
+                    for (int m = 0; m < type.members().size(); m++) {
+                        MemberApi member = type.members().get(m);
+                        if (values.put(lineIds[m + 1], member.v()) != null) {
+                            throw new IllegalArgumentException("api " + version + ": " + type.name() + " "
+                                    + member.id() + " twice in " + artifact.id());
+                        }
+                    }
+                }
+            }
+            return values;
+        }
+
+        private static String[] lineIds(String artifactId, ClassApi type) {
+            String[] lineIds = new String[type.members().size() + 1];
+            lineIds[0] = artifactId + " " + type.name();
+            for (int m = 0; m < type.members().size(); m++) {
+                lineIds[m + 1] = lineIds[0] + " " + type.members().get(m).id();
+            }
+            return lineIds;
+        }
     }
 
     /// One line per id, sorted: `{"<idField>": id, "h": [[version, value], ...]}` with a point wherever the value

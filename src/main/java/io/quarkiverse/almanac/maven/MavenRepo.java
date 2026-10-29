@@ -13,8 +13,10 @@ import java.time.Instant;
 import java.time.ZonedDateTime;
 import java.time.format.DateTimeFormatter;
 import java.time.format.DateTimeParseException;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
+import java.util.stream.Stream;
 
 /// A Maven repository (Maven Central by default) with a local cache under `work/cache` that mirrors the
 /// repository layout. Artifacts are immutable and cached forever, 404s are cached as `.404`
@@ -59,6 +61,28 @@ public final class MavenRepo {
     public boolean hasCachedJar(String groupId, String artifactId, String version) {
         Path file = cacheRoot.resolve(artifactPath(groupId, artifactId, version, "jar"));
         return Files.exists(file) || Files.exists(sibling(file, ".cd")) || Files.exists(sibling(file, ".404"));
+    }
+
+    /// The versions of an artifact whose jar this cache holds, whole, as its central directory or as entries in
+    /// `.entries/` (whose index another cache may hold), sorted as text; no request.
+    public List<String> cachedJarVersions(String groupId, String artifactId) throws IOException {
+        Path dir = cacheRoot.resolve(groupId.replace('.', '/') + "/" + artifactId);
+        if (!Files.isDirectory(dir)) {
+            return List.of();
+        }
+        List<String> versions = new ArrayList<>();
+        try (Stream<Path> entries = Files.list(dir)) {
+            for (Path entry : entries.filter(Files::isDirectory).toList()) {
+                String version = entry.getFileName().toString();
+                Path jar = cacheRoot.resolve(artifactPath(groupId, artifactId, version, "jar"));
+                if (Files.exists(jar) || Files.exists(sibling(jar, ".cd"))
+                        || Files.isDirectory(sibling(jar, ".entries"))) {
+                    versions.add(version);
+                }
+            }
+        }
+        versions.sort(null);
+        return versions;
     }
 
     /// Repository path of an artifact file, e.g. `io/quarkus/quarkus-bom/3.20.6/quarkus-bom-3.20.6.pom`.

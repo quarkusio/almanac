@@ -1,13 +1,18 @@
 package io.quarkiverse.almanac.dataset;
 
+import io.quarkiverse.almanac.api.ApiReader;
+import io.quarkiverse.almanac.model.ApiSnapshot;
+import io.quarkiverse.almanac.model.ArtifactApi;
 import io.quarkiverse.almanac.model.ArtifactClasses;
 import io.quarkiverse.almanac.model.BomSnapshot;
+import io.quarkiverse.almanac.model.ClassApi;
 import io.quarkiverse.almanac.model.ClassesSnapshot;
 import io.quarkiverse.almanac.model.ConfigProperty;
 import io.quarkiverse.almanac.model.ConfigSnapshot;
 import io.quarkiverse.almanac.model.ExtensionInfo;
 import io.quarkiverse.almanac.model.ExtensionsSnapshot;
 import io.quarkiverse.almanac.model.ManagedDep;
+import io.quarkiverse.almanac.model.MemberApi;
 import io.quarkiverse.almanac.util.ConfigKeys;
 import io.quarkiverse.almanac.util.SnapshotStore;
 
@@ -144,6 +149,63 @@ final class Samples {
     static final ClassesSnapshot CLASSES_400_ALPHA1 = classes("4.0.0.Alpha1",
             "quarkus-core", names("io.quarkus.runtime.Application"),
             "quarkus-junit-internal", names(UNIT_TEST, "io.quarkus.test.QuarkusExtensionTest"));
+
+    static ApiSnapshot api(String version, ArtifactApi... artifacts) {
+        return new ApiSnapshot(version, ApiReader.READER, List.of(artifacts));
+    }
+
+    static ArtifactApi artifact(String id, ClassApi... classes) {
+        return new ArtifactApi(id, List.of(classes));
+    }
+
+    static ClassApi type(String name, String value, MemberApi... members) {
+        return new ClassApi(name, value, List.of(members));
+    }
+
+    static MemberApi member(String key, String value) {
+        return new MemberApi(key, value);
+    }
+
+    static final String UNIT_TEST_VALUE = "+ implements org.junit.jupiter.api.extension.BeforeAllCallback";
+    static final MemberApi UNIT_TEST_INIT = member("<init>()V", "+");
+    static final MemberApi ARCHIVE = member(
+            "setArchiveProducer(Ljava/util/function/Supplier;)Lio/quarkus/test/QuarkusUnitTest;", "+D");
+    static final MemberApi START = member("start([Ljava/lang/String;)V", "+v");
+    /// The API of 3.0.0.Final: QuarkusUnitTest$1, anonymous, is no API class.
+    static final ApiSnapshot API_300 = api("3.0.0.Final",
+            artifact("quarkus-core", type("io.quarkus.runtime.Application", "+a", member("<init>()V", "+"), START)),
+            artifact("quarkus-junit5-internal", type(UNIT_TEST, UNIT_TEST_VALUE, UNIT_TEST_INIT, ARCHIVE)));
+    /// Application gets a deprecated member, Old comes deprecated for removal.
+    static final ApiSnapshot API_310 = api("3.1.0",
+            artifact("quarkus-core",
+                    type("io.quarkus.runtime.Application", "+a", member("<init>()V", "+"), START,
+                            member("stop()V", "+D since 3.1")),
+                    type("io.quarkus.runtime.Old", "+fR since 3.1", member("COUNT:I", "+sf"))),
+            artifact("quarkus-junit5-internal", type(UNIT_TEST, UNIT_TEST_VALUE, UNIT_TEST_INIT, ARCHIVE)));
+    /// QuarkusUnitTest moves with the same API; a class in two jars; Old and Application's stop() are gone.
+    static final ApiSnapshot API_320 = api("3.2.0",
+            artifact("quarkus-amazon-lambda-http", type("io.quarkus.amazon.lambda.http.LambdaHttpHandler", "+")),
+            artifact("quarkus-amazon-lambda-rest", type("io.quarkus.amazon.lambda.http.LambdaHttpHandler", "+")),
+            artifact("quarkus-core", type("io.quarkus.runtime.Application", "+a", member("<init>()V", "+"), START)),
+            artifact("quarkus-junit-internal",
+                    type("io.quarkus.test.QuarkusExtensionTest", "+X", member("<init>()V", "+")),
+                    type(UNIT_TEST, UNIT_TEST_VALUE, UNIT_TEST_INIT, ARCHIVE)));
+    /// 4.0.0.Alpha1: QuarkusUnitTest goes for removal.
+    static final ApiSnapshot API_400_ALPHA1 = api("4.0.0.Alpha1",
+            artifact("quarkus-core", type("io.quarkus.runtime.Application", "+a", member("<init>()V", "+"), START)),
+            artifact("quarkus-junit-internal",
+                    type("io.quarkus.test.QuarkusExtensionTest", "+", member("<init>()V", "+")),
+                    type(UNIT_TEST, "+R implements org.junit.jupiter.api.extension.BeforeAllCallback since 4.0",
+                            UNIT_TEST_INIT)));
+
+    /// [#contentsWithClasses()] with the API of 3.0.0.Final, 3.1.0, 3.2.0 and 4.0.0.Alpha1.
+    static Contents contentsWithApi() {
+        Contents contents = contentsWithClasses();
+        for (ApiSnapshot api : List.of(API_300, API_310, API_320, API_400_ALPHA1)) {
+            contents.put(api.version(), Kind.API, api);
+        }
+        return contents;
+    }
 
     /// [#contents()] with the classes of 3.0.0.Final, 3.1.0 and 3.2.0, and 4.0.0.Alpha1 with a BOM and classes.
     static Contents contentsWithClasses() {

@@ -109,13 +109,19 @@ public final class DatasetCommand implements Runnable {
         return ReleaseOrder.sorted(folders);
     }
 
-    /// Logs an import: counts per kind, the warnings of imported snapshots, then each refusal (unvalidated ones as
-    /// warnings, others as errors).
+    /// Logs an import: counts per kind, the warnings of imported snapshots and the snapshots it removed, then each
+    /// refusal (unvalidated ones as warnings, others as errors).
     static void logImport(DatasetEditor.ImportReport report) {
         Log.info("dataset import: added %s; replaced %s; unchanged %s; refused %d", perKind(report.added()),
                 perKind(report.replaced()), perKind(report.unchanged()), report.refusals().size());
         for (String warning : report.warnings()) {
             Log.warn("dataset import: %s", warning);
+        }
+        for (String removed : report.removed()) {
+            Log.warn("dataset import: removed %s, read from the jars of the classes this import replaces; api extracts "
+                    + "it again from the new classes.json of the work folder, unless the api.json there is newer (as "
+                    + "when the classes came from elsewhere): then api --force --versions %s does", removed,
+                    removed.substring(removed.indexOf(' ') + 1));
         }
         for (DatasetEditor.Refusal refusal : report.refusals()) {
             if (refusal.unvalidated()) {

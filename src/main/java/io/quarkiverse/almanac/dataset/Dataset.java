@@ -3,14 +3,18 @@ package io.quarkiverse.almanac.dataset;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.JsonNode;
 import io.quarkiverse.almanac.maven.BomDifferences;
+import io.quarkiverse.almanac.model.ApiSnapshot;
+import io.quarkiverse.almanac.model.ArtifactApi;
 import io.quarkiverse.almanac.model.ArtifactClasses;
 import io.quarkiverse.almanac.model.BomSnapshot;
+import io.quarkiverse.almanac.model.ClassApi;
 import io.quarkiverse.almanac.model.ClassesSnapshot;
 import io.quarkiverse.almanac.model.ConfigProperty;
 import io.quarkiverse.almanac.model.ConfigSnapshot;
 import io.quarkiverse.almanac.model.ExtensionInfo;
 import io.quarkiverse.almanac.model.ExtensionsSnapshot;
 import io.quarkiverse.almanac.model.ManagedDep;
+import io.quarkiverse.almanac.model.MemberApi;
 import io.quarkiverse.almanac.util.Json;
 
 import java.io.IOException;
@@ -30,9 +34,10 @@ import java.util.Set;
 import java.util.SortedMap;
 import java.util.TreeMap;
 import java.util.TreeSet;
+import java.util.concurrent.atomic.AtomicReferenceArray;
 
-/// Read access to the committed dataset: the known releases, and the BOM, config, extension, classes and platform BOM
-/// snapshot of any release that holds them, restored exactly from the change-point histories.
+/// Read access to the committed dataset: the known releases, and the BOM, config, extension, classes, platform BOM and
+/// API snapshot of any release that holds them, restored exactly from the change-point histories.
 ///
 /// `releases.jsonl` is read when the dataset is opened; the other files only when a snapshot of their kind is first
 /// restored. Decoded files stay in memory, so restoring a snapshot afterwards costs one binary search per id. Instances
@@ -41,8 +46,9 @@ import java.util.TreeSet;
 /// Reading fails rather than restore data the files do not hold consistently: every line must be one JSON object
 /// (nothing after it, no field twice), change points must name releases of their kind in release order, every state
 /// must hash to its id and be referenced by its history file (which may refer to no other), the `config-meta.jsonl`
-/// line of a release must agree with its `releases.jsonl` line, and a class line must name an artifact and a class
-/// with the value [DatasetFormat#CLASS_PRESENT]. A folder that has [DatasetFormat#WRITE_MARKER] is refused: a write
+/// line of a release must agree with its `releases.jsonl` line, a class line must name an artifact and a class
+/// with the value [DatasetFormat#CLASS_PRESENT], and the member lines of an API file must follow their class line and
+/// have values only where it has one. A folder that has [DatasetFormat#WRITE_MARKER] is refused: a write
 /// was interrupted there. `dataset verify` checks the rest (canonical form, order, encoding).
 public final class Dataset {
 
@@ -55,8 +61,9 @@ public final class Dataset {
     /// @param extensions whether the dataset holds the release's extensions snapshot
     /// @param classes    whether the dataset holds the release's classes snapshot
     /// @param platform   what `releases.jsonl` says about the platform BOM snapshot, null when the dataset has none
+    /// @param api        what `releases.jsonl` says about the API snapshot, null when the dataset has none
     public record Release(String version, String date, boolean bom, ConfigInfo config, boolean extensions,
-            boolean classes, PlatformInfo platform) {
+            boolean classes, PlatformInfo platform, ApiInfo api) {
 
         /// Whether the dataset holds this release's snapshot of the given kind.
         public boolean has(Kind kind) {
@@ -66,6 +73,7 @@ public final class Dataset {
                 case EXTENSIONS -> extensions;
                 case CLASSES -> classes;
                 case PLATFORM -> platform != null;
+                case API -> api != null;
             };
         }
     }
@@ -82,6 +90,12 @@ public final class Dataset {
     ///
     /// @param date UTC day of the platform BOM's `Last-Modified`, null when unknown
     public record PlatformInfo(String date) {
+    }
+
+    /// The API summary of a `releases.jsonl` line.
+    ///
+    /// @param reader the reader of the API snapshot and its version, e.g. `api/1`
+    public record ApiInfo(String reader) {
     }
 
     /// Where the files come from: a folder or, for checks before writing, the encoder's output.
@@ -127,11 +141,14 @@ public final class Dataset {
 
         /// The value at a release ordinal, null when absent.
         String at(int ordinal) {
-            int index = Arrays.binarySearch(ordinals, ordinal);
-            if (index < 0) {
-                index = -index - 2;
-            }
+            int index = index(ordinal);
             return index < 0 ? null : values[index];
+        }
+
+        /// The index of the change point that holds at a release ordinal, -1 before the first one.
+        int index(int ordinal) {
+            int index = Arrays.binarySearch(ordinals, ordinal);
+            return index < 0 ? -index - 2 : index;
         }
     }
 
@@ -160,6 +177,87 @@ public final class Dataset {
     private record ClassTable(Table table, String[] artifacts, String[] classes) {
     }
 
+    /// An API file decoded: the ordinal of each release of the line with API data, and its lines grouped per class.
+    private record ApiTable(Map<String, Integer> ordinals, List<ApiClass> classes) {
+    }
+
+    /// A class line of an API file with the member lines that follow it. Restored snapshots share one [ClassApi] per
+    /// revision of the class (its state from one change point of these lines to the next) and one [MemberApi] per
+    /// change point, so that restoring every release, as import, verify and assemble do, holds each state once.
+    private static final class ApiClass {
+        private final String artifact;
+        private final String name;
+        private final Points points;
+        private final Points[] members;
+        /// Per member line, the record of each change point (null where the value is null).
+        private final MemberApi[][] memberRecords;
+        /// The ordinals of every change point of these lines, ascending, each once: where a revision starts.
+        private final int[] revisions;
+        private final AtomicReferenceArray<ClassApi> restored;
+
+        ApiClass(String artifact, String name, Points points, List<String> memberKeys, List<Points> members) {
+            this.artifact = artifact;
+            this.name = name;
+            this.points = points;
+            this.members = members.toArray(Points[]::new);
+            this.memberRecords = new MemberApi[this.members.length][];
+            TreeSet<Integer> starts = new TreeSet<>();
+            Arrays.stream(points.ordinals()).forEach(starts::add);
+            for (int m = 0; m < this.members.length; m++) {
+                Points member = this.members[m];
+                memberRecords[m] = new MemberApi[member.values().length];
+                for (int p = 0; p < member.values().length; p++) {
+                    if (member.values()[p] != null) {
+                        memberRecords[m][p] = new MemberApi(memberKeys.get(m), member.values()[p]);
+                    }
+                    starts.add(member.ordinals()[p]);
+                }
+            }
+            this.revisions = starts.stream().mapToInt(Integer::intValue).toArray();
+            this.restored = new AtomicReferenceArray<>(revisions.length);
+        }
+
+        /// The first member key with a value at a revision where the class has none, null when there is none.
+        String memberWithoutClass() {
+            for (int ordinal : revisions) {
+                if (points.at(ordinal) == null) {
+                    for (int m = 0; m < members.length; m++) {
+                        int p = members[m].index(ordinal);
+                        if (p >= 0 && memberRecords[m][p] != null) {
+                            return memberRecords[m][p].id();
+                        }
+                    }
+                }
+            }
+            return null;
+        }
+
+        /// The class at a release ordinal, null when it is not API there.
+        ClassApi at(int ordinal) {
+            String value = points.at(ordinal);
+            if (value == null) {
+                return null;
+            }
+            int revision = Arrays.binarySearch(revisions, ordinal);
+            if (revision < 0) {
+                revision = -revision - 2;
+            }
+            ClassApi known = restored.get(revision);
+            if (known != null) {
+                return known;
+            }
+            List<MemberApi> present = new ArrayList<>();
+            for (int m = 0; m < members.length; m++) {
+                int p = members[m].index(ordinal);
+                if (p >= 0 && memberRecords[m][p] != null) {
+                    present.add(memberRecords[m][p]);
+                }
+            }
+            ClassApi created = new ClassApi(name, value, List.copyOf(present));
+            return restored.compareAndSet(revision, null, created) ? created : restored.get(revision);
+        }
+    }
+
     private final FileSource files;
     private final List<Release> releases;
     private final Map<String, Release> byVersion;
@@ -169,6 +267,8 @@ public final class Dataset {
     /// Major version line → its classes file, decoded on first use.
     private final Map<Integer, Lazy<ClassTable>> classTables;
     private final Lazy<Table> platformTable;
+    /// Major version line → its API file, decoded on first use.
+    private final Map<Integer, Lazy<ApiTable>> apiTables;
     private final Lazy<Map<String, ConfigProperty>> configStates;
     private final Lazy<Map<String, ExtensionInfo>> extensionStates;
     private final Lazy<Map<String, DatasetEncoder.ConfigMeta>> configMeta;
@@ -188,6 +288,11 @@ public final class Dataset {
         }
         this.classTables = tables;
         this.platformTable = new Lazy<>(() -> readTable(DatasetFormat.PLATFORM, "id", Kind.PLATFORM));
+        Map<Integer, Lazy<ApiTable>> apis = new HashMap<>();
+        for (String version : versionsWith(Kind.API)) {
+            apis.computeIfAbsent(DatasetFormat.majorOf(version), major -> new Lazy<>(() -> readApiTable(major)));
+        }
+        this.apiTables = apis;
         this.configStates = new Lazy<>(() -> readStates(DatasetFormat.CONFIG_STATES, ConfigProperty.class,
                 DatasetFormat.CONFIG, configTable.get()));
         this.extensionStates = new Lazy<>(() -> readStates(DatasetFormat.EXTENSION_STATES, ExtensionInfo.class,
@@ -275,7 +380,7 @@ public final class Dataset {
     }
 
     /// Restores a snapshot of the given kind: a [BomSnapshot] (of the BOM or the platform BOM), [ConfigSnapshot],
-    /// [ExtensionsSnapshot] or [ClassesSnapshot].
+    /// [ExtensionsSnapshot], [ClassesSnapshot] or [ApiSnapshot].
     ///
     /// @throws IOException when the dataset does not hold it or is inconsistent
     public Object snapshot(String version, Kind kind) throws IOException {
@@ -285,6 +390,7 @@ public final class Dataset {
             case EXTENSIONS -> extensions(version);
             case CLASSES -> classes(version);
             case PLATFORM -> platform(version);
+            case API -> api(version);
         };
     }
 
@@ -414,6 +520,37 @@ public final class Dataset {
         return new ClassesSnapshot(version, Collections.unmodifiableList(artifacts));
     }
 
+    /// Restores the API snapshot of a release from the API file of its major line: per artifact, every class whose
+    /// line has a value at the release, with the member lines that have one; only artifacts with such a class. The
+    /// lines are sorted by id, so the lines of an artifact follow each other, and a class line comes right before its
+    /// member lines (a space sorts before every character of a binary name).
+    public ApiSnapshot api(String version) throws IOException {
+        Release release = require(version, Kind.API);
+        ApiTable decoded = apiTables.get(DatasetFormat.majorOf(version)).get();
+        int ordinal = decoded.ordinals().get(version);
+        List<ArtifactApi> artifacts = new ArrayList<>();
+        String artifact = null;
+        List<ClassApi> classes = new ArrayList<>();
+        for (ApiClass line : decoded.classes()) {
+            ClassApi restored = line.at(ordinal);
+            if (restored == null) {
+                continue;
+            }
+            if (!line.artifact.equals(artifact)) {
+                if (artifact != null) {
+                    artifacts.add(new ArtifactApi(artifact, List.copyOf(classes)));
+                }
+                artifact = line.artifact;
+                classes.clear();
+            }
+            classes.add(restored);
+        }
+        if (artifact != null) {
+            artifacts.add(new ArtifactApi(artifact, List.copyOf(classes)));
+        }
+        return new ApiSnapshot(version, release.api().reader(), Collections.unmodifiableList(artifacts));
+    }
+
     /// Restores everything: every known release with its date and every snapshot.
     Contents contents() throws IOException {
         Contents contents = new Contents();
@@ -477,8 +614,17 @@ public final class Dataset {
                 }
                 platformInfo = new PlatformInfo(optionalText(platform, "date"));
             }
+            JsonNode api = row.get("api");
+            ApiInfo apiInfo = null;
+            if (api != null && !api.isNull()) {
+                if (!api.isObject()) {
+                    throw error(DatasetFormat.RELEASES, i + 1, "api is not an object");
+                }
+                apiInfo = new ApiInfo(optionalText(api, "reader"));
+            }
             Release release = new Release(version, optionalText(row, "date"), row.path("bom").asBoolean(false), info,
-                    row.path("extensions").asBoolean(false), row.path("classes").asBoolean(false), platformInfo);
+                    row.path("extensions").asBoolean(false), row.path("classes").asBoolean(false), platformInfo,
+                    apiInfo);
             if (releases.put(version, release) != null) {
                 throw error(DatasetFormat.RELEASES, i + 1, version + " is listed twice");
             }
@@ -586,6 +732,69 @@ public final class Dataset {
             i++;
         }
         return new ClassTable(table, artifacts, classes);
+    }
+
+    /// Reads the API file of a major line: a history file over the releases of that line with API data, whose ids are
+    /// `<artifactId> <class>` for a class line and `<artifactId> <class> <member>` for each of its member lines, which
+    /// follow it, and whose member lines have values only where their class line has one. The ids and values are
+    /// interned: the same member key or value in many lines is one string.
+    private ApiTable readApiTable(int major) throws IOException {
+        String file = DatasetFormat.apiFile(major);
+        List<String> versions = versionsWith(Kind.API).stream()
+                .filter(version -> DatasetFormat.majorOf(version) == major).toList();
+        Table table = readTable(file, "id", versions, "API data of the " + major + ".x line");
+        Map<String, String> strings = new HashMap<>();
+        List<ApiClass> classes = new ArrayList<>();
+        String artifact = null;
+        String name = null;
+        Points points = null;
+        List<String> memberKeys = new ArrayList<>();
+        List<Points> members = new ArrayList<>();
+        for (Map.Entry<String, Points> row : table.rows().entrySet()) {
+            String id = row.getKey();
+            String[] parts = id.split(" ", -1);
+            if ((parts.length != 2 && parts.length != 3) || Arrays.stream(parts).anyMatch(String::isEmpty)) {
+                throw new IOException(files.describe(file) + ": " + id + " is neither <artifactId> <class> nor "
+                        + "<artifactId> <class> <member>");
+            }
+            String[] values = row.getValue().values();
+            for (int p = 0; p < values.length; p++) {
+                if (values[p] != null) {
+                    values[p] = strings.computeIfAbsent(values[p], v -> v);
+                }
+            }
+            if (parts.length == 2) {
+                if (points != null) {
+                    classes.add(apiClass(file, artifact, name, points, memberKeys, members));
+                }
+                artifact = strings.computeIfAbsent(parts[0], a -> a);
+                name = parts[1];
+                points = row.getValue();
+                memberKeys = new ArrayList<>();
+                members = new ArrayList<>();
+            } else if (points == null || !parts[0].equals(artifact) || !parts[1].equals(name)) {
+                throw new IOException(files.describe(file) + ": member line " + id + " does not follow the line of "
+                        + "its class");
+            } else {
+                memberKeys.add(strings.computeIfAbsent(parts[2], k -> k));
+                members.add(row.getValue());
+            }
+        }
+        if (points != null) {
+            classes.add(apiClass(file, artifact, name, points, memberKeys, members));
+        }
+        return new ApiTable(table.ordinals(), List.copyOf(classes));
+    }
+
+    private ApiClass apiClass(String file, String artifact, String name, Points points, List<String> memberKeys,
+            List<Points> members) throws IOException {
+        ApiClass line = new ApiClass(artifact, name, points, memberKeys, members);
+        String member = line.memberWithoutClass();
+        if (member != null) {
+            throw new IOException(files.describe(file) + ": " + artifact + " " + name + " " + member + " has a value "
+                    + "where its class has none");
+        }
+        return line;
     }
 
     /// Reads a state file: each state must hash to its id, and the states must be exactly those `history` refers to

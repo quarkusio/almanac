@@ -93,7 +93,8 @@ class DatasetCommandTest {
         try (ScratchDir dir = ScratchDir.create()) {
             Path dataset = importAll(dir);
             Path fresh = dir.resolve("fresh-work");
-            String[] common = {"--offline", "--work", fresh.toString(), "--dataset", dataset.toString()};
+            String[] common = {"--offline", "--since", "3.0", "--work", fresh.toString(), "--dataset",
+                    dataset.toString()};
 
             // no maven-metadata.xml in this work folder: the release list comes from releases.jsonl
             Run versions = run(concat(new String[]{"versions", "--select", "all"}, common));
@@ -148,8 +149,8 @@ class DatasetCommandTest {
                     "--site", site.toString(), "--include-work");
             assertEquals(0, withWork.exitCode(), withWork.log());
             assertEquals(List.of("3.0.0.Final", "3.1.0", "3.2.0"), published(site));
-            assertTrue(withWork.log().contains("--include-work used 1 BOM, 2 config, 2 extensions, 0 classes and 0 "
-                    + "platform BOM snapshots"), withWork.log());
+            assertTrue(withWork.log().contains("--include-work used 1 BOM, 2 config, 2 extensions, 0 classes, 0 "
+                    + "platform BOM and 0 API snapshots"), withWork.log());
 
             Run noDataset = run("assemble", "--offline", "--work", work.toString(), "--dataset",
                     dir.resolve("missing").toString(), "--site", site.toString());
@@ -164,7 +165,8 @@ class DatasetCommandTest {
             SnapshotStore snapshots = workSnapshots(work, false);
             writeMetadata(work);
             Path dataset = dir.resolve("dataset");
-            String[] common = {"--offline", "--work", work.toString(), "--dataset", dataset.toString()};
+            String[] common = {"--offline", "--since", "3.0", "--work", work.toString(), "--dataset",
+                    dataset.toString()};
             assertEquals(0, run(concat(new String[] {"dataset", "import", "--versions", "all"}, common)).exitCode());
             // the platform releases 3.1.0 and 3.2.0, and 3.2.0.1 of no Quarkus release
             cachePlatformBom(work, "3.1.0", "4.4.2", "2023-06-02T10:00:00Z");
@@ -247,8 +249,8 @@ class DatasetCommandTest {
             Path dataset = dir.resolve("dataset");
             Path site = dir.resolve("site");
             // every snapshot is in the work folder already, so nothing is downloaded
-            Run all = run("all", "--offline", "--work", work.toString(), "--dataset", dataset.toString(), "--site",
-                    site.toString());
+            Run all = run("all", "--offline", "--since", "3.0", "--work", work.toString(), "--dataset",
+                    dataset.toString(), "--site", site.toString());
             assertEquals(0, all.exitCode(), all.log());
             assertTrue(all.log().contains("dataset import: added 8 (bom 3, config 2, extensions 3)"), all.log());
             assertTrue(all.log().contains("dataset: 4 known releases (1 new: 2.16.12.Final, 0 dropped, 0 dated from "
@@ -260,8 +262,8 @@ class DatasetCommandTest {
             assertEquals(0, run("dataset", "verify", "--offline", "--dataset", dataset.toString()).exitCode());
 
             // a second run finds everything in the dataset
-            Run again = run("all", "--offline", "--work", work.toString(), "--dataset", dataset.toString(), "--site",
-                    site.toString());
+            Run again = run("all", "--offline", "--since", "3.0", "--work", work.toString(), "--dataset",
+                    dataset.toString(), "--site", site.toString());
             assertEquals(0, again.exitCode(), again.log());
             assertTrue(again.log().contains("bom: 3 releases already in the dataset"), again.log());
             assertTrue(again.log().contains("config: 2 releases already in the dataset"), again.log());

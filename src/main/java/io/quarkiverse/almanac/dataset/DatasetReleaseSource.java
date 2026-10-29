@@ -2,6 +2,8 @@ package io.quarkiverse.almanac.dataset;
 
 import io.quarkiverse.almanac.assemble.HistoryBuilder;
 import io.quarkiverse.almanac.assemble.ReleaseSource;
+import io.quarkiverse.almanac.maven.QuarkusVersion;
+import io.quarkiverse.almanac.model.ApiSnapshot;
 import io.quarkiverse.almanac.model.BomSnapshot;
 import io.quarkiverse.almanac.model.ClassesSnapshot;
 import io.quarkiverse.almanac.model.ConfigSnapshot;
@@ -27,6 +29,7 @@ public final class DatasetReleaseSource implements ReleaseSource {
     private final AtomicInteger workExtensions = new AtomicInteger();
     private final AtomicInteger workClasses = new AtomicInteger();
     private final AtomicInteger workPlatforms = new AtomicInteger();
+    private final AtomicInteger workApis = new AtomicInteger();
 
     /// @param dataset the committed dataset
     /// @param work    work snapshots to add where the dataset has none (a store without dataset fallback), or null
@@ -81,22 +84,30 @@ public final class DatasetReleaseSource implements ReleaseSource {
             classes = work.read(version, SnapshotStore.CLASSES, ClassesSnapshot.class);
             workClasses.incrementAndGet();
         }
+        // the API of the release's classes: none without them (dataset verify reports a dataset that has it alone)
+        ApiSnapshot api = null;
+        if (classes != null && dataset.has(version, Kind.API)) {
+            api = dataset.api(version);
+        } else if (work != null && classes != null && work.inWork(version, SnapshotStore.API)) {
+            api = work.read(version, SnapshotStore.API, ApiSnapshot.class);
+            workApis.incrementAndGet();
+        }
         boolean datasetConfig = dataset.has(version, Kind.CONFIG);
         boolean workConfig = !datasetConfig && work != null && work.inWork(version, SnapshotStore.CONFIG);
         if (!datasetConfig && !workConfig) {
-            return new HistoryBuilder.Release(bom, null, extensions, classes, platform);
+            return new HistoryBuilder.Release(bom, null, extensions, classes, platform, api);
         }
-        if (extensions == null) {
+        if (extensions == null && QuarkusVersion.parse(version).hasExtensionCatalog()) {
             Log.warn("assemble: %s has config but no extensions snapshot (%s); its config is ignored", version,
                     datasetConfig ? "dataset verify reports it" : "in " + work.root());
-            return new HistoryBuilder.Release(bom, null, null, classes, platform);
+            return new HistoryBuilder.Release(bom, null, null, classes, platform, api);
         }
         if (datasetConfig) {
-            return new HistoryBuilder.Release(bom, dataset.config(version), extensions, classes, platform);
+            return new HistoryBuilder.Release(bom, dataset.config(version), extensions, classes, platform, api);
         }
         workConfigs.incrementAndGet();
         return new HistoryBuilder.Release(bom, work.read(version, SnapshotStore.CONFIG, ConfigSnapshot.class),
-                extensions, classes, platform);
+                extensions, classes, platform, api);
     }
 
     /// How many BOM snapshots came from the work folder.
@@ -122,5 +133,10 @@ public final class DatasetReleaseSource implements ReleaseSource {
     /// How many platform BOM snapshots came from the work folder.
     public int workPlatforms() {
         return workPlatforms.get();
+    }
+
+    /// How many API snapshots came from the work folder.
+    public int workApis() {
+        return workApis.get();
     }
 }

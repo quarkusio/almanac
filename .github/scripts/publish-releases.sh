@@ -3,8 +3,9 @@
 # those releases and of older ones whose platform BOM came out later), rebuilds the site data from it, and commits both
 # to main. Expects the jar and, under work/, each release's snapshots (work/snapshots/<version>/, with the platform BOM
 # when it was out) and BOM pom (work/cache/io/quarkus/quarkus-bom/<version>/, whose Last-Modified dates the release).
-# Only releases with all four snapshots (BOM, config, extensions, classes) are added; EXPECTED, the number of releases
-# the workflow extracted, makes a run where none of them is complete fail. It starts from origin/main and, when main
+# Only releases with all four snapshots (BOM, config, extensions, classes) are added, with their API when the
+# extraction got it (api.json; optional, never blocking a release); EXPECTED, the number of releases the workflow
+# extracted, makes a run where none of them is complete fail. It starts from origin/main and, when main
 # moves before the push, starts over from it; when main's code is no longer the code that built the jar (BUILT, a
 # commit), it adds nothing, since the next run extracts the releases again with main's code.
 # For a dry run: RESET=no (start from the checkout as it is), COMMIT=no (stage the changes only) or PUSH=no (commit
@@ -43,6 +44,13 @@ platforms=
 add() {
     if [ -n "$versions" ]; then
         java -jar "$JAR" dataset import --versions "$versions" --kinds bom,config,extensions,classes --pause "$PAUSE"
+        # the API of those that have it; one that is refused only warns, and api --missing lists it
+        apis=$(for v in ${versions//,/ }; do
+            if [ -f "work/snapshots/$v/api.json" ]; then echo "$v"; fi
+        done | paste -sd, -)
+        if [ -n "$apis" ] && ! java -jar "$JAR" dataset import --versions "$apis" --kinds api --pause "$PAUSE"; then
+            echo "::warning::not all the API data of $apis could be imported; api --missing lists what is missing" >&2
+        fi
     fi
     # the platform BOMs the dataset lacks, of the new releases too now that their BOMs are in: those the extraction
     # wrote are reused, the others downloaded. A platform BOM that fails is left to a later run.

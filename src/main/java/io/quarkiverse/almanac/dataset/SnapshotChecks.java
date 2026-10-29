@@ -1,26 +1,35 @@
 package io.quarkiverse.almanac.dataset;
 
+import io.quarkiverse.almanac.api.ApiGrammar;
 import io.quarkiverse.almanac.maven.BomDifferences;
 import io.quarkiverse.almanac.maven.BomSnapshots;
+import io.quarkiverse.almanac.model.ApiSnapshot;
+import io.quarkiverse.almanac.model.ArtifactApi;
 import io.quarkiverse.almanac.model.ArtifactClasses;
 import io.quarkiverse.almanac.model.BomSnapshot;
+import io.quarkiverse.almanac.model.ClassApi;
 import io.quarkiverse.almanac.model.ClassesSnapshot;
 import io.quarkiverse.almanac.model.ConfigProperty;
 import io.quarkiverse.almanac.model.ConfigSnapshot;
 import io.quarkiverse.almanac.model.ExtensionInfo;
 import io.quarkiverse.almanac.model.ExtensionsSnapshot;
 import io.quarkiverse.almanac.model.ManagedDep;
+import io.quarkiverse.almanac.model.MemberApi;
 import io.quarkiverse.almanac.util.ConfigKeys;
 
 import java.util.ArrayList;
+import java.util.Collections;
+import java.util.HashMap;
+import java.util.IdentityHashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import java.util.regex.Pattern;
 
 /// What `dataset import` requires of a work snapshot: the invariants that make it restorable
-/// exactly from the dataset (sorted, unique ids, the release's own version, class lines that can be split again), and,
-/// for config, a validated extractor.
+/// exactly from the dataset (sorted, unique ids, the release's own version, class lines that can be split again, API
+/// values in their grammar), and, for config and the API, a validated reader.
 final class SnapshotChecks {
 
     private static final Pattern DATE = Pattern.compile("\\d{4}-\\d{2}-\\d{2}");
@@ -37,6 +46,12 @@ final class SnapshotChecks {
 
     /// The problems that make the snapshot inconsistent; empty when it can be imported.
     static List<String> problems(String release, Kind kind, Object snapshot) {
+        return problems(release, kind, snapshot, Collections.newSetFromMap(new IdentityHashMap<>()));
+    }
+
+    /// The problems that make the snapshot inconsistent, skipping the API classes of `checked` (instances checked
+    /// before, whose content is the same at every release that shares them) and adding the others to it.
+    static List<String> problems(String release, Kind kind, Object snapshot, Set<ClassApi> checked) {
         List<String> problems = new ArrayList<>();
         switch (kind) {
             case BOM -> bom(release, (BomSnapshot) snapshot, problems);
@@ -44,6 +59,7 @@ final class SnapshotChecks {
             case EXTENSIONS -> extensions(release, (ExtensionsSnapshot) snapshot, problems);
             case CLASSES -> classes(release, (ClassesSnapshot) snapshot, problems);
             case PLATFORM -> platform(release, (BomSnapshot) snapshot, problems);
+            case API -> api(release, (ApiSnapshot) snapshot, checked, problems);
         }
         return problems.size() > MAX_PROBLEMS
                 ? List.copyOf(problems.subList(0, MAX_PROBLEMS)) : List.copyOf(problems);
@@ -64,6 +80,15 @@ final class SnapshotChecks {
                 return Optional.of("not all @ConfigDoc* annotations were read from the -sources jars (" + shown
                         + "); extract it online with the default --doc-annotations sources");
             }
+        }
+        return Optional.empty();
+    }
+
+    /// Why an API snapshot is not validated, if it is not: its reader is not one of [DatasetFormat#API_READERS].
+    static Optional<String> unvalidated(ApiSnapshot api) {
+        if (api.reader() == null || !DatasetFormat.API_READERS.contains(api.reader())) {
+            return Optional.of("API reader " + api.reader() + " is not validated; its snapshots stay out of the "
+                    + "dataset and the site");
         }
         return Optional.empty();
     }
@@ -182,6 +207,167 @@ final class SnapshotChecks {
                 }
                 previousClass = ascending(previousClass, name, "class of " + artifact.id(), problems);
             }
+        }
+    }
+
+    /// The first class of an API snapshot that the classes snapshot of the release does not list in the same jar, as
+    /// a message; empty when every API class is one of the release's classes (both snapshots sorted).
+    static Optional<String> apiOutsideClasses(ApiSnapshot api, ClassesSnapshot classes) {
+        Map<String, List<String>> byJar = new HashMap<>();
+        for (ArtifactClasses artifact : classes.artifacts()) {
+            byJar.put(artifact.id(), artifact.classes());
+        }
+        for (ArtifactApi artifact : api.artifacts()) {
+            List<String> names = byJar.getOrDefault(artifact.id(), List.of());
+            for (ClassApi type : artifact.classes()) {
+                if (Collections.binarySearch(names, type.name()) < 0) {
+                    return Optional.of("API class " + artifact.id() + " " + type.name() + " is not one of the "
+                            + "release's classes");
+                }
+            }
+        }
+        return Optional.empty();
+    }
+
+    /// Sorted jars, classes and members, names a dataset id can hold, values and member keys in the [ApiGrammar].
+    private static void api(String release, ApiSnapshot api, Set<ClassApi> checked, List<String> problems) {
+        version(release, api.version(), problems);
+        if (empty(api.reader())) {
+            problems.add("no reader");
+        }
+        if (api.artifacts() == null || api.artifacts().isEmpty()) {
+            problems.add("no jar with an API class");
+            return;
+        }
+        String previous = null;
+        for (ArtifactApi artifact : api.artifacts()) {
+            if (artifact == null || artifact.id() == null || !NAME.matcher(artifact.id()).matches()) {
+                problems.add("a jar without a usable artifactId: " + (artifact == null ? null : artifact.id()));
+                continue;
+            }
+            previous = ascending(previous, artifact.id(), "jar", problems);
+            if (artifact.classes() == null || artifact.classes().isEmpty()) {
+                problems.add(artifact.id() + " lists no API class");
+                continue;
+            }
+            String previousClass = null;
+            for (ClassApi type : artifact.classes()) {
+                if (type == null || type.name() == null || !NAME.matcher(type.name()).matches()
+                        || type.name().contains("/")) {
+                    problems.add(artifact.id() + " has a class that is no binary name: "
+                            + (type == null ? null : type.name()));
+                    continue;
+                }
+                previousClass = ascending(previousClass, type.name(), "class of " + artifact.id(), problems);
+                if (checked.add(type)) {
+                    classApi(artifact.id(), type, problems);
+                }
+                if (problems.size() > MAX_PROBLEMS) {
+                    return;
+                }
+            }
+        }
+        implicitlyStatic(api, problems);
+    }
+
+    /// Classes marked static that are static implicitly: member classes of an interface or an annotation. What encloses
+    /// a class is not in the snapshot, so it is found by name, as javac and kotlinc name member classes (`a.B` encloses
+    /// `a.B$C`). Since a simple name can hold `$` itself (a member class `C$D` of `a.B` is `a.B$C$D` too), each name
+    /// before a `$` of the simple name that is an API class (of the same jar, else of the first other jar that has it,
+    /// as [io.quarkiverse.almanac.api.ApiReader#snapshot] finds the enclosing class) may be the enclosing class: the
+    /// `s` is refused only when every one of them is an interface or an annotation, so that the `s` the reader keeps
+    /// for a member class of a class is never refused. Checked at every release, since the same class record can have
+    /// another enclosing class at another release.
+    private static void implicitlyStatic(ApiSnapshot api, List<String> problems) {
+        for (ArtifactApi artifact : api.artifacts()) {
+            if (artifact == null || artifact.classes() == null) {
+                continue;
+            }
+            for (ClassApi type : artifact.classes()) {
+                if (type == null || type.name() == null || type.v() == null || !ApiGrammar.marksStatic(type.v())) {
+                    continue;
+                }
+                ClassApi outer = implicitlyStaticIn(api, artifact, type.name());
+                if (outer != null) {
+                    problems.add(artifact.id() + " " + type.name() + ": class value '" + type.v() + "' marks it "
+                            + "static, which a member class of the " + (ApiGrammar.classKind(outer.v())
+                            == ApiGrammar.INTERFACE ? "interface " : "annotation ") + outer.name() + " is implicitly");
+                    if (problems.size() > MAX_PROBLEMS) {
+                        return;
+                    }
+                }
+            }
+        }
+    }
+
+    /// The interface or annotation that encloses a nested class, by name, when every API class that may enclose it (a
+    /// name before a `$` of its simple name, in the same jar, else in the first other jar that has it) is an interface
+    /// or an annotation: the one of the longest name. Null when one of them is neither, or there is none.
+    private static ClassApi implicitlyStaticIn(ApiSnapshot api, ArtifactApi artifact, String name) {
+        ClassApi longest = null;
+        int simpleName = name.lastIndexOf('.') + 1;
+        for (int dollar = name.lastIndexOf('$'); dollar > simpleName; dollar = name.lastIndexOf('$', dollar - 1)) {
+            String outer = name.substring(0, dollar);
+            ClassApi found = find(artifact, outer);
+            for (int i = 0; found == null && i < api.artifacts().size(); i++) {
+                found = find(api.artifacts().get(i), outer);
+            }
+            if (found == null) {
+                continue;
+            }
+            char kind = found.v() == null ? 0 : ApiGrammar.classKind(found.v());
+            if (kind != ApiGrammar.INTERFACE && kind != ApiGrammar.ANNOTATION) {
+                return null;
+            }
+            if (longest == null) {
+                longest = found;
+            }
+        }
+        return longest;
+    }
+
+    /// The class of that name among the sorted API classes of a jar, null when it has none.
+    private static ClassApi find(ArtifactApi artifact, String name) {
+        List<ClassApi> classes = artifact == null || artifact.classes() == null ? List.of() : artifact.classes();
+        int low = 0;
+        int high = classes.size() - 1;
+        while (low <= high) {
+            int middle = (low + high) >>> 1;
+            ClassApi type = classes.get(middle);
+            int c = type == null || type.name() == null ? -1 : type.name().compareTo(name);
+            if (c == 0) {
+                return type;
+            }
+            if (c < 0) {
+                low = middle + 1;
+            } else {
+                high = middle - 1;
+            }
+        }
+        return null;
+    }
+
+    private static void classApi(String artifactId, ClassApi type, List<String> problems) {
+        String where = artifactId + " " + type.name();
+        if (type.v() == null) {
+            problems.add(where + " has no value");
+        } else {
+            ApiGrammar.classValueProblem(type.v()).ifPresent(problem -> problems.add(where + ": " + problem));
+        }
+        if (type.members() == null) {
+            problems.add(where + " has no member list");
+            return;
+        }
+        String previous = null;
+        for (MemberApi member : type.members()) {
+            if (member == null || member.id() == null || member.v() == null) {
+                problems.add(where + " has a member without key or value: " + member);
+                continue;
+            }
+            previous = ascending(previous, member.id(), "member of " + where, problems);
+            Optional<String> problem = ApiGrammar.memberKeyProblem(member.id())
+                    .or(() -> ApiGrammar.memberValueProblem(member.id(), member.v()));
+            problem.ifPresent(text -> problems.add(where + ": " + text));
         }
     }
 

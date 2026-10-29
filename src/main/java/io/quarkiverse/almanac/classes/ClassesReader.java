@@ -32,17 +32,30 @@ public final class ClassesReader {
     public static List<String> classNames(Collection<String> entryNames) {
         TreeSet<String> names = new TreeSet<>();
         for (String entry : entryNames) {
-            if (!entry.endsWith(CLASS_SUFFIX) || entry.startsWith(META_INF)) {
-                continue;
+            String name = className(entry);
+            if (name != null) {
+                names.add(name);
             }
-            String path = entry.substring(0, entry.length() - CLASS_SUFFIX.length());
-            String simpleName = path.substring(path.lastIndexOf('/') + 1);
-            if (simpleName.isEmpty() || simpleName.equals("module-info") || simpleName.equals("package-info")) {
-                continue;
-            }
-            names.add(path.replace('/', '.'));
         }
         return List.copyOf(names);
+    }
+
+    /// The binary name of the class of an entry name, null when the entry is no class of the jar.
+    public static String className(String entryName) {
+        if (!entryName.endsWith(CLASS_SUFFIX) || entryName.startsWith(META_INF)) {
+            return null;
+        }
+        String path = entryName.substring(0, entryName.length() - CLASS_SUFFIX.length());
+        String simpleName = path.substring(path.lastIndexOf('/') + 1);
+        if (simpleName.isEmpty() || simpleName.equals("module-info") || simpleName.equals("package-info")) {
+            return null;
+        }
+        return path.replace('/', '.');
+    }
+
+    /// The entry name of a class of the jar, by its binary name: `io/quarkus/test/QuarkusUnitTest$Builder.class`.
+    public static String entryName(String className) {
+        return className.replace('.', '/') + CLASS_SUFFIX;
     }
 
     /// The snapshot of a release from its jars: every existing jar that holds a class, sorted by artifactId. Reads

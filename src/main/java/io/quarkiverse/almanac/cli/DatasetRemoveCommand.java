@@ -16,8 +16,9 @@ import java.util.concurrent.Callable;
 
 /// `dataset remove`: drops snapshots from the committed dataset (for a bad import); the releases stay known.
 @Command(name = "remove", description = "Remove snapshots of the given releases from the dataset; the releases stay "
-        + "in releases.jsonl. Removing a BOM removes the release's config, extensions, classes and platform BOM, "
-        + "removing extensions removes the config (it needs them); config, classes and the platform BOM can go alone.")
+        + "in releases.jsonl. Removing a BOM removes the release's config, extensions, classes, platform BOM and API, "
+        + "removing extensions removes the config and removing classes the API (they need them); config, the platform "
+        + "BOM and the API can go alone.")
 public final class DatasetRemoveCommand implements Callable<Integer> {
 
     @Mixin
@@ -30,7 +31,7 @@ public final class DatasetRemoveCommand implements Callable<Integer> {
     String versions;
 
     @Option(names = "--kinds", defaultValue = "all", paramLabel = "KINDS",
-            description = "Comma-separated: bom, config, extensions, classes, platform, or all (default: "
+            description = "Comma-separated: bom, config, extensions, classes, platform, api, or all (default: "
                     + "${DEFAULT-VALUE}).")
     String kinds;
 

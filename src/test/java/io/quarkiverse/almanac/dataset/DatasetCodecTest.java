@@ -199,6 +199,82 @@ class DatasetCodecTest {
     }
 
     @Test
+    void apiLinesNameTheJarTheClassAndTheMemberAndRestoreExactly() throws IOException {
+        Contents contents = Samples.contentsWithApi();
+        Map<String, String> files = DatasetEncoder.encode(contents);
+        String api3 = DatasetFormat.apiFile(3);
+        String api4 = DatasetFormat.apiFile(4);
+        assertEquals("api/3.x.jsonl", api3);
+        // one file per major line, after the classes files and before README.md
+        List<String> names = List.copyOf(files.keySet());
+        assertEquals(List.of(DatasetFormat.classesFile(3), DatasetFormat.classesFile(4), api3, api4,
+                DatasetFormat.README), names.subList(names.size() - 5, names.size()));
+        // a class line right before its member lines; a move ends the lines of one jar and starts those of another
+        assertEquals("""
+                {"id":"quarkus-amazon-lambda-http io.quarkus.amazon.lambda.http.LambdaHttpHandler","h":[["3.2.0","+"]]}
+                {"id":"quarkus-amazon-lambda-rest io.quarkus.amazon.lambda.http.LambdaHttpHandler","h":[["3.2.0","+"]]}
+                {"id":"quarkus-core io.quarkus.runtime.Application","h":[["3.0.0.Final","+a"]]}
+                {"id":"quarkus-core io.quarkus.runtime.Application <init>()V","h":[["3.0.0.Final","+"]]}
+                {"id":"quarkus-core io.quarkus.runtime.Application start([Ljava/lang/String;)V","h":[["3.0.0.Final","+v"]]}
+                {"id":"quarkus-core io.quarkus.runtime.Application stop()V","h":[["3.1.0","+D since 3.1"],["3.2.0",null]]}
+                {"id":"quarkus-core io.quarkus.runtime.Old","h":[["3.1.0","+fR since 3.1"],["3.2.0",null]]}
+                {"id":"quarkus-core io.quarkus.runtime.Old COUNT:I","h":[["3.1.0","+sf"],["3.2.0",null]]}
+                {"id":"quarkus-junit-internal io.quarkus.test.QuarkusExtensionTest","h":[["3.2.0","+X"]]}
+                {"id":"quarkus-junit-internal io.quarkus.test.QuarkusExtensionTest <init>()V","h":[["3.2.0","+"]]}
+                {"id":"quarkus-junit-internal io.quarkus.test.QuarkusUnitTest","h":[["3.2.0","+ implements org.junit.jupiter.api.extension.BeforeAllCallback"]]}
+                {"id":"quarkus-junit-internal io.quarkus.test.QuarkusUnitTest <init>()V","h":[["3.2.0","+"]]}
+                {"id":"quarkus-junit-internal io.quarkus.test.QuarkusUnitTest setArchiveProducer(Ljava/util/function/Supplier;)Lio/quarkus/test/QuarkusUnitTest;","h":[["3.2.0","+D"]]}
+                {"id":"quarkus-junit5-internal io.quarkus.test.QuarkusUnitTest","h":[["3.0.0.Final","+ implements org.junit.jupiter.api.extension.BeforeAllCallback"],["3.2.0",null]]}
+                {"id":"quarkus-junit5-internal io.quarkus.test.QuarkusUnitTest <init>()V","h":[["3.0.0.Final","+"],["3.2.0",null]]}
+                {"id":"quarkus-junit5-internal io.quarkus.test.QuarkusUnitTest setArchiveProducer(Ljava/util/function/Supplier;)Lio/quarkus/test/QuarkusUnitTest;","h":[["3.0.0.Final","+D"],["3.2.0",null]]}
+                """, files.get(api3));
+        assertEquals(7, DatasetFormat.lines(files.get(api4)).size());
+        List<String> releases = DatasetFormat.lines(files.get(DatasetFormat.RELEASES));
+        assertEquals("{\"version\":\"3.0.0.Final\",\"date\":\"2023-04-26\",\"bom\":true,\"classes\":true,"
+                + "\"api\":{\"reader\":\"api/1\"}}", releases.get(1));
+        assertEquals("{\"version\":\"3.2.0.CR1\",\"date\":\"2023-06-28\",\"bom\":true}", releases.get(3));
+
+        Dataset dataset = Dataset.of(files);
+        assertEquals(List.of("3.0.0.Final", "3.1.0", "3.2.0", "4.0.0.Alpha1"), dataset.versionsWith(Kind.API));
+        assertEquals(Samples.API_300, dataset.api("3.0.0.Final"));
+        assertEquals(Samples.API_310, dataset.api("3.1.0"));
+        assertEquals(Samples.API_320, dataset.api("3.2.0"));
+        assertEquals(Samples.API_400_ALPHA1, dataset.api("4.0.0.Alpha1"));
+        assertEquals(contents, dataset.contents());
+        assertEquals(files, DatasetEncoder.encode(dataset.contents()));
+        // the releases where a class does not change share its record, and a member's record is one per change point
+        assertSame(dataset.api("3.0.0.Final").artifacts().get(1).classes().getFirst(),
+                dataset.api("3.1.0").artifacts().get(1).classes().getFirst());
+        assertSame(dataset.api("3.0.0.Final").artifacts().get(0).classes().getFirst().members().get(1),
+                dataset.api("3.1.0").artifacts().get(0).classes().getFirst().members().get(1));
+        assertThrows(IOException.class, () -> dataset.api("3.2.0.CR1"));
+
+        // the API of a release changes its releases line and the lines of what only it had, in its line's file
+        Contents without = Samples.contentsWithApi();
+        without.remove("3.1.0", Kind.API);
+        assertEquals(Map.of(DatasetFormat.RELEASES, "+1 -1", api3, "+3 -0"),
+                Samples.lineChanges(DatasetEncoder.encode(without), files));
+        Contents before4 = Samples.contentsWithApi();
+        before4.remove("4.0.0.Alpha1", Kind.API);
+        assertEquals(Map.of(DatasetFormat.RELEASES, "+1 -1", api4, "+7 -0"),
+                Samples.lineChanges(DatasetEncoder.encode(before4), files));
+
+        // a member line after another class's line, one where its class has no value, an id of four parts, a
+        // change point at a release without API
+        assertRefused(files, api3, files.get(api3).replace("quarkus-core io.quarkus.runtime.Old COUNT:I",
+                "quarkus-core io.quarkus.runtime.Older COUNT:I"), "member line quarkus-core io.quarkus.runtime.Older "
+                + "COUNT:I does not follow the line of its class");
+        assertRefused(files, api3, files.get(api3).replace("[[\"3.1.0\",\"+sf\"],[\"3.2.0\",null]]",
+                "[[\"3.0.0.Final\",\"+sf\"],[\"3.2.0\",null]]"), "quarkus-core io.quarkus.runtime.Old COUNT:I has a "
+                + "value where its class has none");
+        assertRefused(files, api3, files.get(api3).replace("Old COUNT:I", "Old COUNT:I more"), "quarkus-core "
+                + "io.quarkus.runtime.Old COUNT:I more is neither <artifactId> <class> nor <artifactId> <class> "
+                + "<member>");
+        assertRefused(files, api3, files.get(api3).replace("[[\"3.1.0\",\"+sf\"]", "[[\"3.2.0.CR1\",\"+sf\"]"),
+                "has a change point at 3.2.0.CR1, which has no API data of the 3.x line in releases.jsonl");
+    }
+
+    @Test
     void encodingIsDeterministicAndIndependentOfInsertionOrder() throws IOException {
         Map<String, String> ascending = DatasetEncoder.encode(Samples.contents());
         assertEquals(ascending, DatasetEncoder.encode(Samples.contents()));

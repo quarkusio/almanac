@@ -1,5 +1,6 @@
 package io.quarkiverse.almanac.dataset;
 
+import io.quarkiverse.almanac.model.ApiSnapshot;
 import io.quarkiverse.almanac.model.BomSnapshot;
 import io.quarkiverse.almanac.model.ClassesSnapshot;
 import io.quarkiverse.almanac.model.ConfigSnapshot;
@@ -23,6 +24,7 @@ final class Contents {
     private final SortedMap<String, ExtensionsSnapshot> extensions = new TreeMap<>(ReleaseOrder.COMPARATOR);
     private final SortedMap<String, ClassesSnapshot> classes = new TreeMap<>(ReleaseOrder.COMPARATOR);
     private final SortedMap<String, BomSnapshot> platforms = new TreeMap<>(ReleaseOrder.COMPARATOR);
+    private final SortedMap<String, ApiSnapshot> apis = new TreeMap<>(ReleaseOrder.COMPARATOR);
 
     /// Every known release, in release order.
     SortedSet<String> releases() {
@@ -33,6 +35,7 @@ final class Contents {
         all.addAll(extensions.keySet());
         all.addAll(classes.keySet());
         all.addAll(platforms.keySet());
+        all.addAll(apis.keySet());
         return all;
     }
 
@@ -92,6 +95,11 @@ final class Contents {
         return platforms;
     }
 
+    /// The API snapshots; a release with one has its classes in [#classes()].
+    SortedMap<String, ApiSnapshot> apis() {
+        return apis;
+    }
+
     SortedMap<String, String> dates() {
         return dates;
     }
@@ -130,6 +138,10 @@ final class Contents {
                 platforms.put(version, (BomSnapshot) snapshot);
                 addRelease(version, null);
             }
+            case API -> {
+                apis.put(version, (ApiSnapshot) snapshot);
+                addRelease(version, null);
+            }
         }
     }
 
@@ -145,6 +157,7 @@ final class Contents {
             case EXTENSIONS -> extensions;
             case CLASSES -> classes;
             case PLATFORM -> platforms;
+            case API -> apis;
         };
     }
 
@@ -162,11 +175,11 @@ final class Contents {
             }
         }
         return boms.equals(that.boms) && configs.equals(that.configs) && extensions.equals(that.extensions)
-                && classes.equals(that.classes) && platforms.equals(that.platforms);
+                && classes.equals(that.classes) && platforms.equals(that.platforms) && apis.equals(that.apis);
     }
 
     @Override
     public int hashCode() {
-        return Objects.hash(releases(), boms, configs, extensions, classes, platforms);
+        return Objects.hash(releases(), boms, configs, extensions, classes, platforms, apis);
     }
 }

@@ -13,11 +13,11 @@ import java.nio.file.Path;
 import java.util.List;
 import java.util.concurrent.Callable;
 
-/// `all`: versions → bom (all) → platform (all) → config (streams, with their classes) → dataset import of what they
-/// extracted → assemble (from the dataset). Releases the dataset has are not extracted again.
+/// `all`: versions → bom (all) → platform (all) → config (streams, with their classes) → api (streams) → dataset
+/// import of what they extracted → assemble (from the dataset). Releases the dataset has are not extracted again.
 @Command(name = "all", description = "Run versions, bom (all releases), platform (all releases), config (newest of "
-        + "each stream, with the classes of its jars) for the releases the dataset does not have, import what they "
-        + "extracted into the dataset, and assemble the site data from the dataset.")
+        + "each stream, with the classes of its jars) and api (newest of each stream) for the releases the dataset "
+        + "does not have, import what they extracted into the dataset, and assemble the site data from the dataset.")
 public final class AllCommand implements Callable<Integer> {
 
     @Mixin
@@ -59,9 +59,13 @@ public final class AllCommand implements Callable<Integer> {
             }
             List<QuarkusVersion> configs = ConfigCommand.notInDataset(workspace, streams, source, force);
             boolean configOk = configs.isEmpty() || ConfigCommand.extract(workspace, configs, source, force);
-            boolean importOk = DatasetImportCommand.importExtracted(workspace, boms, configs, platforms, force);
+            // the API of the streams with classes, those config just extracted among them
+            List<QuarkusVersion> apis = ApiCommand.toProcess(workspace, streams, force);
+            boolean apiOk = ApiCommand.extract(workspace, workspace.workSnapshots(), List.of(), apis, force,
+                    ApiCommand.DEFAULT_MAX_REQUESTS);
+            boolean importOk = DatasetImportCommand.importExtracted(workspace, boms, configs, platforms, apis, force);
             AssembleCommand.assemble(workspace, site, false);
-            return bomOk && platformOk && configOk && importOk ? 0 : 1;
+            return bomOk && platformOk && configOk && apiOk && importOk ? 0 : 1;
         }
     }
 }

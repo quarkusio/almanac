@@ -44,9 +44,11 @@ public final class DatasetFormat {
     public static final String EXTENSION_STATES = "extension-states.jsonl";
     /// The folder of the classes files: one per major version line, see [#classesFile(int)].
     public static final String CLASSES_DIR = "classes";
+    /// The folder of the API files: one per major version line, see [#apiFile(int)].
+    public static final String API_DIR = "api";
 
     /// The files every dataset has, in writing order. The classes files, one per major version line that has classes
-    /// ([#classesFile(int)]), come before `README.md`.
+    /// ([#classesFile(int)]), then the API files ([#apiFile(int)]) come before `README.md`.
     public static final List<String> FILES = List.of(RELEASES, BOM, PLATFORM, CONFIG, CONFIG_STATES, CONFIG_META,
             EXTENSIONS, EXTENSION_STATES, README);
 
@@ -63,6 +65,7 @@ public final class DatasetFormat {
     public static final String CLASS_PRESENT = "+";
 
     private static final Pattern CLASSES_FILE = Pattern.compile(CLASSES_DIR + "/(\\d+)\\.x\\.jsonl");
+    private static final Pattern API_FILE = Pattern.compile(API_DIR + "/(\\d+)\\.x\\.jsonl");
     private static final Pattern LEADING_NUMBER = Pattern.compile("(\\d+).*", Pattern.DOTALL);
 
     /// Config extractors whose snapshots are not validated: `dataset import` refuses them, so they never reach the
@@ -74,6 +77,11 @@ public final class DatasetFormat {
     /// jars of a release before 3.14 (`doc annotations unavailable…`, `doc annotations: …`): `dataset import` refuses
     /// such a config as not validated, since map keys and documented defaults may be wrong.
     public static final String DOC_ANNOTATION_WARNING = "doc annotations";
+
+    /// The API readers whose snapshots `dataset import` takes (`api.json`'s `reader`); it refuses the others, so a
+    /// reader under development never reaches the dataset or the site. The releases of a major line all have the
+    /// same reader: a change of reader shows as changes of every class at the line's first release with the new one.
+    public static final Set<String> API_READERS = Set.of("api/1");
 
     /// First line of `README.md`; readers check it to recognise the format.
     static final String README_TITLE = "# Quarkus Almanac dataset, format " + VERSION;
@@ -116,6 +124,12 @@ public final class DatasetFormat {
         return CLASSES_DIR + "/" + major + ".x.jsonl";
     }
 
+    /// The API file of a major version line: `api/3.x.jsonl` for the 3.x releases, one per line like the classes
+    /// files.
+    public static String apiFile(int major) {
+        return API_DIR + "/" + major + ".x.jsonl";
+    }
+
     /// The major version line of a release: its first number, `3` for `3.40.1` and `4` for `4.0.0.Beta1`.
     ///
     /// @throws IllegalArgumentException for a version that does not start with a number
@@ -133,21 +147,36 @@ public final class DatasetFormat {
         return m.matches() ? Integer.parseInt(m.group(1)) : -1;
     }
 
+    /// The major version line of an API file name (`api/3.x.jsonl` → 3), or -1 for any other name.
+    static int majorOfApiFile(String name) {
+        Matcher m = API_FILE.matcher(name);
+        return m.matches() ? Integer.parseInt(m.group(1)) : -1;
+    }
+
     /// The files in the classes folder of a dataset folder (`classes/3.x.jsonl`, and names that are no classes file),
     /// classes files first by major line, then the others by name; empty without the folder.
     static List<String> filesInClassesDir(Path dir) throws IOException {
-        Path classes = dir.resolve(CLASSES_DIR);
-        if (!Files.isDirectory(classes)) {
+        return filesInLineDir(dir, CLASSES_DIR, CLASSES_FILE);
+    }
+
+    /// The files in the API folder of a dataset folder, as [#filesInClassesDir] lists those of the classes folder.
+    static List<String> filesInApiDir(Path dir) throws IOException {
+        return filesInLineDir(dir, API_DIR, API_FILE);
+    }
+
+    private static List<String> filesInLineDir(Path dir, String folder, Pattern lineFile) throws IOException {
+        Path files = dir.resolve(folder);
+        if (!Files.isDirectory(files)) {
             return List.of();
         }
         TreeMap<Integer, String> lines = new TreeMap<>();
         List<String> others = new ArrayList<>();
-        try (Stream<Path> entries = Files.list(classes)) {
+        try (Stream<Path> entries = Files.list(files)) {
             for (Path entry : entries.toList()) {
-                String name = CLASSES_DIR + "/" + entry.getFileName();
-                int major = Files.isRegularFile(entry) ? majorOfClassesFile(name) : -1;
-                if (major >= 0) {
-                    lines.put(major, name);
+                String name = folder + "/" + entry.getFileName();
+                Matcher m = lineFile.matcher(name);
+                if (Files.isRegularFile(entry) && m.matches()) {
+                    lines.put(Integer.parseInt(m.group(1)), name);
                 } else {
                     others.add(name);
                 }
@@ -213,7 +242,7 @@ public final class DatasetFormat {
 
                 | File | One line per | Fields |
                 |---|---|---|
-                | `releases.jsonl` | known release (all versions of `io.quarkus:quarkus-bom`), in version order | `version`; `date` (UTC day of the BOM's `Last-Modified`, when known); `bom: true`, `config: {source, extractor, roots}`, `extensions: true`, `classes: true` and `platform: {date}` (the UTC day of the platform BOM's `Last-Modified`, when known) for the kinds this dataset holds |
+                | `releases.jsonl` | known release (all versions of `io.quarkus:quarkus-bom`), in version order | `version`; `date` (UTC day of the BOM's `Last-Modified`, when known); `bom: true`, `config: {source, extractor, roots}`, `extensions: true`, `classes: true`, `platform: {date}` (the UTC day of the platform BOM's `Last-Modified`, when known) and `api: {reader}` (the reader of the API data, e.g. `api/1`) for the kinds this dataset holds |
                 | `bom.jsonl` | managed artifact (`groupId:artifactId[:type][:classifier]`), by id | `id`, `h` |
                 | `platform-bom.jsonl` | artifact that the platform BOM `io.quarkus.platform:quarkus-bom` of the same version manages otherwise than the release's BOM, by id | `id`, `h` |
                 | `config.jsonl` | canonical config key, by key | `key`, `h` (values are config state ids) |
@@ -222,17 +251,47 @@ public final class DatasetFormat {
                 | `extensions.jsonl` | extension artifactId, by id | `id`, `h` (values are extension state ids) |
                 | `extension-states.jsonl` | distinct extension, by id | `id`, `state` (every `ExtensionInfo` field, as in `extensions.json`) |
                 | `classes/<major>.x.jsonl` | class of an `io.quarkus` jar that `quarkus-bom` manages, by id; one file per major version line (`classes/3.x.jsonl` for the 3.x releases) | `id` (`<artifactId> <class>`, the class by its binary name, e.g. `quarkus-junit-internal io.quarkus.test.QuarkusUnitTest$Builder`), `h` |
+                | `api/<major>.x.jsonl` | API class of the classes files (see **API values**), and public or protected field, method or constructor of it, by id; one file per major version line, like the classes files | `id` (`<artifactId> <class>` for a class, as in the classes files; `<artifactId> <class> <member>` for a member), `h` |
 
                 - **Change points** `h = [["<version>", value], ...]`, ascending, over the releases that hold that kind in
-                  `releases.jsonl` (for a classes file, those of its major line only): a value holds from its release until the
-                  next point, `null` means absent, nothing is recorded before the first point and only changes are. A line
-                  therefore changes only when its history does, and a release changes no file of another major line.
+                  `releases.jsonl` (for a classes or API file, those of its major line only): a value holds from its
+                  release until the next point, `null` means absent, nothing is recorded before the first point and only
+                  changes are. A line therefore changes only when its history does, and a release changes no file of
+                  another major line.
                 - **BOM values**: the managed version, or `"="` for "the release's own version".
                 - **Platform BOM values** say how the platform BOM differs from the release's BOM, over the releases
                   with `platform`: its managed version (`"="` for the release's own), `"-"` when only the release's
                   BOM manages the id, `null` when both manage it alike (or neither does).
                 - **Class values**: `"+"` while the jar has the class. A class moved to another jar ends on one line and
                   starts on another.
+                - **API values**, read from the class files: a class is API when it is public or protected (a nested class
+                  by its own `InnerClasses` entry), every enclosing class is too, and it is neither synthetic, anonymous
+                  nor local; its members are its public and protected fields, methods and constructors that are neither
+                  synthetic nor bridges, `<clinit>` left out. The classes are those of the classes files except the copies
+                  of other projects that some jars bundle: none of `quarkus-grpc-cli` and
+                  `quarkus-bootstrap-gradle-resolver`, none of `quarkus-ide-launcher` outside the package
+                  `io.quarkus.launcher`, and none in a package with a `shaded` segment. A class line holds
+                  `<access><kind><modifiers>[X][D|R][ extends <class>][ implements <class>,<class>...][ since <text>]`, a
+                  member line `<access><modifiers>[X][D|R][ since <text>]`:
+                  - access `+` public, `#` protected; kind none for a class, `i` interface, `n` annotation, `e` enum, `r`
+                    record;
+                  - modifiers in this order, implicit ones left out: of a class of no kind (the others have none), `a`
+                    abstract, `f` final, `s` static (a nested class, but not a member class of an interface or an
+                    annotation, which is static implicitly); of a member, `s` static, `a` abstract, `f` final, `d`
+                    default (an interface method with a body), `v` varargs, `e` enum constant (the fields of an
+                    interface and the enum constants are not marked `sf`, the abstract methods of an interface not `a`);
+                  - `X` for `@io.smallrye.common.annotation.Experimental`; `D` deprecated (the `Deprecated` attribute, which
+                    javac writes for `@Deprecated` and for a javadoc `@deprecated`, or a `@java.lang.Deprecated`
+                    annotation), `R` deprecated for removal (`forRemoval = true`), never both;
+                  - `extends` the superclass by binary name, left out for `java.lang.Object`, `java.lang.Enum`,
+                    `java.lang.Record` and interfaces; `implements` the interfaces in declaration order (of an interface,
+                    its super-interfaces), `java.lang.annotation.Annotation` left out, comma-separated;
+                  - `since` the non-blank `since` of `@Deprecated` as written, to the end of the value.
+
+                  A member is `<name><descriptor>` for a method or constructor (`<init>()V`,
+                  `get(I)Ljava/lang/Object;`) and `<name>:<descriptor>` for a field (`INSTANCE:Lio/quarkus/Foo;`), JVM
+                  descriptors; names never hold whitespace, `(` or `:`. A member line has a value only where its class
+                  line has one; `null` means absent or not API (the classes files tell which).
                 - **State ids**: the first 16 hex digits of the SHA-256 of the state's compact JSON, exactly as the line
                   holds it.
                 - **Order**: versions by numeric parts, then Alpha < Beta < CR < Final; ids and keys by
@@ -253,6 +312,11 @@ public final class DatasetFormat {
                 - `classes.json` = `{version: R, artifacts}`: from the classes file of R's major line, per artifactId,
                   `{id, classes}` with the class of every line of that artifactId whose value at R is not null, sorted; only
                   artifactIds with a class, sorted.
+                - `api.json` = `{version: R, reader: <the API reader of R in releases.jsonl>, artifacts}`: from the API file
+                  of R's major line, per artifactId, `{id, classes}` with `{name, v, members}` for every class line of that
+                  artifactId whose value `v` at R is not null, `members` the `{id, v}` of its member lines whose value at R
+                  is not null (`id` the member part of the line's id); classes and members sorted, only artifactIds with a
+                  class, sorted.
                 """;
     }
 }

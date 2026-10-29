@@ -65,6 +65,12 @@ public record QuarkusVersion(String text, List<Integer> numbers, Qualifier quali
         return number(0);
     }
 
+    /// Whether the release surely lists its extensions in an extension catalog: from 1.0 on. Of the 0.x releases only
+    /// the last ones (0.27 and 0.28) have one, so the config of a 0.x release may come without extensions.
+    public boolean hasExtensionCatalog() {
+        return major() >= 1;
+    }
+
     public int minor() {
         return number(1);
     }

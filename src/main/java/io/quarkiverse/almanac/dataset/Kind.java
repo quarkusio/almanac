@@ -1,5 +1,6 @@
 package io.quarkiverse.almanac.dataset;
 
+import io.quarkiverse.almanac.model.ApiSnapshot;
 import io.quarkiverse.almanac.model.BomSnapshot;
 import io.quarkiverse.almanac.model.ClassesSnapshot;
 import io.quarkiverse.almanac.model.ConfigSnapshot;
@@ -23,7 +24,9 @@ public enum Kind {
     CLASSES("classes", SnapshotStore.CLASSES, ClassesSnapshot.class),
     /// The platform BOM `io.quarkus.platform:quarkus-bom` of the same version: `platform-bom.json`, a [BomSnapshot].
     /// The dataset keeps how it differs from the release's BOM, which it needs.
-    PLATFORM("platform", SnapshotStore.PLATFORM_BOM, BomSnapshot.class);
+    PLATFORM("platform", SnapshotStore.PLATFORM_BOM, BomSnapshot.class),
+    /// The API of the classes: `api.json`, an [ApiSnapshot]. The dataset keeps it for releases with classes.
+    API("api", SnapshotStore.API, ApiSnapshot.class);
 
     private final String label;
     private final String snapshotFile;
@@ -35,8 +38,8 @@ public enum Kind {
         this.recordType = recordType;
     }
 
-    /// The name used on the command line and in `releases.jsonl`: `bom`, `config`, `extensions`, `classes` or
-    /// `platform`.
+    /// The name used on the command line and in `releases.jsonl`: `bom`, `config`, `extensions`, `classes`,
+    /// `platform` or `api`.
     public String label() {
         return label;
     }
@@ -62,7 +65,7 @@ public enum Kind {
         return Optional.empty();
     }
 
-    /// Parses a comma-separated list of labels such as `bom,config,extensions,platform`, or `all`.
+    /// Parses a comma-separated list of labels such as `bom,config,extensions,platform,api`, or `all`.
     ///
     /// @throws IllegalArgumentException for an unknown label or an empty list
     public static Set<Kind> parseList(String text) {
@@ -84,13 +87,13 @@ public enum Kind {
             }
             if (match == null) {
                 throw new IllegalArgumentException("unknown kind '" + part.strip() + "': expected bom, config, "
-                        + "extensions, classes, platform or all");
+                        + "extensions, classes, platform, api or all");
             }
             kinds.add(match);
         }
         if (kinds.isEmpty()) {
-            throw new IllegalArgumentException("no kind given: expected bom, config, extensions, classes, platform "
-                    + "or all");
+            throw new IllegalArgumentException("no kind given: expected bom, config, extensions, classes, platform, "
+                    + "api or all");
         }
         return kinds;
     }

@@ -18,9 +18,10 @@ import java.util.stream.Stream;
 /// dataset.
 ///
 /// Writes always go to the work folder, pretty-printed and atomically. Reads look in the work folder first; a
-/// `bom.json`, `config.json`, `extensions.json`, `classes.json` or `platform-bom.json` it lacks is restored from the
-/// dataset (the dataset is opened on first use and stays in memory; each snapshot is restored on demand). So code that
-/// reads snapshots through a store, such as `bom`, `config` and `verify official`, works on a fresh clone that has no
+/// `bom.json`, `config.json`, `extensions.json`, `classes.json`, `platform-bom.json` or `api.json` it lacks is restored
+/// from the dataset (the dataset is opened on first use and stays in memory; each snapshot is restored on demand). So
+/// code that reads snapshots through a store, such as `bom`, `config` and `verify official`, works on a fresh clone
+/// that has no
 /// work folder. [#file] is the work path only: code that opens snapshot files itself sees the work folder alone.
 public final class SnapshotStore {
 
@@ -31,6 +32,7 @@ public final class SnapshotStore {
     public static final String EXTENSIONS = "extensions.json";
     public static final String CLASSES = "classes.json";
     public static final String PLATFORM_BOM = "platform-bom.json";
+    public static final String API = "api.json";
 
     private final Path root;
     private final Path datasetDir;
@@ -79,8 +81,8 @@ public final class SnapshotStore {
         return Files.isRegularFile(file(version, name));
     }
 
-    /// Whether the dataset holds the snapshot (`bom.json`, `config.json`, `extensions.json`, `classes.json` or
-    /// `platform-bom.json`).
+    /// Whether the dataset holds the snapshot (`bom.json`, `config.json`, `extensions.json`, `classes.json`,
+    /// `platform-bom.json` or `api.json`).
     ///
     /// @throws UncheckedIOException when the dataset cannot be read
     public boolean inDataset(String version, String name) {

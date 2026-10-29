@@ -64,9 +64,10 @@ public final class AssembleCommand implements Callable<Integer> {
         }
         HistoryBuilder.assemble(source, workspace.selectForSite(withBom), site.resolve("data"), Instant.now());
         if (includeWork) {
-            Log.info("assemble: --include-work used %d BOM, %d config, %d extensions, %d classes and %d platform BOM "
-                    + "snapshots from %s that the dataset does not have", source.workBoms(), source.workConfigs(),
-                    source.workExtensions(), source.workClasses(), source.workPlatforms(), work.root());
+            Log.info("assemble: --include-work used %d BOM, %d config, %d extensions, %d classes, %d platform BOM "
+                    + "and %d API snapshots from %s that the dataset does not have", source.workBoms(),
+                    source.workConfigs(), source.workExtensions(), source.workClasses(), source.workPlatforms(),
+                    source.workApis(), work.root());
         }
     }
 

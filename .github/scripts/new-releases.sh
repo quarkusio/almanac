@@ -1,11 +1,12 @@
 #!/usr/bin/env bash
 # The releases the new-releases workflow adds to the dataset: those of quarkusio/quarkus's GitHub releases published at
 # least 6 hours ago (or of REQUESTED, a comma-separated list) that Maven Central serves for the almanac's selection
-# (3.0 and later, pre-releases included) and that the site data does not have yet. The 6 hours let every jar of a
+# (every release, pre-releases included) and that the site data does not have yet. The 6 hours let every jar of a
 # release reach Maven Central before it is read: a jar missing then would be missing from the dataset for good.
 # Prints, in the format of $GITHUB_OUTPUT, versions=<JSON array> and count=<n>, and platforms=<n>: how many releases of
-# the dataset lack a platform BOM that Maven Central now serves (it often comes out days after the release). Needs
-# java, node and gh (with GH_TOKEN).
+# the dataset lack a platform BOM that Maven Central now serves (it often comes out days after the release). The
+# releases of the dataset without API data (it is optional) are a notice only. Needs java, node and gh (with
+# GH_TOKEN).
 set -euo pipefail
 
 JAR=${JAR:-target/quarkus-almanac.jar}
@@ -30,7 +31,7 @@ if [ -n "${REQUESTED:-}" ]; then
     while read -r v; do
         [ -n "$v" ] || continue
         if ! grep -qxF "$v" <<< "$served"; then
-            echo "::notice::$v is left out: Maven Central does not serve it for the almanac (3.0 and later)" >&2
+            echo "::notice::$v is left out: Maven Central does not serve it for the almanac" >&2
         elif grep -qxF "$v" <<< "$have"; then
             echo "::notice::$v is left out: the site data has it already" >&2
         fi
@@ -46,6 +47,19 @@ if ! platforms=$(java -jar "$JAR" platform --missing --versions all --pre-releas
     platforms=
 fi
 platform_count=$(grep -c . <<< "$platforms" || true)
+
+# the releases of the dataset with classes but no API data: read from the dataset alone, a notice, never a failure
+if missing_api=$(java -jar "$JAR" api --missing --pause "$PAUSE" --work "$WORK" | tr -d '\r'); then
+    api_count=$(grep -c . <<< "$missing_api" || true)
+    if [ "$api_count" != 0 ]; then
+        shown=$(head -n 20 <<< "$missing_api" | paste -sd' ' -)
+        if [ "$api_count" -gt 20 ]; then shown="$shown ..."; fi
+        how="api --versions <list> extracts them, dataset import --kinds api adds them"
+        echo "::notice::$api_count releases of the dataset have no API data ($shown); $how" >&2
+    fi
+else
+    echo "::warning::the releases without API data could not be listed" >&2
+fi
 
 echo "new releases: $count${new:+ ($(paste -sd' ' - <<< "$new"))}" >&2
 echo "platform BOMs to add to releases of the dataset: $platform_count${platforms:+ ($(paste -sd' ' - <<< "$platforms"))}" >&2

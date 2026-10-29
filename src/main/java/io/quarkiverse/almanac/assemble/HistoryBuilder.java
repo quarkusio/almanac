@@ -6,23 +6,29 @@ import com.fasterxml.jackson.databind.node.IntNode;
 import com.fasterxml.jackson.databind.node.JsonNodeFactory;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.fasterxml.jackson.databind.node.TextNode;
+import io.quarkiverse.almanac.api.ApiGrammar;
 import io.quarkiverse.almanac.config.ConfigProperties;
 import io.quarkiverse.almanac.maven.BomDifferences;
 import io.quarkiverse.almanac.maven.QuarkusVersion;
 import io.quarkiverse.almanac.maven.VersionSelector;
+import io.quarkiverse.almanac.model.ApiSnapshot;
+import io.quarkiverse.almanac.model.ArtifactApi;
 import io.quarkiverse.almanac.model.ArtifactClasses;
 import io.quarkiverse.almanac.model.BomSnapshot;
+import io.quarkiverse.almanac.model.ClassApi;
 import io.quarkiverse.almanac.model.ClassesSnapshot;
 import io.quarkiverse.almanac.model.ConfigProperty;
 import io.quarkiverse.almanac.model.ConfigSnapshot;
 import io.quarkiverse.almanac.model.ExtensionInfo;
 import io.quarkiverse.almanac.model.ExtensionsSnapshot;
 import io.quarkiverse.almanac.model.ManagedDep;
+import io.quarkiverse.almanac.model.MemberApi;
 import io.quarkiverse.almanac.util.Json;
 import io.quarkiverse.almanac.util.Log;
 import io.quarkiverse.almanac.util.SnapshotStore;
 
 import java.io.IOException;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Instant;
@@ -31,6 +37,7 @@ import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Comparator;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
@@ -41,6 +48,7 @@ import java.util.Set;
 import java.util.SortedMap;
 import java.util.TreeMap;
 import java.util.TreeSet;
+import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
@@ -51,23 +59,36 @@ import java.util.stream.Stream;
 /// releases with an extensions snapshot, flagged `ext` in `versions.json`), `platform.json` (how the platform BOM
 /// differs from the BOM, over the releases with a platform BOM snapshot; see [#build]) and, per major version line,
 /// `classes-<major>.json` (the jars of every class over the releases of that line with a classes snapshot, flagged
-/// `classes`; see [#classesDocument]), so that a page loads the classes of the lines it shows only.
+/// `classes`, with the deprecated API and the revision of each class's API over the releases with an API snapshot,
+/// flagged `api`; see [#classesDocument]) and the API shards `api-<major>-<k>.json` (the API of the classes, a few
+/// classes per file; see [#apiShards]), so that a page loads the classes of the lines it shows only, and the members of
+/// the classes it shows.
 ///
 /// Releases are [added][#add] in ascending version order, then [#build] produces the documents.
 /// Before building config histories, each snapshot is normalised by [unnamed-key folding][#foldUnnamedKeys].
 public final class HistoryBuilder {
 
-    /// The snapshots of one release. A release with config also has extensions; one with extensions may have no
-    /// config (extensions read from the release's extension catalog, before config was extracted). Classes need
-    /// neither. The platform BOM, of the same version, may be missing.
+    /// The snapshots of one release. A release with config also has extensions, unless it has no extension catalog
+    /// (0.x); one with extensions may have no config (extensions read from the release's extension catalog, before
+    /// config was extracted). Classes need neither. The platform BOM, of the same version, may be missing. The API
+    /// needs the classes.
     public record Release(BomSnapshot bom, ConfigSnapshot config, ExtensionsSnapshot extensions,
-            ClassesSnapshot classes, BomSnapshot platform) {
+            ClassesSnapshot classes, BomSnapshot platform, ApiSnapshot api) {
 
         public Release {
             Objects.requireNonNull(bom, "bom");
-            if (config != null && extensions == null) {
+            if (config != null && extensions == null && QuarkusVersion.parse(bom.version()).hasExtensionCatalog()) {
                 throw new IllegalArgumentException("a config snapshot needs the release's extensions snapshot");
             }
+            if (api != null && classes == null) {
+                throw new IllegalArgumentException("an API snapshot needs the release's classes snapshot");
+            }
+        }
+
+        /// A release without API snapshot.
+        public Release(BomSnapshot bom, ConfigSnapshot config, ExtensionsSnapshot extensions,
+                ClassesSnapshot classes, BomSnapshot platform) {
+            this(bom, config, extensions, classes, platform, null);
         }
 
         /// A release without classes and platform BOM snapshots.
@@ -75,10 +96,10 @@ public final class HistoryBuilder {
             this(bom, config, extensions, null, null);
         }
 
-        /// A release without platform BOM snapshot.
+        /// A release without platform BOM and API snapshots.
         public Release(BomSnapshot bom, ConfigSnapshot config, ExtensionsSnapshot extensions,
                 ClassesSnapshot classes) {
-            this(bom, config, extensions, classes, null);
+            this(bom, config, extensions, classes, null, null);
         }
 
         boolean hasConfig() {
@@ -96,13 +117,19 @@ public final class HistoryBuilder {
         boolean hasPlatform() {
             return platform != null;
         }
+
+        boolean hasApi() {
+            return api != null;
+        }
     }
 
     /// The site data documents.
     ///
-    /// @param classes major version line → its classes document, for the lines with a classes snapshot
+    /// @param classes   major version line → its classes document, for the lines with a classes snapshot
+    /// @param apiShards major version line → its API shards ([#apiShards]), for the lines with an API snapshot
     public record SiteData(ObjectNode versions, ObjectNode bom, ObjectNode config, ObjectNode extensions,
-            ObjectNode platform, SortedMap<Integer, ObjectNode> classes) {
+            ObjectNode platform, SortedMap<Integer, ObjectNode> classes,
+            SortedMap<Integer, List<ObjectNode>> apiShards) {
 
         /// File name → document, in writing order.
         public Map<String, ObjectNode> files() {
@@ -113,6 +140,11 @@ public final class HistoryBuilder {
             files.put("extensions.json", extensions);
             files.put("platform.json", platform);
             classes.forEach((major, document) -> files.put(classesFile(major), document));
+            apiShards.forEach((major, shards) -> {
+                for (int k = 0; k < shards.size(); k++) {
+                    files.put(apiShardFile(major, k), shards.get(k));
+                }
+            });
             return files;
         }
     }
@@ -122,8 +154,43 @@ public final class HistoryBuilder {
         return "classes-" + major + ".json";
     }
 
+    /// The site data file of an API shard of a major version line: `api-3-17.json` for shard 17 of the 3.x releases.
+    public static String apiShardFile(int major, int shard) {
+        return "api-" + major + "-" + shard + ".json";
+    }
+
+    /// The number of API shards of a major version line: 32 for 3.x, 16 for 4.x, 8 for the others, so that a shard
+    /// stays around 20-30 KB gzip as a line's API grows.
+    public static int apiShardCount(int major) {
+        return switch (major) {
+            case 3 -> 32;
+            case 4 -> 16;
+            default -> 8;
+        };
+    }
+
+    /// The API shard of a class: FNV-1a 32 (offset basis 2166136261, prime 16777619) of the UTF-8 bytes of its
+    /// top-level binary name (up to the first `$`), unsigned, modulo `shards`, so that a nested class is in the shard
+    /// of its outer class.
+    public static int apiShardOf(String binaryName, int shards) {
+        int dollar = binaryName.indexOf('$');
+        return (int) (fnv1a32(dollar < 0 ? binaryName : binaryName.substring(0, dollar)) % shards);
+    }
+
+    /// FNV-1a 32 of the UTF-8 bytes of a text, unsigned.
+    static long fnv1a32(String text) {
+        int hash = 0x811C9DC5;
+        for (byte b : text.getBytes(StandardCharsets.UTF_8)) {
+            hash ^= b & 0xFF;
+            hash *= 0x01000193;
+        }
+        return Integer.toUnsignedLong(hash);
+    }
+
     /// Any classes file name, for the files of lines that a new assembly no longer has.
     private static final Pattern CLASSES_FILE = Pattern.compile("classes-\\d+\\.json");
+    /// Any API shard file name, for the shards that a new assembly no longer has.
+    private static final Pattern API_SHARD_FILE = Pattern.compile("api-(\\d+)-\\d+\\.json");
 
     /// Value written for a managed version equal to the release's own version.
     public static final String SAME_AS_RELEASE = "=";
@@ -144,6 +211,15 @@ public final class HistoryBuilder {
     private final SortedMap<Integer, ArrayNode> classVersions = new TreeMap<>();
     private final Interner configStates = new Interner();
     private final Interner extensionStates = new Interner();
+    /// Per major version line: the API of its releases with an API snapshot.
+    private final SortedMap<Integer, ApiLine> apiLines = new TreeMap<>();
+    /// Per binary class name: each distinct API state of the class → its revision, numbered in order of first
+    /// appearance over every line in release order.
+    private final Map<String, Map<ClassApi, Integer>> apiRevisions = new HashMap<>();
+    /// What is deprecated in some jar at the last release added with an API snapshot (a class by binary name, a member
+    /// as `<class> <member key>`) → the release index where its deprecation began: the first of the unbroken run of
+    /// releases with an API snapshot, in release order over every line, at which it is deprecated.
+    private final Map<String, Integer> deprecatedSince = new HashMap<>();
     private final ArrayNode configVersions = NODES.arrayNode();
     private int extensionVersions;
     private final Map<String, String> descriptions = new TreeMap<>();
@@ -193,28 +269,42 @@ public final class HistoryBuilder {
         SiteData data = builder.build(generatedAt);
         Files.createDirectories(siteDataDir);
         Map<String, ObjectNode> files = data.files();
+        SortedMap<Integer, long[]> shardBytes = new TreeMap<>();
         for (Map.Entry<String, ObjectNode> file : files.entrySet()) {
             Path path = siteDataDir.resolve(file.getKey());
             Json.writeCompact(path, file.getValue());
-            Log.info("assemble: wrote %s (%,d bytes)", path, Files.size(path));
+            Matcher shard = API_SHARD_FILE.matcher(file.getKey());
+            if (shard.matches()) {
+                long[] count = shardBytes.computeIfAbsent(Integer.parseInt(shard.group(1)), major -> new long[2]);
+                count[0]++;
+                count[1] += Files.size(path);
+            } else {
+                Log.info("assemble: wrote %s (%,d bytes)", path, Files.size(path));
+            }
         }
-        // the classes of a line that this assembly no longer has
+        shardBytes.forEach((major, count) -> Log.info("assemble: wrote %d API shards of the %d.x line, %s (%,d bytes)",
+                count[0], major, siteDataDir.resolve(apiShardFile(major, 0)), count[1]));
+        // the classes and API shards of a line that this assembly no longer has
         try (Stream<Path> entries = Files.list(siteDataDir)) {
-            for (Path stale : entries.filter(path -> CLASSES_FILE.matcher(path.getFileName().toString()).matches()
+            for (Path stale : entries.filter(path -> (CLASSES_FILE.matcher(path.getFileName().toString()).matches()
+                    || API_SHARD_FILE.matcher(path.getFileName().toString()).matches())
                     && !files.containsKey(path.getFileName().toString())).toList()) {
                 Files.delete(stale);
                 Log.info("assemble: deleted %s", stale);
             }
         }
         Log.info("assemble: %d releases (%d pre-release, %d with config, %d with extensions, %d with classes, %d with "
-                        + "a platform BOM), %d BOM artifacts, %d ids that a platform BOM manages otherwise, %d config "
-                        + "keys in %d states, %d extensions in %d states, classes of %d major lines",
+                        + "a platform BOM, %d with API), %d BOM artifacts, %d ids that a platform BOM manages "
+                        + "otherwise, %d config keys in %d states, %d extensions in %d states, classes of %d major "
+                        + "lines",
                 builder.versionRows.size(), versions.stream().filter(version -> !version.isFinal()).count(),
                 builder.configVersions.size(), builder.extensionVersions,
                 builder.classVersions.values().stream().mapToInt(ArrayNode::size).sum(),
-                builder.platformVersions.size(), builder.bomHistory.size(), builder.platformHistory.size(),
-                builder.configHistory.size(), builder.configStates.size(), builder.extensionHistory.size(),
-                builder.extensionStates.size(), builder.classHistories.size());
+                builder.platformVersions.size(),
+                builder.apiLines.values().stream().mapToInt(line -> line.versions.size()).sum(),
+                builder.bomHistory.size(), builder.platformHistory.size(), builder.configHistory.size(),
+                builder.configStates.size(), builder.extensionHistory.size(), builder.extensionStates.size(),
+                builder.classHistories.size());
     }
 
     /// The first five names, then `...` when there are more.
@@ -243,6 +333,9 @@ public final class HistoryBuilder {
         }
         row.put("ext", release.hasExtensions());
         row.put("classes", release.hasClasses());
+        if (release.hasApi()) {
+            row.put("api", true);
+        }
 
         Map<String, JsonNode> managed = new HashMap<>();
         for (ManagedDep dep : bom.deps()) {
@@ -289,6 +382,60 @@ public final class HistoryBuilder {
             jarsOfClass.forEach((name, jars) -> classes.put(name, TextNode.valueOf(String.join(" ", jars))));
             classHistories.computeIfAbsent(version.major(), major -> new ChangePoints()).observe(vi, classes);
         }
+        if (release.hasApi()) {
+            addApi(vi, version.major(), release.api());
+        }
+    }
+
+    /// Records the API of a release: the class and member values of each jar, the revision of each class's API (the
+    /// state of its first jar by artifactId), and where the deprecation of what is deprecated began; at the first
+    /// release of a line, what is deprecated since a release of an earlier line is the line's [ApiLine#from].
+    private void addApi(int vi, int major, ApiSnapshot api) {
+        ApiLine line = apiLines.computeIfAbsent(major, m -> new ApiLine());
+        boolean firstOfLine = line.versions.isEmpty();
+        line.versions.add(vi);
+        Map<String, JsonNode> values = new HashMap<>();
+        Map<String, ClassApi> firstJar = new HashMap<>();
+        Map<String, Integer> since = new HashMap<>();
+        for (ArtifactApi artifact : api.artifacts()) {
+            for (ClassApi type : artifact.classes()) {
+                String id = artifact.id() + " " + type.name();
+                values.put(id, TextNode.valueOf(type.v()));
+                if (ApiGrammar.isDeprecated(type.v())) {
+                    since.put(type.name(), deprecatedSince.getOrDefault(type.name(), vi));
+                }
+                for (MemberApi member : type.members()) {
+                    values.put(id + " " + member.id(), TextNode.valueOf(member.v()));
+                    if (ApiGrammar.isDeprecated(member.v())) {
+                        String item = type.name() + " " + member.id();
+                        since.put(item, deprecatedSince.getOrDefault(item, vi));
+                    }
+                }
+                firstJar.putIfAbsent(type.name(), type);
+            }
+        }
+        // deprecated at the previous release with an API snapshot too, which is of an earlier line
+        if (firstOfLine) {
+            since.forEach((item, start) -> {
+                if (start < vi) {
+                    line.from.put(item, start);
+                }
+            });
+        }
+        deprecatedSince.clear();
+        deprecatedSince.putAll(since);
+        line.values.observe(vi, values);
+        Map<String, JsonNode> revisions = new HashMap<>();
+        firstJar.forEach((name, type) -> {
+            Map<ClassApi, Integer> states = apiRevisions.computeIfAbsent(name, n -> new HashMap<>());
+            Integer revision = states.get(type);
+            if (revision == null) {
+                revision = states.size();
+                states.put(type, revision);
+            }
+            revisions.put(name, IntNode.valueOf(revision));
+        });
+        line.revisions.observe(vi, revisions);
     }
 
     /// The site documents for the releases added so far. `platform.json` has `versions`, the release indices with a
@@ -320,10 +467,41 @@ public final class HistoryBuilder {
         ObjectNode platform = NODES.objectNode();
         platform.set("versions", platformVersions.deepCopy());
         platform.set("artifacts", platformHistory.toJson("id"));
-                SortedMap<Integer, ObjectNode> classes = new TreeMap<>();
-        classHistories.forEach((major, history) -> classes.put(major,
-                classesDocument(history, classVersions.get(major))));
-        return new SiteData(versions, bom, config, extensions, platform, classes);
+        // per line, the histories of the class and member values of each jar; what is deprecated in any of them
+        SortedMap<Integer, ArrayNode> apiValues = new TreeMap<>();
+        apiLines.forEach((major, line) -> apiValues.put(major, line.values.toJson("id")));
+        Set<String> deprecated = deprecatedAnywhere(apiValues.values());
+        SortedMap<Integer, ObjectNode> classes = new TreeMap<>();
+        classHistories.forEach((major, history) -> classes.put(major, classesDocument(history,
+                classVersions.get(major), apiLines.get(major), apiValues.get(major), deprecated,
+                apiShardCount(major))));
+        SortedMap<Integer, List<ObjectNode>> shards = new TreeMap<>();
+        apiValues.forEach((major, values) -> shards.put(major, apiShards(values, apiShardCount(major))));
+        return new SiteData(versions, bom, config, extensions, platform, classes, shards);
+    }
+
+    /// The classes (`<class>`) and members (`<class> <member key>`) deprecated in some jar at some release of any
+    /// line, by binary name.
+    ///
+    /// @param lines per line, the value histories of [ApiLine#values] as JSON
+    private static Set<String> deprecatedAnywhere(Collection<ArrayNode> lines) {
+        Set<String> deprecated = new HashSet<>();
+        for (ArrayNode values : lines) {
+            for (JsonNode item : values) {
+                for (JsonNode point : item.get("h")) {
+                    if (point.get(1).isTextual() && ApiGrammar.isDeprecated(point.get(1).textValue())) {
+                        deprecated.add(withoutArtifact(item.get("id").textValue()));
+                        break;
+                    }
+                }
+            }
+        }
+        return deprecated;
+    }
+
+    /// `<artifactId> <class>[ <member key>]` → `<class>[ <member key>]`.
+    private static String withoutArtifact(String id) {
+        return id.substring(id.indexOf(' ') + 1);
     }
 
     /// The classes document of a major version line: `versions` (the release indices of the line with a classes
@@ -331,7 +509,32 @@ public final class HistoryBuilder {
     /// sorted by package and then by name, `[package index, name in the package, change points]`, over the releases of
     /// the line alone (a history starts at the first presence in the line). A change point's value is the index of the
     /// jar that has the class, an array of indices (ascending) when several jars have it, or `null`.
-    private static ObjectNode classesDocument(ChangePoints history, ArrayNode lineVersions) {
+    ///
+    /// When releases of the line have an API snapshot, a class row that is API at one of them has a fourth element,
+    /// its revisions `[[vi, rev|null], ...]` over those releases: `rev` numbers the distinct API states of the class
+    /// (its value and the keys and values of its members, in the first jar by artifactId that has it as API), per
+    /// class in order of first appearance over every line in release order, so that the same `rev` at two releases,
+    /// even of two lines, means the same API; `null` means not API (absent). The document then also has `api`:
+    ///
+    /// - `versions`: the release indices of the line with an API snapshot, ascending;
+    /// - `shards`: how many API shards the line has ([#apiShards]);
+    /// - `dep`: `[class row index, artifact index, member key or null, [[vi, value|null], ...], from]` for every class
+    ///   (member key null) and every member that is API in a jar at one of those releases at least, when the class, or
+    ///   that member of the class (by binary name and member key, in any jar), is deprecated (`D` or `R`) at a release
+    ///   of any line: a class deprecated in 3.x and no longer in 4.x has its row in both files. A row holds the whole
+    ///   history of the value in that jar, in the API grammar (`io.quarkiverse.almanac.api.ApiGrammar`), over the
+    ///   line's releases with an API snapshot; rows are sorted by class row, artifact and member key (the class
+    ///   first). The fifth element `from`, optional, dates a deprecation that began in an earlier line: the release
+    ///   index of the first of the unbroken run of releases with an API snapshot, in release order over every line, at
+    ///   which the item (the class, or that member of the class, in any jar) is deprecated, when that run began in an
+    ///   earlier line and still holds at this line's first release with an API snapshot (so the item is deprecated at
+    ///   that release and at the release with an API snapshot just before it, of an earlier line). Every row of the
+    ///   item in the document has the same `from`; without such a run, rows have four elements.
+    ///
+    /// @param apiValues  the value histories of `api` as JSON, null without API snapshot
+    /// @param deprecated what is deprecated in any line ([#deprecatedAnywhere])
+    private static ObjectNode classesDocument(ChangePoints history, ArrayNode lineVersions, ApiLine api,
+            ArrayNode apiValues, Set<String> deprecated, int shards) {
         ArrayNode histories = history.toJson("n");
         TreeSet<String> artifactNames = new TreeSet<>();
         TreeSet<String> packageNames = new TreeSet<>();
@@ -376,7 +579,111 @@ public final class HistoryBuilder {
         artifactNames.forEach(classes.putArray("artifacts")::add);
         packageNames.forEach(classes.putArray("packages")::add);
         classes.set("classes", rows);
+        if (api != null) {
+            Map<String, Integer> rowOf = new HashMap<>();
+            for (int i = 0; i < items.size(); i++) {
+                rowOf.put(items.get(i).get("n").textValue(), i);
+            }
+            for (JsonNode revisions : api.revisions.toJson("n")) {
+                Integer row = rowOf.get(revisions.get("n").textValue());
+                if (row != null) {
+                    ((ArrayNode) rows.get(row)).add(revisions.get("h"));
+                }
+            }
+            ObjectNode apiData = classes.putObject("api");
+            apiData.set("versions", api.versions.deepCopy());
+            apiData.put("shards", shards);
+            apiData.set("dep", deprecations(apiValues, deprecated, api.from, rowOf, artifactIndex));
+        }
         return classes;
+    }
+
+    /// The `dep` rows of a classes document (see [#classesDocument]).
+    ///
+    /// @param from [ApiLine#from] of the line
+    private static ArrayNode deprecations(ArrayNode apiValues, Set<String> deprecated, Map<String, Integer> from,
+            Map<String, Integer> rowOf, Map<String, Integer> artifactIndex) {
+        List<ArrayNode> rows = new ArrayList<>();
+        for (JsonNode item : apiValues) {
+            String id = item.get("id").textValue();
+            String key = withoutArtifact(id);
+            if (!deprecated.contains(key)) {
+                continue;
+            }
+            String[] parts = id.split(" ", 3);
+            Integer row = rowOf.get(parts[1]);
+            Integer artifact = artifactIndex.get(parts[0]);
+            if (row == null || artifact == null) {
+                Log.warn("assemble: the API of %s %s is not among the classes; left out", parts[0], parts[1]);
+                continue;
+            }
+            ArrayNode dep = NODES.arrayNode().add(row).add(artifact);
+            if (parts.length == 3) {
+                dep.add(parts[2]);
+            } else {
+                dep.addNull();
+            }
+            dep.add(item.get("h"));
+            Integer since = from.get(key);
+            if (since != null) {
+                dep.add(since);
+            }
+            rows.add(dep);
+        }
+        rows.sort(Comparator.comparingInt((ArrayNode dep) -> dep.get(0).intValue())
+                .thenComparingInt(dep -> dep.get(1).intValue())
+                .thenComparing(dep -> dep.get(2).isNull() ? "" : " " + dep.get(2).textValue()));
+        ArrayNode dep = NODES.arrayNode();
+        rows.forEach(dep::add);
+        return dep;
+    }
+
+    /// The API shards of a major version line, `api-<major>-<k>.json` for `k` from 0 to `shards - 1`, each
+    /// `{"rows": [[artifactId, binary name, [[version, value|null], ...], [[member key, [[version, value|null], ...]],
+    /// ...]], ...]}`: per jar and class that is API at one of the line's releases with an API snapshot, the history of
+    /// its value and of each member's value over those releases, values in the API grammar
+    /// (`io.quarkiverse.almanac.api.ApiGrammar`). Change points name releases by version, not by release index, so that
+    /// a release changes only the shards of the classes whose API it changes (a release inserted between others moves
+    /// every later index). A class is in shard [#apiShardOf], with its nested classes; rows are sorted by binary name,
+    /// then artifactId, members by key.
+    ///
+    /// @param apiValues the value histories of the line's [ApiLine#values] as JSON
+    private List<ObjectNode> apiShards(ArrayNode apiValues, int shards) {
+        List<List<ArrayNode>> rowsOf = new ArrayList<>();
+        for (int k = 0; k < shards; k++) {
+            rowsOf.add(new ArrayList<>());
+        }
+        ArrayNode members = null;
+        for (JsonNode item : apiValues) {
+            String[] parts = item.get("id").textValue().split(" ", 3);
+            ArrayNode history = byVersion(item.get("h"));
+            if (parts.length == 2) {
+                ArrayNode row = NODES.arrayNode().add(parts[0]).add(parts[1]).add(history);
+                members = row.addArray();
+                rowsOf.get(apiShardOf(parts[1], shards)).add(row);
+            } else if (members != null) {
+                members.addArray().add(parts[2]).add(history);
+            }
+        }
+        List<ObjectNode> documents = new ArrayList<>();
+        for (List<ArrayNode> rows : rowsOf) {
+            rows.sort(Comparator.comparing((ArrayNode row) -> row.get(1).textValue())
+                    .thenComparing(row -> row.get(0).textValue()));
+            ObjectNode document = NODES.objectNode();
+            ArrayNode out = document.putArray("rows");
+            rows.forEach(out::add);
+            documents.add(document);
+        }
+        return documents;
+    }
+
+    /// Change points by release index → the same by version.
+    private ArrayNode byVersion(JsonNode history) {
+        ArrayNode points = NODES.arrayNode();
+        for (JsonNode point : history) {
+            points.addArray().add(versionRows.get(point.get(0).intValue()).get("v").textValue()).add(point.get(1));
+        }
+        return points;
     }
 
     /// The package of a binary class name (`io.quarkus.test` for `io.quarkus.test.QuarkusUnitTest$Builder`), empty for
@@ -511,6 +818,20 @@ public final class HistoryBuilder {
         if (value) {
             node.put(field, 1);
         }
+    }
+
+    /// The API of the releases of a major version line that have an API snapshot.
+    private static final class ApiLine {
+        /// The release indices with an API snapshot.
+        private final ArrayNode versions = NODES.arrayNode();
+        /// `<artifactId> <class>` → class value, `<artifactId> <class> <member>` → member value.
+        private final ChangePoints values = new ChangePoints();
+        /// Binary class name → revision of its API.
+        private final ChangePoints revisions = new ChangePoints();
+        /// What is deprecated at the line's first release with an API snapshot and was at the one before it, of an
+        /// earlier line (a class by binary name, a member as `<class> <member key>`) → the release index where that
+        /// deprecation began.
+        private final Map<String, Integer> from = new HashMap<>();
     }
 
     /// Assigns each distinct state an index, in order of first appearance.

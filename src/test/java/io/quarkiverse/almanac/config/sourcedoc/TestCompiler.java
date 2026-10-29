@@ -26,8 +26,9 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assumptions.assumeTrue;
 
 /// Compiles Java sources in memory with the JDK's javac, so that tests can compare what the sources say with what
-/// javac writes into class files (folded constants, retained annotations, `SourceFile` attributes).
-final class TestCompiler {
+/// javac writes into class files (folded constants, retained annotations, `SourceFile` attributes); the API reader's
+/// tests read its class files too.
+public final class TestCompiler {
 
     private TestCompiler() {
     }
@@ -37,7 +38,7 @@ final class TestCompiler {
     ///
     /// @param sources file path as in a sources jar (e.g. `com/acme/Foo.java`) → content
     /// @return internal class name (e.g. `com/acme/Foo$Bar`) → class file
-    static Map<String, byte[]> compile(Map<String, String> sources) {
+    public static Map<String, byte[]> compile(Map<String, String> sources) {
         JavaCompiler compiler = ToolProvider.getSystemJavaCompiler();
         assumeTrue(compiler != null, "javac is not available");
         DiagnosticCollector<JavaFileObject> diagnostics = new DiagnosticCollector<>();

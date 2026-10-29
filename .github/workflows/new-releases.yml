@@ -3,7 +3,8 @@ name: Add new Quarkus releases
 # Looks for releases of quarkusio/quarkus that Maven Central serves and the dataset lacks, extracts them on up to four
 # runners at once (each sends its requests to Maven Central one at a time, 1 ms apart), adds them to the dataset,
 # rebuilds the site data, commits both to main and starts the Pages deploy. It also adds the platform BOM
-# (io.quarkus.platform:quarkus-bom) of each release, including those that come out after their release.
+# (io.quarkus.platform:quarkus-bom) of each release, including those that come out after their release, and the API
+# of each release when its extraction got it (optional: a release without it is added all the same).
 on:
   schedule:
     - cron: '17 */12 * * *'
@@ -101,6 +102,12 @@ jobs:
             || echo "::warning::no platform BOM of $VERSION this time; a later run adds it"
           java -jar target/quarkus-almanac.jar config --versions "$VERSION" --pause "$PAUSE"
           for f in bom.json config.json extensions.json classes.json; do test -f "work/snapshots/$VERSION/$f"; done
+      # optional: the release is added without it, api --missing (in the check job) lists it, and a maintainer
+      # extracts it again after a fix; most of its jars are in the cache already, after config
+      - name: Extract the API
+        run: |
+          java -jar target/quarkus-almanac.jar api --versions "$VERSION" --pause "$PAUSE" --max-requests 150 \
+            || echo "::warning::no API data of $VERSION this time; api --missing lists the releases without it"
       # the snapshots, and the BOM pom whose Last-Modified dates the release
       - uses: actions/upload-artifact@v7
         with:

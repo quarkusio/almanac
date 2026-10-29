@@ -27,11 +27,13 @@ import java.util.concurrent.Callable;
 
 /// `dataset import`: merges work snapshots into the committed dataset.
 @Command(name = "import", description = "Merge work snapshots (work/snapshots/<version>/bom.json, config.json, "
-        + "extensions.json, classes.json, platform-bom.json) into the dataset. Refuses inconsistent snapshots, "
-        + "unvalidated config (the bytecode/1 extractor, or bytecode config of a release before 3.14 without all its doc "
-        + "annotations), config without extensions, config, extensions, classes or a platform BOM without the BOM, and, "
-        + "without --force, snapshots that differ from the dataset's; the others are imported. Extensions need no "
-        + "config, classes need neither.")
+        + "extensions.json, classes.json, platform-bom.json, api.json) into the dataset. Refuses inconsistent "
+        + "snapshots, unvalidated config (the bytecode/1 extractor, or bytecode config of a release before 3.14 "
+        + "without all its doc annotations) and API readers, config without extensions (from 1.0 on: 0.x releases "
+        + "have no extension catalog), config, extensions, classes, a platform BOM or API without the BOM, API without "
+        + "the classes or with classes they do not list, a major line with the API of two readers, and, without "
+        + "--force, snapshots that differ from the dataset's; the others are imported. Extensions need no config, "
+        + "classes need neither.")
 public final class DatasetImportCommand implements Callable<Integer> {
 
     @Mixin
@@ -45,8 +47,9 @@ public final class DatasetImportCommand implements Callable<Integer> {
     String versions;
 
     @Option(names = "--kinds", defaultValue = "bom,config,extensions,classes", paramLabel = "KINDS",
-            description = "Comma-separated: bom, config, extensions, classes, platform, or all (default: "
-                    + "${DEFAULT-VALUE}; a platform BOM, often out days after its release, comes with --kinds platform).")
+            description = "Comma-separated: bom, config, extensions, classes, platform, api, or all (default: "
+                    + "${DEFAULT-VALUE}; a platform BOM, often out days after its release, comes with --kinds "
+                    + "platform, the API with --kinds api).")
     String kinds;
 
     @Option(names = "--force", description = "Replace dataset snapshots that differ from the work snapshots.")
@@ -67,15 +70,15 @@ public final class DatasetImportCommand implements Callable<Integer> {
         }
     }
 
-    /// The import step of `all`: the BOMs of `boms`, the config, extensions and classes of `configs` and the platform
-    /// BOMs of `platforms` that the work folder has (what the run extracted, or reused from the work folder), replacing
-    /// different dataset snapshots only with `force`; then the release list is refreshed from the cached
-    /// `maven-metadata.xml`.
+    /// The import step of `all`: the BOMs of `boms`, the config, extensions and classes of `configs`, the platform
+    /// BOMs of `platforms` and the API of `apis` that the work folder has (what the run extracted, or reused from the
+    /// work folder), replacing different dataset snapshots only with `force`; then the release list is refreshed from
+    /// the cached `maven-metadata.xml`.
     ///
     /// @return false when a snapshot was refused as inconsistent (refusals of unvalidated extractors are expected and
     ///         only logged)
     static boolean importExtracted(Workspace workspace, List<QuarkusVersion> boms, List<QuarkusVersion> configs,
-            List<QuarkusVersion> platforms, boolean force) throws IOException {
+            List<QuarkusVersion> platforms, List<QuarkusVersion> apis, boolean force) throws IOException {
         SnapshotStore work = workspace.workSnapshots();
         List<DatasetEditor.Candidate> candidates = new ArrayList<>();
         for (QuarkusVersion version : boms) {
@@ -94,6 +97,9 @@ public final class DatasetImportCommand implements Callable<Integer> {
             }
             // config writes them from the same reads; a release extracted before it did has none
             addIfPresent(candidates, work, version.text(), Kind.CLASSES);
+        }
+        for (QuarkusVersion version : apis) {
+            addIfPresent(candidates, work, version.text(), Kind.API);
         }
         DatasetEditor editor = DatasetEditor.open(workspace.datasetDir());
         boolean consistent = true;
