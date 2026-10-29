@@ -2314,6 +2314,75 @@ mark {
   text-decoration: underline;
 }
 
+/* module groups that open and close: the chevron is the button, and the rest of the head works as one too */
+
+.cgroup-head {
+  cursor: pointer;
+}
+
+.cgroup-name {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+
+.cgroup-toggle {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  margin-left: -4px;
+  padding: 0;
+  color: var(--accent);
+  background: none;
+  border: 0;
+  border-radius: var(--radius);
+  cursor: pointer;
+}
+
+.cgroup-head:hover .cgroup-toggle,
+.cgroup-toggle:focus-visible {
+  background: var(--accent-soft);
+}
+
+.cgroup-chev {
+  width: 16px;
+  height: 16px;
+  transition: transform 0.15s ease;
+}
+
+.cgroup.is-collapsed .cgroup-chev {
+  transform: rotate(-90deg);
+}
+
+/* a run of collapsed groups reads as a list of modules */
+.cgroup.is-collapsed + .cgroup.is-collapsed {
+  margin-top: 8px;
+}
+
+.list-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 0 12px;
+}
+
+@media print {
+  .cgroup-body[hidden] {
+    display: block !important;
+    content-visibility: visible !important;
+  }
+
+  .cgroup-toggle,
+  .groups-all {
+    display: none;
+  }
+}
+
 .cgroup-counts {
   display: inline-flex;
   gap: 12px;

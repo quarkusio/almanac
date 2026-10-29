@@ -2228,7 +2228,7 @@ describe('API: members from the shards', () => {
 
   test('classApiHistory: what changed from one release shown to the next', () => {
     const events = classApiHistory(classA, [0, 1]);
-    assert.deepEqual(events[0], { vi: 0, first: true, added: 7, removed: 0, changes: [] });
+    assert.deepEqual(events[0], { vi: 0, first: true, added: 7, removed: 0, inherited: [], changes: [] });
     assert.deepEqual([events[1].added, events[1].removed, events[1].changed, events[1].changes], [3, 4, 2, ['deprecated', 'became final', 'supertype changed']]);
     assert.deepEqual(classApiHistory(classA, [1]).map((e) => e.first), [true]);
     assert.deepEqual(modifierChanges(parseApiValue('+'), parseApiValue('#a')), ['public → protected', 'became abstract']);
@@ -2459,10 +2459,65 @@ describe('API: dating across jars and lines, change kinds, members across jars',
   test('classApiHistory: a class that is no longer API, and API again', () => {
     const g = [rowsOf('a', 'x.G', [[0, '+'], [1, null], [2, '+']], { 'f()V': [[0, '+'], [1, null], [2, '+']] })];
     assert.deepEqual(classApiHistory(g, [0, 1, 2]), [
-      { vi: 0, first: true, added: 1, removed: 0, changes: [] },
-      { vi: 1, first: false, added: 0, removed: 1, changed: 0, changes: ['no longer public API'] },
-      { vi: 2, first: true, again: true, added: 1, removed: 0, changes: [] },
+      { vi: 0, first: true, added: 1, removed: 0, inherited: [], changes: [] },
+      { vi: 1, first: false, added: 0, removed: 1, inherited: [], changed: 0, changes: ['no longer public API'] },
+      { vi: 2, first: true, again: true, added: 1, removed: 0, inherited: [], changes: [] },
     ]);
+  });
+
+  test('a member that a supertype declares now is inherited, not removed', () => {
+    const RUN = 'run()V';
+    const OF = 'of()Lio/quarkus/S;';
+    const NAME = 'NAME:Ljava/lang/String;';
+    // at 1, C extends Base, which declares run() and NAME, and implements I, whose static of() is not inherited
+    const c = [rowsOf('a', 'io.quarkus.C', [[0, '+'], [1, '+ extends io.quarkus.Base implements io.quarkus.I']], {
+      [RUN]: [[0, '+'], [1, null]], [NAME]: [[0, '+sf'], [1, null]], [OF]: [[0, '+s'], [1, null]], '<init>()V': [[0, '+'], [1, null]],
+    })];
+    const supers = new Map([
+      ['io.quarkus.Base', [rowsOf('b', 'io.quarkus.Base', [[1, '+a']], { [RUN]: [[1, '+']], [NAME]: [[1, '+sf']], '<init>()V': [[1, '#']] })]],
+      ['io.quarkus.I', [rowsOf('b', 'io.quarkus.I', [[1, '+i']], { [OF]: [[1, '+s']] })]],
+    ]);
+    const known = (n) => supers.get(n) ?? null;
+    const members = (out) => out.filter((r) => r.member).map((r) => [r.member, r.change, r.from ?? null, r.moved ?? null]);
+    assert.deepEqual(members(core.diffApi(new Map([['io.quarkus.C', c]]), 0, 1, undefined, undefined, known)), [
+      ['<init>()V', 'removed', null, null],
+      [OF, 'removed', null, null],
+      [NAME, 'inherited', 'io.quarkus.Base', true],
+      [RUN, 'inherited', 'io.quarkus.Base', true],
+    ], 'a constructor and an interface\'s static method are never inherited');
+    assert.ok(members(core.diffApi(new Map([['io.quarkus.C', c]]), 0, 1)).every((r) => r[1] === 'removed'), 'without the supertypes: removed, as before');
+    const events = core.classApiHistory(c, [0, 1], null, known);
+    assert.deepEqual([events[1].added, events[1].removed, events[1].inherited], [0, 2, [{ from: 'io.quarkus.Base', count: 2, moved: true }]]);
+    const m = core.classMembers(c, [0, 1], 1, 'io.quarkus.C', known);
+    assert.deepEqual(m.removed.map((x) => x.key), ['<init>()V', OF]);
+    assert.deepEqual(m.inherited.map((x) => [x.key, x.from, x.last]), [[NAME, 'io.quarkus.Base', 0], [RUN, 'io.quarkus.Base', 0]]);
+
+    // an override dropped: inherited from a supertype that had the member already (not moved)
+    const sub = [rowsOf('a', 'io.quarkus.Sub', [[0, '+ extends io.quarkus.Top']], { [RUN]: [[0, '+'], [1, null]] })];
+    const top = [rowsOf('a', 'io.quarkus.Top', [[0, '+a']], { [RUN]: [[0, '+']] })];
+    const [dropped] = core.diffApi(new Map([['io.quarkus.Sub', sub]]), 0, 1, undefined, undefined, (n) => (n === 'io.quarkus.Top' ? top : null));
+    assert.deepEqual([dropped.change, dropped.from, dropped.moved], ['inherited', 'io.quarkus.Top', false]);
+    assert.deepEqual(core.classApiHistory(sub, [0, 1], null, (n) => (n === 'io.quarkus.Top' ? top : null))[1].inherited,
+      [{ from: 'io.quarkus.Top', count: 1, moved: false }]);
+
+    // up a chain: V extends Mid, which declares nothing of it, and Mid extends Top
+    const v = [rowsOf('a', 'io.quarkus.V', [[0, '+'], [1, '+ extends io.quarkus.Mid']], { [RUN]: [[0, '+'], [1, null]] })];
+    const chain = new Map([['io.quarkus.Mid', [rowsOf('a', 'io.quarkus.Mid', [[1, '+a extends io.quarkus.Top']], {})]], ['io.quarkus.Top', top]]);
+    assert.equal(core.diffApi(new Map([['io.quarkus.V', v]]), 0, 1, undefined, undefined, (n) => chain.get(n) ?? null)[1].from, 'io.quarkus.Top');
+
+    // public in the class, protected in the supertype: callers lost it
+    const n = [rowsOf('a', 'io.quarkus.N', [[0, '+'], [1, '+ extends io.quarkus.P']], { [RUN]: [[0, '+'], [1, null]] })];
+    const p = [rowsOf('a', 'io.quarkus.P', [[1, '+a']], { [RUN]: [[1, '#']] })];
+    assert.equal(core.diffApi(new Map([['io.quarkus.N', n]]), 0, 1, undefined, undefined, (x) => (x === 'io.quarkus.P' ? p : null))
+      .find((r) => r.member === RUN).change, 'removed');
+
+    // a method inherited now is not half of a possible signature change with a new one of the same name
+    const o = [rowsOf('a', 'io.quarkus.O', [[0, '+'], [1, '+ extends io.quarkus.Base']], { [RUN]: [[0, '+'], [1, null]], 'run(I)V': [[1, '+']] })];
+    assert.deepEqual(members(core.diffApi(new Map([['io.quarkus.O', o]]), 0, 1, undefined, undefined, known)).map((r) => r.slice(0, 2)),
+      [[RUN, 'inherited'], ['run(I)V', 'added']]);
+    assert.deepEqual(core.supertypesOf('+ extends io.quarkus.Base implements io.quarkus.I,io.quarkus.J'), ['io.quarkus.Base', 'io.quarkus.I', 'io.quarkus.J']);
+    assert.deepEqual(core.supertypesOf('+i implements io.quarkus.I'), ['io.quarkus.I']);
+    assert.deepEqual(core.supertypesOf(null), []);
   });
 
   test('deprecation lists and API changes carry the values, so varargs print as such', () => {

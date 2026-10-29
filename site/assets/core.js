@@ -1798,6 +1798,52 @@ export function apiUnionAt(rows, vi) {
   return now;
 }
 
+/**
+ * The supertypes written in a class value, by binary name: its superclass, then its interfaces (for an interface, the
+ * interfaces it extends). Empty for null or a value outside the grammar.
+ */
+export function supertypesOf(value) {
+  const c = parseApiValue(value);
+  return c ? [...(c.extends ? [c.extends] : []), ...c.implements] : [];
+}
+
+/**
+ * The supertype that a class inherits a member from at release `vi`, now that the class no longer declares it: the
+ * nearest supertype, superclass first, then through `extends` and `implements`, that is API at `vi` and declares the
+ * member there at least as visibly as the class did. Null when none does. `key` is the member, `was` its last value in
+ * the class, `classValue` the class's value at `vi`, and `rowsOf` gives a class's rows (mergeApiRows), or null for
+ * one without member data, whose own supertypes stay unknown. A constructor is never inherited, and neither is a static
+ * method of an interface (JLS 8.4.8).
+ */
+export function inheritedFrom(key, was, classValue, vi, rowsOf) {
+  const kind = memberKind(key);
+  if (kind === 'constructor') return null;
+  const wasPublic = parseApiValue(was, true)?.access === 'public';
+  const queue = supertypesOf(classValue);
+  const seen = new Set();
+  while (queue.length && seen.size < 64) {
+    const name = queue.shift();
+    if (seen.has(name)) continue;
+    seen.add(name);
+    const rows = rowsOf(name);
+    const at = rows ? apiUnionAt(rows, vi) : null;
+    if (!at) continue;
+    const value = at.members.get(key);
+    if (value != null) {
+      const m = parseApiValue(value, true);
+      const ofInterface = ['interface', 'annotation'].includes(parseApiValue(at.value)?.kind);
+      if (m && !(kind === 'method' && m.static && ofInterface) && (!wasPublic || m.access === 'public')) return name;
+    }
+    queue.push(...supertypesOf(at.value));
+  }
+  return null;
+}
+
+/** Whether a class declares a member at release `vi`, from its rows (mergeApiRows; null for none). */
+function declaresAt(rows, key, vi) {
+  return !!rows && apiUnionAt(rows, vi)?.members.has(key) === true;
+}
+
 const MODIFIER_FLAGS = [
   ['abstract', 'abstract'], ['final', 'final'], ['static', 'static'], ['default', 'default'], ['enumConstant', 'an enum constant'],
   ['experimental', 'experimental'],
@@ -1879,7 +1925,7 @@ function deprecationChange(from, to) {
 
 /** API change kinds in their order on the compare page. */
 export const API_CHANGE_ORDER = [
-  'removed', 'removal', 'deprecated', 'unremoval', 'undeprecated', 'return type', 'signature', 'modifiers', 'supertype', 'added',
+  'removed', 'inherited', 'removal', 'deprecated', 'unremoval', 'undeprecated', 'return type', 'signature', 'modifiers', 'supertype', 'added',
 ];
 
 /**
@@ -1911,12 +1957,15 @@ function lastValueBefore(hs, a, b) {
  * member null), 'deprecated', 'removal', 'unremoval', 'undeprecated', 'modifiers' (details say which), 'supertype'
  * (classes), 'return type' (a method kept its name and parameters; `member` is the new key, `previous` the old one,
  * `previousValue` its value) or 'signature' (a possible signature change: a method that went and one of the same name
- * that came, kept as one row). A member row's `value` is its value at B, or the last one it had for 'removed'; a
- * removed class or member says in `was` how it was deprecated the last time it was there (deprecationBeforeRemoval's
- * rule). `prefer` gives the jars of each class at A and B (artifactIds), to pick among several; `enclosing` the rows of
- * the class a nested class is declared in, whose kind says whether it is implicitly static (impliedClass).
+ * that came, kept as one row) or 'inherited' (a member the class no longer declares but inherits at B, inheritedFrom:
+ * `from` names the supertype, `moved` says whether it did not declare the member at A). A member row's `value` is its
+ * value at B, or the last one it had for 'removed' and 'inherited'; a removed class or member says in `was` how it was
+ * deprecated the last time it was there (deprecationBeforeRemoval's rule). `prefer` gives the jars of each class at A
+ * and B (artifactIds), to pick among several; `enclosing` the rows of the class a nested class is declared in, whose
+ * kind says whether it is implicitly static (impliedClass); `supertypes` the rows of a class by binary name, or null,
+ * where inheritedFrom looks for a member a class no longer declares.
  */
-export function diffApi(rowsByName, a, b, prefer = () => [[], []], enclosing = () => null) {
+export function diffApi(rowsByName, a, b, prefer = () => [[], []], enclosing = () => null, supertypes = () => null) {
   const out = [];
   for (const [name, rows] of rowsByName) {
     const [preferA, preferB] = prefer(name);
@@ -1951,11 +2000,18 @@ export function diffApi(rowsByName, a, b, prefer = () => [[], []], enclosing = (
     const memberRow = (key, change, value, extra = {}) => push({
       artifact, member: key, change, protected: String(value).startsWith('#'), constructor: memberKind(key) === 'constructor', value, ...extra,
     });
+    const lastOf = (key) => lastValueBefore(rows.map((r) => r.members.get(key)).filter(Boolean), a, b) ?? A.members.get(key);
+    // a member that a supertype declares now is still there, inherited: neither removed nor half of a signature change
+    const inherited = new Map();
+    for (const key of gone) {
+      const from = inheritedFrom(key, A.members.get(key), B.value, b, supertypes);
+      if (from) inherited.set(key, from);
+    }
     // a method that kept its name and parameters changed its return type; another of the same name may be a new signature
     const cameBySignature = groupBy(came.filter((k) => memberKind(k) !== 'field'), memberSignature);
-    const paired = new Set();
+    const paired = new Set(inherited.keys());
     for (const key of gone) {
-      if (memberKind(key) === 'field') continue;
+      if (memberKind(key) === 'field' || paired.has(key)) continue;
       const twin = (cameBySignature.get(memberSignature(key)) ?? []).find((k) => !paired.has(k));
       if (twin) {
         paired.add(twin);
@@ -1973,9 +2029,10 @@ export function diffApi(rowsByName, a, b, prefer = () => [[], []], enclosing = (
         memberRow(twin, 'signature', B.members.get(twin), { previous: key, previousValue: A.members.get(key) });
       }
     }
+    for (const [key, from] of inherited) memberRow(key, 'inherited', lastOf(key), { from, moved: !declaresAt(supertypes(from), key, a) });
     for (const key of gone) {
       if (paired.has(key)) continue;
-      const last = lastValueBefore(rows.map((r) => r.members.get(key)).filter(Boolean), a, b) ?? A.members.get(key);
+      const last = lastOf(key);
       memberRow(key, 'removed', last, { was: deprecationOf(last) });
     }
     for (const key of came) if (!paired.has(key)) memberRow(key, 'added', B.members.get(key));
@@ -2006,15 +2063,17 @@ function supertypeChanges(from, to) {
 
 /**
  * The API history of a class over the releases `cvs` (ascending) from its rows (mergeApiRows): one event per release
- * whose API differs from the previous one shown, `{vi, added, removed, changed, changes}`: members added, removed and
- * changed in any of its jars (apiUnionAt, as classMembers lists them; each change as diffApi sees it), and the
- * class's own changes in words (deprecated, marked for removal, no longer marked for removal, undeprecated, became
- * final, supertype changed, …). The first release with API is `{vi, first: true}`, with `again` when it was API
- * before; a release where it is no longer API (gone, or no longer public or protected) says 'no longer public API'.
- * `enclosing`: the rows of the class a nested class is declared in (impliedClass). A release whose values differ only
- * in what is implicit has no event.
+ * whose API differs from the previous one shown, `{vi, added, removed, inherited, changed, changes}`: members added,
+ * removed and changed in any of its jars (apiUnionAt, as classMembers lists them; each change as diffApi sees it), the
+ * members it no longer declares but inherits (`inherited`: `[{from, count, moved}]` by supertype, most first, `moved`
+ * when none of them was in that supertype before; not counted as removed), and the class's own changes in words
+ * (deprecated, marked for removal, no longer marked for removal, undeprecated, became final, supertype changed, …). The
+ * first release with API is `{vi, first: true}`, with `again` when it was API before; a release where it is no longer
+ * API (gone, or no longer public or protected) says 'no longer public API'. `enclosing`: the rows of the class a nested
+ * class is declared in (impliedClass); `supertypes`: the rows of a class by binary name, or null (inheritedFrom). A
+ * release whose values differ only in what is implicit has no event.
  */
-export function classApiHistory(rows, cvs, enclosing = null) {
+export function classApiHistory(rows, cvs, enclosing = null, supertypes = () => null) {
   const events = [];
   let prev = null;
   let prevVi = null;
@@ -2023,15 +2082,26 @@ export function classApiHistory(rows, cvs, enclosing = null) {
   for (const vi of cvs) {
     const now = apiUnionAt(rows, vi);
     if (!now) {
-      if (prev) events.push({ vi, first: false, added: 0, removed: prev.members.size, changed: 0, changes: ['no longer public API'] });
+      if (prev) events.push({ vi, first: false, added: 0, removed: prev.members.size, inherited: [], changed: 0, changes: ['no longer public API'] });
       prev = null;
       continue;
     }
     if (!prev) {
-      events.push({ vi, first: true, ...(seen ? { again: true } : {}), added: now.members.size, removed: 0, changes: [] });
+      events.push({ vi, first: true, ...(seen ? { again: true } : {}), added: now.members.size, removed: 0, inherited: [], changes: [] });
     } else if (prev.value !== now.value || !sameMembers(prev.members, now.members)) {
       const added = [...now.members.keys()].filter((k) => !prev.members.has(k)).length;
-      const removed = [...prev.members.keys()].filter((k) => !now.members.has(k)).length;
+      const gone = [...prev.members.keys()].filter((k) => !now.members.has(k));
+      const bySupertype = new Map();
+      for (const key of gone) {
+        const from = inheritedFrom(key, prev.members.get(key), now.value, vi, supertypes);
+        if (!from) continue;
+        const x = bySupertype.get(from) ?? { from, count: 0, moved: true };
+        x.count++;
+        x.moved &&= !declaresAt(supertypes(from), key, prevVi);
+        bySupertype.set(from, x);
+      }
+      const inherited = [...bySupertype.values()].sort((x, y) => y.count - x.count || cmpText(x.from, y.from));
+      const removed = gone.length - inherited.reduce((n, x) => n + x.count, 0);
       const changes = [];
       const dep = deprecationChange(prev.value, now.value);
       if (dep) changes.push(DEPRECATION_WORDS[dep] ?? dep);
@@ -2045,7 +2115,9 @@ export function classApiHistory(rows, cvs, enclosing = null) {
         if (w == null || w === v) continue;
         if (deprecationChange(v, w) || memberModifierChanges(key, v, w, ca?.kind, cb?.kind).length) memberChanges++;
       }
-      if (added || removed || memberChanges || changes.length) events.push({ vi, first: false, added, removed, changed: memberChanges, changes });
+      if (added || removed || inherited.length || memberChanges || changes.length) {
+        events.push({ vi, first: false, added, removed, inherited, changed: memberChanges, changes });
+      }
     }
     seen = true;
     prev = now;
@@ -2059,14 +2131,17 @@ const sameMembers = (x, y) => x.size === y.size && [...x].every(([k, v]) => y.ge
 /**
  * The members of a class at release `vi` and how they got there over the releases `cvs` (ascending, `vi` the last
  * one shown): `members`, `{key, value, parsed, pretty, since}` for each member at `vi` in any of its jars (the first
- * jar's value), `since` the first release of `cvs` from which it is there without a break; and `removed`, `{key,
- * value, parsed, pretty, last}` for each member that some release of `cvs` had and no jar has at `vi`, `last` the
- * last release that had it (its value there). `value` and `artifact` are the class's at `vi` (apiAt).
+ * jar's value), `since` the first release of `cvs` from which it is there without a break; `removed`, `{key, value,
+ * parsed, pretty, last}` for each member that some release of `cvs` had and no jar has at `vi`, `last` the last
+ * release that had it (its value there); and `inherited`, the same with `from`, for those of them that the class
+ * inherits at `vi` (inheritedFrom, with `supertypes` the rows of a class by binary name, or null), which `removed`
+ * leaves out. `value` and `artifact` are the class's at `vi` (apiAt).
  */
-export function classMembers(rows, cvs, vi, className = '') {
+export function classMembers(rows, cvs, vi, className = '', supertypes = () => null) {
   const now = apiAt(rows, vi);
   const members = [];
   const removed = [];
+  const inherited = [];
   const histories = new Map(); // member key → its histories, one per jar
   for (const r of rows) {
     for (const [key, h] of r.members) {
@@ -2099,10 +2174,15 @@ export function classMembers(rows, cvs, vi, className = '') {
     for (const u of shown) if (valueAt(key, u) != null) last = u;
     if (last == null) continue;
     const value = valueAt(key, last);
-    removed.push({ key, value, parsed: parseApiValue(value, true), pretty: pretty(key, value), last });
+    const x = { key, value, parsed: parseApiValue(value, true), pretty: pretty(key, value), last };
+    const from = now ? inheritedFrom(key, value, now.value, vi, supertypes) : null;
+    if (from) inherited.push({ ...x, from });
+    else removed.push(x);
   }
   const byKey = (x, y) => cmpText(x.key, y.key);
-  return { members: members.sort(byKey), removed: removed.sort(byKey), value: now?.value ?? null, artifact: now?.artifact ?? null };
+  return {
+    members: members.sort(byKey), removed: removed.sort(byKey), inherited: inherited.sort(byKey), value: now?.value ?? null, artifact: now?.artifact ?? null,
+  };
 }
 
 /**

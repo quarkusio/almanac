@@ -40,14 +40,14 @@ const KIND_LABEL = {
   relocated: 'relocated', unrelocated: 'relocation dropped', status: 'status', renamed: 'renamed',
   moved: 'moved', 'moved-in': 'moved in', 'moved-out': 'moved out', introduced: 'introduced', reintroduced: 'reintroduced',
   removal: 'for removal', unremoval: 'no longer for removal', 'return type': 'return type', signature: 'signature', modifiers: 'modifiers',
-  supertype: 'supertype',
+  supertype: 'supertype', inherited: 'inherited',
 };
 const KIND_TONE = {
   added: 'add', removed: 'rem', changed: 'chg', default: 'chg', type: 'chg', phase: 'chg', enum: 'chg', extension: 'neu',
   deprecated: 'dep', undeprecated: 'dep-o', major: 'maj', minor: 'chg', patch: 'neu', other: 'neu', downgrade: 'rem',
   same: 'neu', relocated: 'chg', unrelocated: 'neu', status: 'chg', renamed: 'neu',
   moved: 'chg', 'moved-in': 'chg', 'moved-out': 'chg', introduced: 'add', reintroduced: 'add',
-  removal: 'rem', unremoval: 'dep-o', 'return type': 'chg', signature: 'chg', modifiers: 'chg', supertype: 'chg',
+  removal: 'rem', unremoval: 'dep-o', 'return type': 'chg', signature: 'chg', modifiers: 'chg', supertype: 'chg', inherited: 'neu',
   lts: 'lts', pre: 'pre', cfg: 'neu',
 };
 const KIND_TITLE = {
@@ -62,6 +62,7 @@ const KIND_TITLE = {
   'return type': 'The same name and parameters, another return type',
   signature: 'A method went and another of the same name came: possibly the same method with other parameters',
   modifiers: 'Its modifiers changed', supertype: 'Its superclass or interfaces changed',
+  inherited: 'No longer declared by the class, but a supertype declares it: still there, inherited',
 };
 /** An extension's status takes quarkus.io's tag colour for it, as on quarkus.io/extensions. */
 const STATUS_TONE = { stable: 'stable', preview: 'preview', experimental: 'experimental', deprecated: 'deprecated' };
@@ -548,6 +549,48 @@ async function enclosingApiRows(classes, names, lines = memberLines(classes.raw)
       return { first: l.versions[0], rows: shard.byName.get(outer) ?? [] };
     }));
     out.set(name, core.mergeApiRows(parts));
+  }
+  return out;
+}
+
+/**
+ * The API rows of the supertypes `seeds` (binary names), and of theirs at the releases `vis`, as far as the classes
+ * files know them (a class outside the io.quarkus jars has none): binary name → rows (core.mergeApiRows), for
+ * core.inheritedFrom. `known` holds rows loaded already, which are used and not returned. A member file that cannot be
+ * loaded leaves its classes out, so their members read as removed rather than inherited, as without this.
+ */
+async function supertypeApiRows(classes, seeds, vis, known = new Map()) {
+  const out = new Map();
+  const seen = new Set();
+  let level = seeds;
+  for (let depth = 0; level.length && depth < 16; depth++) {
+    const names = [...new Set(level)].filter((n) => !seen.has(n) && classes.byName.has(n));
+    for (const n of names) seen.add(n);
+    const loaded = await classesApiRows(classes, names.filter((n) => !known.has(n))).catch(() => new Map());
+    level = [];
+    for (const n of names) {
+      const rows = known.get(n) ?? loaded.get(n);
+      if (!rows) continue;
+      if (!known.has(n)) out.set(n, rows);
+      for (const vi of vis) level.push(...core.supertypesOf(core.apiAt(rows, vi)?.value));
+    }
+  }
+  return out;
+}
+
+/**
+ * The supertypes at B of the classes `rowsByName` (binary name → rows) that may no longer declare a member there:
+ * those of a class that loses one between A and B, or that is in several jars, where core.diffApi may compare others.
+ */
+function removalSupertypes(rowsByName, a, b) {
+  const out = [];
+  for (const rows of rowsByName.values()) {
+    const A = core.apiUnionAt(rows, a);
+    const B = core.apiAt(rows, b);
+    if (!A || !B) continue;
+    if (rows.length > 1 || [...A.members.keys()].some((k) => !B.members.has(k) && core.memberKind(k) !== 'constructor')) {
+      out.push(...core.supertypesOf(B.value));
+    }
   }
   return out;
 }
@@ -2371,7 +2414,7 @@ function configSection(cmp, data) {
   const rows = cmp.configRows;
   if (!rows.length) return add(sec, [emptyNote('No config property was added, removed or changed between these releases.')]);
 
-  const state = { tags: new Set(), text: '', expanded: new Set() };
+  const state = { tags: new Set(), text: '', expanded: new Set(), groups: moduleGroups(() => update()) };
   const status = h('p', { class: 'filter-status', 'aria-live': 'polite' });
   const groupsEl = h('div', { class: 'cgroups' });
   const extCount = new Set(rows.map((r) => r.ext)).size;
@@ -2390,7 +2433,7 @@ function configSection(cmp, data) {
         state.text = v;
         update();
       })),
-    status,
+    listBar(status, state.groups),
     groupsEl);
   update();
   return sec;
@@ -2398,8 +2441,9 @@ function configSection(cmp, data) {
 
 function renderConfigGroups(container, rows, state) {
   const filtering = state.text.trim() !== '';
-  renderGroupPages(container, [...core.groupBy(rows, (r) => r.ext)], (ext, list) => configGroup(ext, list, state, filtering),
-    'No change matches these filters.', 'more extension');
+  const groups = [...core.groupBy(rows, (r) => r.ext)];
+  state.groups.listed(groups.map(([ext]) => ext), state.text.trim());
+  renderGroupPages(container, groups, (ext, list) => configGroup(ext, list, state, filtering), 'No change matches these filters.', 'more extension');
 }
 
 /**
@@ -2438,6 +2482,82 @@ function renderGroupPages(container, groups, renderGroup, empty, noun) {
   appendPage();
 }
 
+/**
+ * The open state of the module groups of a list (moduleGroup): collapsed, or open while a text filter is active, unless
+ * the reader opened or closed them; with a button that opens or closes every group the list holds. Another filter text
+ * forgets those choices, so that its matches show. `onChange` renders the list again.
+ */
+function moduleGroups(onChange) {
+  const choice = new Map();
+  let keys = [];
+  let text = '';
+  const isOpen = (key) => choice.get(key) ?? text !== '';
+  const button = h('button', { type: 'button', class: 'more more--inline groups-all' });
+  const sync = () => {
+    button.hidden = keys.length < 2;
+    button.textContent = keys.every(isOpen) ? 'Collapse all' : 'Expand all';
+  };
+  button.addEventListener('click', () => {
+    const open = !keys.every(isOpen);
+    for (const key of keys) choice.set(key, open);
+    onChange();
+  });
+  return {
+    isOpen,
+    button,
+    /** The keys of the groups the list holds now, and its text filter ('' for none). */
+    listed(list, filter) {
+      if (filter !== text) choice.clear();
+      keys = list;
+      text = filter;
+      sync();
+    },
+    choose(key, open) {
+      choice.set(key, open);
+      sync();
+    },
+  };
+}
+
+let moduleGroupSeq = 0;
+
+/**
+ * A module's group of rows (an extension's or a jar's): its head, with the module (`title`, a link) and `counts`,
+ * shows or hides the rows `body`; it starts as `groups` says (moduleGroups), which hears of the reader's choices.
+ * `label` names the group for assistive technologies. Find in page opens a collapsed group where browsers support
+ * hidden="until-found".
+ */
+function moduleGroup(groups, key, title, counts, label, ...body) {
+  const id = `cgroup-${++moduleGroupSeq}`;
+  const bodyEl = h('div', { class: 'cgroup-body', id }, ...body);
+  const toggle = h('button', { type: 'button', class: 'cgroup-toggle', 'aria-controls': id, 'aria-label': label }, icon('chevron', 'cgroup-chev'));
+  const head = h('div', { class: 'cgroup-head' }, h('div', { class: 'cgroup-name' }, toggle, h('h3', { class: 'cgroup-title' }, title)), counts);
+  const sec = h('section', { class: 'cgroup', 'aria-label': label }, head, bodyEl);
+  const set = (open) => {
+    toggle.setAttribute('aria-expanded', String(open));
+    if (open) bodyEl.removeAttribute('hidden');
+    else bodyEl.setAttribute('hidden', 'until-found');
+    sec.classList.toggle('is-collapsed', !open);
+  };
+  const choose = (open) => {
+    set(open);
+    groups.choose(key, open);
+  };
+  set(groups.isOpen(key));
+  toggle.addEventListener('click', () => choose(toggle.getAttribute('aria-expanded') !== 'true'));
+  // the whole head opens and closes the group, but for its links
+  head.addEventListener('click', (e) => {
+    if (!e.target.closest('a, button')) choose(toggle.getAttribute('aria-expanded') !== 'true');
+  });
+  bodyEl.addEventListener('beforematch', () => choose(true));
+  return sec;
+}
+
+/** A list's status line with the button that opens or closes all its module groups (moduleGroups). */
+function listBar(status, groups) {
+  return h('div', { class: 'list-bar' }, status, groups.button);
+}
+
 function configGroup(ext, list, state, filtering) {
   const counts = { added: 0, removed: 0, changed: 0 };
   for (const r of list) counts[r.change]++;
@@ -2450,24 +2570,18 @@ function configGroup(ext, list, state, filtering) {
     return f;
   };
   ul.append(fill(0, initial));
-  const sec = h('section', { class: 'cgroup', 'aria-label': `${ext || 'Unattributed'}: ${plural(list.length, 'change')}` },
-    h('div', { class: 'cgroup-head' },
-      h('h3', { class: 'cgroup-title' }, ext ? h('a', { href: link.extension(ext) }, ext) : 'Unattributed'),
-      h('span', { class: 'cgroup-counts' },
-        countMark('add', '+', counts.added, 'added'),
-        countMark('rem', '−', counts.removed, 'removed'),
-        countMark('chg', '~', counts.changed, 'changed'))),
-    ul);
-  if (list.length > initial) {
-    const btn = moreButton(`Show all ${plural(list.length, 'change')} in ${ext || 'this group'}`, () => {
-      state.expanded.add(ext);
-      ul.append(fill(initial, list.length));
-      btn.remove();
-      ul.children[initial]?.querySelector('a')?.focus();
-    });
-    sec.append(btn);
-  }
-  return sec;
+  const more = list.length > initial ? moreButton(`Show all ${plural(list.length, 'change')} in ${ext || 'this group'}`, () => {
+    state.expanded.add(ext);
+    ul.append(fill(initial, list.length));
+    more.remove();
+    ul.children[initial]?.querySelector('a')?.focus();
+  }) : null;
+  return moduleGroup(state.groups, ext, ext ? h('a', { href: link.extension(ext) }, ext) : 'Unattributed',
+    h('span', { class: 'cgroup-counts' },
+      countMark('add', '+', counts.added, 'added'),
+      countMark('rem', '−', counts.removed, 'removed'),
+      countMark('chg', '~', counts.changed, 'changed')),
+    `${ext || 'Unattributed'}: ${plural(list.length, 'change')}`, ul, more);
 }
 
 function configRow(r) {
@@ -2861,7 +2975,10 @@ function apiSection(cmp) {
       else slot.replaceChildren(status);
       classesApiRows(classes, changed).then(async (rowsByName) => {
         const enclosing = await enclosingApiRows(classes, changed);
-        cmp.apiRows = core.diffApi(rowsByName, cmp.aa, cmp.ab, jarsAtBoth(cmp, classes), (name) => enclosing.get(name));
+        // a member a class no longer declares may be inherited: from the supertypes, loaded as far as the data goes
+        const supers = await supertypeApiRows(classes, removalSupertypes(rowsByName, cmp.aa, cmp.ab), [cmp.ab], rowsByName);
+        cmp.apiRows = core.diffApi(rowsByName, cmp.aa, cmp.ab, jarsAtBoth(cmp, classes), (name) => enclosing.get(name),
+          (name) => rowsByName.get(name) ?? supers.get(name) ?? null);
         slot.replaceChildren(apiChanges(cmp));
       }).catch((e) => {
         // the files that failed are forgotten (loadApiShard): another try fetches them again
@@ -2901,13 +3018,16 @@ function deprecationChanges(deps) {
   const counts = {};
   for (const r of deps.rows) counts[r.change] = (counts[r.change] ?? 0) + 1;
   const state = { tags: new Set(), text: '' };
+  const groups = moduleGroups(() => update());
   const groupsEl = h('div', { class: 'cgroups' });
   const status = h('p', { class: 'filter-status', 'aria-live': 'polite' });
   const update = () => {
     const words = state.text.toLowerCase().split(/\s+/).filter(Boolean);
     const rows = deps.rows.filter((r) => (!state.tags.size || state.tags.has(r.change))
       && words.every((w) => `${r.name}\n${r.member ?? ''}\n${r.artifact}`.toLowerCase().includes(w)));
-    renderGroupPages(groupsEl, [...core.groupBy(rows, (r) => r.artifact)], (jar, list) => apiJarGroup(jar, list, deprecationRow),
+    const byJar = [...core.groupBy(rows, (r) => r.artifact)];
+    groups.listed(byJar.map(([jar]) => jar), words.join(' '));
+    renderGroupPages(groupsEl, byJar, (jar, list) => apiJarGroup(jar, list, deprecationRow, groups),
       'No deprecation change matches these filters.', 'more jar');
     status.textContent = rows.length === deps.rows.length ? `${plural(rows.length, 'change')}.` : `Showing ${fmt(rows.length)} of ${plural(deps.rows.length, 'change')}.`;
   };
@@ -2919,7 +3039,7 @@ function deprecationChanges(deps) {
         state.text = v;
         update();
       })),
-    status,
+    listBar(status, groups),
     groupsEl);
 }
 
@@ -2934,27 +3054,26 @@ function deprecationRow(r) {
   return h('li', { class: 'mrow' }, change, what, since);
 }
 
-/** A jar's group of API rows, by class: the class as a heading, its rows below (`renderRow`). */
-function apiJarGroup(jar, list, renderRow) {
+/** A jar's group of API rows (moduleGroup, as `groups` says), by class: the class as a heading, its rows below (`renderRow`). */
+function apiJarGroup(jar, list, renderRow, groups) {
   const byClass = [...core.groupBy(list, (r) => r.name)];
-  return h('section', { class: 'cgroup', 'aria-label': `${jar}: ${plural(list.length, 'change')}` },
-    h('div', { class: 'cgroup-head' },
-      h('h3', { class: 'cgroup-title' }, h('a', { href: link.extension(jar) }, jar)),
-      h('span', { class: 'cgroup-counts' }, plural(byClass.length, 'class', 'classes'))),
+  return moduleGroup(groups, jar, h('a', { href: link.extension(jar) }, jar), h('span', { class: 'cgroup-counts' }, plural(byClass.length, 'class', 'classes')),
+    `${jar}: ${plural(list.length, 'change')}`,
     byClass.map(([name, rows]) => h('div', { class: 'api-class' },
       h('a', { class: 'prop api-class-name', href: link.class(name) }, classNameEl(name)),
       h('ul', { class: 'mlist' }, rows.map(renderRow)))));
 }
 
-const API_CHIPS = [['removed', 'removed'], ['removal', 'for removal'], ['deprecated', 'deprecated'], ['unremoval', 'no longer for removal'],
-  ['undeprecated', 'undeprecated'], ['return type', 'return type'], ['signature', 'signature'], ['modifiers', 'modifiers'], ['supertype', 'supertype'],
-  ['added', 'added']];
+const API_CHIPS = [['removed', 'removed'], ['inherited', 'inherited'], ['removal', 'for removal'], ['deprecated', 'deprecated'],
+  ['unremoval', 'no longer for removal'], ['undeprecated', 'undeprecated'], ['return type', 'return type'], ['signature', 'signature'],
+  ['modifiers', 'modifiers'], ['supertype', 'supertype'], ['added', 'added']];
 
 /** The API changes (core.diffApi) by jar, then class, with filters for the kinds, nested classes, protected members and constructors. */
 function apiChanges(cmp) {
   const rows = cmp.apiRows;
   if (!rows.length) return emptyNote('No class or member was added, removed or changed between these releases.');
   const state = { tags: new Set(), text: '', nested: false, protected: true, constructors: true };
+  const groups = moduleGroups(() => update());
   const groupsEl = h('div', { class: 'cgroups' });
   const status = h('p', { class: 'filter-status', 'aria-live': 'polite' });
   const chips = h('div', { class: 'cls-chips' });
@@ -2963,8 +3082,9 @@ function apiChanges(cmp) {
     const words = state.text.toLowerCase().split(/\s+/).filter(Boolean);
     const all = pool();
     const shown = all.filter((r) => (!state.tags.size || state.tags.has(r.change)) && words.every((w) => r.text.includes(w)));
-    renderGroupPages(groupsEl, [...core.groupBy(shown, (r) => r.artifact)], (jar, list) => apiJarGroup(jar, list, apiRow),
-      'No API change matches these filters.', 'more jar');
+    const byJar = [...core.groupBy(shown, (r) => r.artifact)];
+    groups.listed(byJar.map(([jar]) => jar), words.join(' '));
+    renderGroupPages(groupsEl, byJar, (jar, list) => apiJarGroup(jar, list, apiRow, groups), 'No API change matches these filters.', 'more jar');
     // as §4 says it: what the toggles leave out (nested classes are left out at first)
     const out = andList([
       !state.nested && rows.some((r) => r.nested) ? 'nested classes' : null,
@@ -3008,8 +3128,13 @@ function apiChanges(cmp) {
         state.text = v;
         update();
       })),
-    status,
+    listBar(status, groups),
     groupsEl);
+}
+
+/** A class by its simple name (full name on hover), linked to its page, or to one of its members there. */
+function classRef(name, member = null) {
+  return h('a', { class: 'mono', href: member ? link.member(name, member) : link.class(name), title: name }, core.simpleClassName(name).replace(/\$/g, '.'));
 }
 
 /** One API change: its kind, the member (or "the class"), and what changed. */
@@ -3020,7 +3145,8 @@ function apiRow(r) {
   const what = r.member ? memberSignature(r.name, r.member, r.value)
     : h('span', { class: 'muted' }, r.change === 'added' ? 'the class, new' : r.change === 'removed' ? 'the class, gone' : 'the class');
   const was = r.change === 'removed'
-    ? h('span', { class: 'msince' }, r.was === 'removal' ? 'was deprecated for removal' : r.was ? 'was deprecated' : 'removed without deprecation') : null;
+    ? h('span', { class: 'msince' }, r.was === 'removal' ? 'was deprecated for removal' : r.was ? 'was deprecated' : 'removed without deprecation')
+    : r.change === 'inherited' ? h('span', { class: 'msince' }, r.moved ? 'moved to ' : 'inherited from ', classRef(r.from, r.member)) : null;
   const previous = r.previous ? h('span', { class: 'msince' }, 'was ', memberSignature(r.name, r.previous, r.previousValue, { linked: false })) : null;
   const details = r.details?.length ? h('span', { class: 'msince' }, r.details.join(', ')) : null;
   return h('li', { class: 'mrow' }, label, what, previous, details, was,
@@ -3032,7 +3158,7 @@ function classChanges(cmp) {
   const d = cmp.classes;
   const rows = cmp.classRows;
   if (!rows.length) return emptyNote('No class was added, removed or moved between these releases.');
-  const state = { tags: new Set(), text: '', nested: false, expanded: new Set() };
+  const state = { tags: new Set(), text: '', nested: false, expanded: new Set(), groups: moduleGroups(() => update()) };
   const status = h('p', { class: 'filter-status', 'aria-live': 'polite' });
   const groupsEl = h('div', { class: 'cgroups' });
   const nestedCount = d.counts.added + d.counts.removed + d.counts.moved - d.top.added - d.top.removed - d.top.moved;
@@ -3041,8 +3167,9 @@ function classChanges(cmp) {
     const pool = state.nested ? rows : rows.filter((r) => !r.nested);
     const filtered = core.filterRows(pool, state);
     const filtering = state.text.trim() !== '';
-    renderGroupPages(groupsEl, [...core.groupBy(filtered, (r) => r.artifact)], (jar, list) => classGroup(jar, list, state, filtering),
-      'No class change matches these filters.', 'more jar');
+    const byJar = [...core.groupBy(filtered, (r) => r.artifact)];
+    state.groups.listed(byJar.map(([jar]) => jar), state.text.trim());
+    renderGroupPages(groupsEl, byJar, (jar, list) => classGroup(jar, list, state, filtering), 'No class change matches these filters.', 'more jar');
     const jars = new Set(filtered.map((r) => r.artifact)).size;
     status.textContent = filtered.length === pool.length
       ? `${plural(pool.length, 'change')} in ${plural(jars, 'jar')}${state.nested || !nestedCount ? '' : ', nested classes left out'}.`
@@ -3069,7 +3196,7 @@ function classChanges(cmp) {
         state.text = v;
         update();
       })),
-    status,
+    listBar(status, state.groups),
     groupsEl);
 }
 
@@ -3091,24 +3218,18 @@ function classGroup(jar, list, state, filtering) {
     return f;
   };
   ul.append(fill(0, initial));
-  const sec = h('section', { class: 'cgroup', 'aria-label': `${jar}: ${plural(list.length, 'change')}` },
-    h('div', { class: 'cgroup-head' },
-      h('h3', { class: 'cgroup-title' }, h('a', { href: link.extension(jar) }, jar)),
-      h('span', { class: 'cgroup-counts' },
-        countMark('add', '+', added, 'added'),
-        countMark('rem', '−', removed, 'removed'),
-        countMark('chg', '~', moved, 'moved in or out'))),
-    ul);
-  if (list.length > initial) {
-    const btn = moreButton(`Show all ${plural(list.length, 'change')} in ${jar}`, () => {
-      state.expanded.add(jar);
-      ul.append(fill(initial, list.length));
-      btn.remove();
-      ul.children[initial]?.querySelector('a')?.focus();
-    });
-    sec.append(btn);
-  }
-  return sec;
+  const more = list.length > initial ? moreButton(`Show all ${plural(list.length, 'change')} in ${jar}`, () => {
+    state.expanded.add(jar);
+    ul.append(fill(initial, list.length));
+    more.remove();
+    ul.children[initial]?.querySelector('a')?.focus();
+  }) : null;
+  return moduleGroup(state.groups, jar, h('a', { href: link.extension(jar) }, jar),
+    h('span', { class: 'cgroup-counts' },
+      countMark('add', '+', added, 'added'),
+      countMark('rem', '−', removed, 'removed'),
+      countMark('chg', '~', moved, 'moved in or out')),
+    `${jar}: ${plural(list.length, 'change')}`, ul, more);
 }
 
 function classRow(r) {
@@ -3844,14 +3965,19 @@ function classMemberSections(name, info, classes, member, kicker, move = true) {
     sectionHead(0, 'API history', 'cls-api-h', h('p', { class: 'sec-note' }, 'How the API of the class changed between consecutive releases shown with API data.')),
     historyBody);
   const seq = renderSeq;
-  const load = (reveal) => Promise.all([classesApiRows(classes, [name]), enclosingApiRows(classes, [name])]).then(([byName, enclosing]) => {
+  const load = (reveal) => Promise.all([classesApiRows(classes, [name]), enclosingApiRows(classes, [name])]).then(async ([byName, enclosing]) => {
     if (seq !== renderSeq) return;
     const rows = byName.get(name) ?? [];
-    const m = core.classMembers(rows, info.cvs, info.at, name);
+    // the supertypes it ever had, for the members it no longer declares but inherits
+    const seeds = rows.flatMap((r) => r.h.flatMap(([, value]) => core.supertypesOf(value)));
+    const supers = await supertypeApiRows(classes, seeds, info.cvs, byName);
+    if (seq !== renderSeq) return;
+    const rowsOf = (n) => byName.get(n) ?? supers.get(n) ?? null;
+    const m = core.classMembers(rows, info.cvs, info.at, name, rowsOf);
     const parsed = core.parseApiValue(m.value);
     if (parsed && kicker) kicker.textContent = `${parsed.kind === 'annotation' ? 'Annotation' : parsed.kind[0].toUpperCase() + parsed.kind.slice(1)}${core.isNestedClass(name) ? ' (nested)' : ''}`;
     membersBody.replaceChildren(membersView(name, m, parsed, member, info.at));
-    historyBody.replaceChildren(apiHistoryView(rows, info, enclosing.get(name) ?? null));
+    historyBody.replaceChildren(apiHistoryView(rows, info, enclosing.get(name) ?? null, rowsOf));
     if (member) revealMember(members, member, reveal);
   }).catch((e) => {
     if (seq !== renderSeq) return;
@@ -3887,6 +4013,14 @@ function membersView(name, m, parsed, target, at) {
       // a removed member's deprecation is in its note, not in chips
       h('ul', { class: 'mlist' }, m.removed.map((x) => row({ ...x, parsed: x.parsed && { ...x.parsed, deprecated: false, forRemoval: false } },
         h('span', { class: 'msince' }, removedNote(x))))))
+    : null;
+  // members it declared in releases shown and inherits now: still there, from a supertype
+  const inherited = m.inherited.length
+    ? h('details', { class: 'mremoved' },
+      h('summary', { title: 'No longer declared by this class: a supertype declares them, so the class still has them' },
+        `Now inherited (${fmt(m.inherited.length)})`),
+      h('ul', { class: 'mlist' }, m.inherited.map((x) => row(x,
+        h('span', { class: 'msince' }, 'from ', classRef(x.from, x.key), '; last declared here in ', verLink(V.list[x.last].v))))))
     : null;
   // a class gone since, or no longer API: what it had in the releases shown
   if (!m.value) return frag(emptyNote(`The class is not public API in ${short(V.list[at].v)}.`), removed);
@@ -3929,7 +4063,8 @@ function membersView(name, m, parsed, target, at) {
     })) : null,
     status,
     groupsEl,
-    removed);
+    removed,
+    inherited);
 }
 
 /** "last in 3.27.4" or "was deprecated since 3.15 (declared); last in 3.27.4" for a member gone since. */
@@ -3960,13 +4095,16 @@ function revealMember(section, key, move = true) {
   }
 }
 
-/** The API history of a class (core.classApiHistory over the releases shown with API data) as a timeline. */
-function apiHistoryView(rows, info, enclosing = null) {
-  const events = core.classApiHistory(rows, info.cvs, enclosing);
+/**
+ * The API history of a class (core.classApiHistory over the releases shown with API data) as a timeline; `supertypes`
+ * gives the rows of a class by binary name, or null, to tell the members it inherits from those it lost.
+ */
+function apiHistoryView(rows, info, enclosing = null, supertypes = () => null) {
+  const events = core.classApiHistory(rows, info.cvs, enclosing, supertypes);
   if (!events.length) return emptyNote('The class is not public API in any release shown.');
   // deprecation is in the History above; here the members and the declaration
   const quiet = new Set(['deprecated', 'marked for removal', 'no longer marked for removal', 'undeprecated']);
-  const shown = events.filter((ev) => ev.first || ev.added || ev.removed || ev.changed || ev.changes.some((c) => !quiet.has(c)));
+  const shown = events.filter((ev) => ev.first || ev.added || ev.removed || ev.inherited?.length || ev.changed || ev.changes.some((c) => !quiet.has(c)));
   return timeline(shown, (ev) => {
     if (ev.first) {
       return h('p', { class: 'tl-text' }, chip('neutral', 'API'),
@@ -3976,6 +4114,7 @@ function apiHistoryView(rows, info, enclosing = null) {
       ev.added || ev.removed ? h('span', { class: 'api-delta' }, countMark('add', '+', ev.added, ev.added === 1 ? 'member added' : 'members added'),
         ev.added && ev.removed ? ' ' : null, countMark('rem', '−', ev.removed, ev.removed === 1 ? 'member removed' : 'members removed'),
         h('span', { 'aria-hidden': 'true' }, ev.added + ev.removed === 1 ? ' member' : ' members')) : null,
+      ...(ev.inherited ?? []).map((x) => h('span', null, `${plural(x.count, 'member')} ${x.moved ? 'moved to' : 'now inherited from'} `, classRef(x.from))),
       ev.changed ? `${plural(ev.changed, 'member')} changed` : null,
       ...ev.changes.filter((c) => !quiet.has(c)),
     ].filter(Boolean);
@@ -4296,14 +4435,16 @@ function deprecatedList(items) {
   if (!items.length) return emptyNote('Nothing is deprecated in this release.');
   const counts = { removal: items.filter((x) => x.kind === 'removal').length, deprecated: items.filter((x) => x.kind === 'deprecated').length };
   const state = { tags: new Set(), text: '' };
+  const groups = moduleGroups(() => update());
   const groupsEl = h('div', { class: 'cgroups' });
   const status = h('p', { class: 'filter-status', 'aria-live': 'polite' });
   const update = () => {
     const words = state.text.toLowerCase().split(/\s+/).filter(Boolean);
     const shown = items.filter((x) => (!state.tags.size || state.tags.has(x.kind))
       && words.every((w) => `${x.name}\n${x.member ?? ''}\n${x.artifact}`.toLowerCase().includes(w)));
-    renderGroupPages(groupsEl, [...core.groupBy(shown, (x) => x.artifact)], (jar, list) => apiJarGroup(jar, list, deprecatedRow),
-      'Nothing deprecated matches these filters.', 'more jar');
+    const byJar = [...core.groupBy(shown, (x) => x.artifact)];
+    groups.listed(byJar.map(([jar]) => jar), words.join(' '));
+    renderGroupPages(groupsEl, byJar, (jar, list) => apiJarGroup(jar, list, deprecatedRow, groups), 'Nothing deprecated matches these filters.', 'more jar');
     status.textContent = shown.length === items.length ? `${deprecatedCounts(items)}.` : `Showing ${fmt(shown.length)} of ${plural(items.length, 'deprecation')}.`;
   };
   update();
@@ -4314,7 +4455,7 @@ function deprecatedList(items) {
         state.text = v;
         update();
       })),
-    status,
+    listBar(status, groups),
     groupsEl);
 }
 
