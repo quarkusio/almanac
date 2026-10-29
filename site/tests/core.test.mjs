@@ -2531,6 +2531,80 @@ describe('API: dating across jars and lines, change kinds, members across jars',
     assert.deepEqual(core.supertypesOf(null), []);
   });
 
+  test('inherited, or lost to callers: static, other return types, java.lang.Object, the superclass first', () => {
+    const one = (cls, key, supers, extra = {}) => {
+      const rows = [rowsOf('a', 'io.quarkus.C', cls.h, cls.members)];
+      const known = (n) => supers.get(n) ?? null;
+      return core.diffApi(new Map([['io.quarkus.C', rows]]), 0, 1, undefined, undefined, known).filter((r) => r.member === key || extra.all);
+    };
+    // Panache's JpaOperations in 1.11: static count(Class) became an instance method of its new superclass
+    const COUNT = 'count(Ljava/lang/Class;)J';
+    const abstractOps = new Map([['io.quarkus.Ops', [rowsOf('b', 'io.quarkus.Ops', [[1, '+a']], { [COUNT]: [[1, '+']] })]]]);
+    assert.deepEqual(one({ h: [[0, '+'], [1, '+ extends io.quarkus.Ops']], members: { [COUNT]: [[0, '+s'], [1, null]] } }, COUNT, abstractOps)
+      .map((r) => r.change), ['removed'], 'a static method is not inherited from an instance one');
+    // a constant moved to an interface, where fields are static and final without saying so
+    const NAME = 'NAME:Ljava/lang/String;';
+    const model = new Map([['io.quarkus.Model', [rowsOf('b', 'io.quarkus.Model', [[1, '+i']], { [NAME]: [[1, '+']] })]]]);
+    assert.deepEqual(one({ h: [[0, '+'], [1, '+ implements io.quarkus.Model']], members: { [NAME]: [[0, '+sf'], [1, null]] } }, NAME, model)
+      .map((r) => [r.change, r.from]), [['inherited', 'io.quarkus.Model']]);
+    // a covariant return: the class still declares newJob(String), with a narrower type, so the old one is overridden
+    const OLD = 'newJob(Ljava/lang/String;)Lio/quarkus/Job;';
+    const NEW = 'newJob(Ljava/lang/String;)Lio/quarkus/QuartzJob;';
+    const scheduler = new Map([['io.quarkus.Scheduler', [rowsOf('b', 'io.quarkus.Scheduler', [[0, '+i']], { [OLD]: [[0, '+']] })]]]);
+    assert.deepEqual(one({ h: [[0, '+ implements io.quarkus.Scheduler']], members: { [OLD]: [[0, '+'], [1, null]], [NEW]: [[1, '+']] } }, null, scheduler, { all: true })
+      .map((r) => [r.member, r.change, r.previous ?? null]), [[NEW, 'return type', OLD]]);
+    // java.lang.Object: a dropped toString() is still there, a public clone() is not (Object's is protected)
+    const TO_STRING = 'toString()Ljava/lang/String;';
+    const CLONE = 'clone()Ljava/lang/Object;';
+    const dropped = one({ h: [[0, '+']], members: { [TO_STRING]: [[0, '+'], [1, null]], [CLONE]: [[0, '+'], [1, null]] } }, null, new Map(), { all: true });
+    assert.deepEqual(dropped.map((r) => [r.member, r.change, r.from ?? null, r.moved ?? null]),
+      [[CLONE, 'removed', null, null], [TO_STRING, 'inherited', core.OBJECT_CLASS, false]]);
+    const iface = one({ h: [[0, '+i']], members: { 'equals(Ljava/lang/Object;)Z': [[0, '+a'], [1, null]] } }, 'equals(Ljava/lang/Object;)Z', new Map());
+    assert.deepEqual(iface.map((r) => [r.change, r.from]), [['inherited', core.OBJECT_CLASS]], 'an interface has Object\'s public methods too');
+    // the superclass chain before the interfaces: C extends S implements I, S extends SS; SS and I both declare run()
+    const RUN = 'run()V';
+    const chain = new Map([
+      ['io.quarkus.S', [rowsOf('b', 'io.quarkus.S', [[1, '+ extends io.quarkus.SS']], {})]],
+      ['io.quarkus.SS', [rowsOf('b', 'io.quarkus.SS', [[1, '+']], { [RUN]: [[1, '+']] })]],
+      ['io.quarkus.I', [rowsOf('b', 'io.quarkus.I', [[1, '+i']], { [RUN]: [[1, '+d']] })]],
+    ]);
+    assert.deepEqual(one({ h: [[0, '+'], [1, '+ extends io.quarkus.S implements io.quarkus.I']], members: { [RUN]: [[0, '+'], [1, null]] } }, RUN, chain)
+      .map((r) => r.from), ['io.quarkus.SS']);
+    // the inherited member's value where it is declared now, for its deprecation
+    const deprecated = new Map([['io.quarkus.Ops', [rowsOf('b', 'io.quarkus.Ops', [[1, '+a']], { [RUN]: [[1, '+R since 3.18']] })]]]);
+    assert.equal(one({ h: [[0, '+'], [1, '+ extends io.quarkus.Ops']], members: { [RUN]: [[0, '+'], [1, null]] } }, RUN, deprecated)[0].inheritedValue, '+R since 3.18');
+  });
+
+  test('apiClassCounts and apiRowCounts: the counts of the summary, nested classes left out', () => {
+    const c = {
+      packages: ['x'],
+      artifacts: ['a'],
+      classes: [
+        [0, 'New', [[1, 0]], [[1, 1]]],
+        [0, 'Gone', [[0, 0], [1, null]], [[0, 2], [1, null]]],
+        [0, 'Changed', [[0, 0]], [[0, 3], [1, 4]]],
+        [0, 'Same', [[0, 0]], [[0, 5]]],
+        [0, 'Changed$Inner', [[0, 0]], [[0, 6], [1, 7]]],
+        [0, 'NotApi', [[0, 0]]],
+      ],
+    };
+    assert.deepEqual(core.apiClassCounts(c, 0, 1), { added: 1, removed: 1, changed: 1 });
+    const rows = [
+      { name: 'x.New', member: null, change: 'added', nested: false },
+      { name: 'x.Changed', member: 'run()V', change: 'removed', nested: false },
+      { name: 'x.Changed', member: 'f:I', change: 'added', nested: false },
+      { name: 'x.Changed', member: '<init>()V', change: 'added', nested: false },
+      { name: 'x.Changed', member: 'stop()V', change: 'inherited', nested: false },
+      { name: 'x.Changed', member: null, change: 'supertype', nested: false },
+      { name: 'x.Changed', member: 'old()V', change: 'deprecated', nested: false },
+      { name: 'x.Changed$Inner', member: 'go()V', change: 'removed', nested: true },
+    ];
+    assert.deepEqual(core.apiRowCounts(rows), {
+      added: 3, removed: 1, changed: 2,
+      byKind: { class: { added: 1, removed: 0, changed: 1 }, method: { added: 0, removed: 1, changed: 1 }, field: { added: 1, removed: 0, changed: 0 }, constructor: { added: 1, removed: 0, changed: 0 } },
+    });
+  });
+
   test('deprecation lists and API changes carry the values, so varargs print as such', () => {
     const OF = 'of([Ljava/lang/String;)Lio/quarkus/Foo;';
     const c = file(3, [0, 1], ['a'], [[0, 'Foo', [[0, 0]]]], [[0, 0, OF, [[0, '+sv'], [1, '+svD']]]]);

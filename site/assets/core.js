@@ -1244,6 +1244,51 @@ export function movedApiClasses(classes, a, b) {
   return out;
 }
 
+/**
+ * The API classes of a comparison by their API revisions, nested classes left out as the API section lists them by
+ * default: `added` (API at B only), `removed` (at A only) and `changed` (at both, with another revision). From the
+ * classes files alone.
+ */
+export function apiClassCounts(classes, a, b) {
+  const out = { added: 0, removed: 0, changed: 0 };
+  for (const row of classes.classes) {
+    if (!Array.isArray(row[3]) || isNestedClass(className(classes, row))) continue;
+    const ra = apiRevisionAt(row, a);
+    const rb = apiRevisionAt(row, b);
+    if (ra == null && rb == null) continue;
+    if (ra == null) out.added++;
+    else if (rb == null) out.removed++;
+    else if (ra !== rb) out.changed++;
+  }
+  return out;
+}
+
+/** What each kind of API change counts as on the summary of a comparison; the deprecation changes count apart. */
+const API_COUNT_KIND = {
+  added: 'added', removed: 'removed', inherited: 'changed', moved: 'changed', 'return type': 'changed', signature: 'changed', modifiers: 'changed',
+  supertype: 'changed',
+};
+
+/**
+ * The API changes of a comparison (rows of diffApi and movedApiClasses) counted for its summary, nested classes left
+ * out as the API section lists them by default: `added`, `removed` and `changed` (inherited, moved, another return
+ * type, signature, modifiers or supertype), and the same by element in `byKind` (class, field, constructor, method).
+ * Deprecation changes are not counted: diffDeprecations counts them.
+ */
+export function apiRowCounts(rows) {
+  const out = { added: 0, removed: 0, changed: 0, byKind: {} };
+  for (const r of rows) {
+    const k = API_COUNT_KIND[r.change];
+    if (!k || r.nested) continue;
+    out[k]++;
+    const kind = r.member == null ? 'class' : memberKind(r.member);
+    // own properties only: 'constructor' is one of every object's
+    if (!Object.hasOwn(out.byKind, kind)) out.byKind[kind] = { added: 0, removed: 0, changed: 0 };
+    out.byKind[kind][k]++;
+  }
+  return out;
+}
+
 /* ========================================================================== */
 /* API: the public and protected classes and members of the io.quarkus jars    */
 /* ========================================================================== */
@@ -1792,40 +1837,89 @@ export function supertypesOf(value) {
   return c ? [...(c.extends ? [c.extends] : []), ...c.implements] : [];
 }
 
+/** The class every class and interface gets the public methods of (JLS 4.3.2, 9.2). */
+export const OBJECT_CLASS = 'java.lang.Object';
+
+/** The methods of java.lang.Object that a class may declare too, by member key, with their access there. */
+const OBJECT_METHODS = new Map([
+  ['toString()Ljava/lang/String;', 'public'], ['hashCode()I', 'public'], ['equals(Ljava/lang/Object;)Z', 'public'],
+  ['clone()Ljava/lang/Object;', 'protected'], ['finalize()V', 'protected'],
+]);
+
+const isInterfaceKind = (kind) => kind === 'interface' || kind === 'annotation';
+
+/** Whether a member is static: written so, an enum constant, or a field of an interface or an annotation (implied). */
+function staticMember(parsed, key, ownerKind) {
+  return !!parsed && (parsed.static || parsed.enumConstant || (isInterfaceKind(ownerKind) && memberKind(key) === 'field'));
+}
+
+/** The signatures (name and parameters) of the methods among member keys, for inheritedFrom's `declared`. */
+export function methodSignatures(keys) {
+  const out = new Set();
+  for (const key of keys) if (memberKind(key) === 'method') out.add(memberSignature(key));
+  return out;
+}
+
 /**
- * The supertype that a class inherits a member from at release `vi`, now that the class no longer declares it: the
- * nearest supertype, superclass first, then through `extends` and `implements`, that is API at `vi` and declares the
- * member there at least as visibly as the class did. Null when none does. `key` is the member, `was` its last value in
- * the class, `classValue` the class's value at `vi`, and `rowsOf` gives a class's rows (mergeApiRows), or null for
- * one without member data, whose own supertypes stay unknown. A constructor is never inherited, and neither is a static
- * method of an interface (JLS 8.4.8).
+ * Where a class gets a member at release `vi` that it no longer declares: `{from, value}`, the supertype that declares
+ * it and its value there, or null when its callers lost it. The superclass chain comes first, then the interfaces met
+ * on the way, breadth first, as Java resolves a method, and the first supertype that is API at `vi` and declares the
+ * member decides: it is inherited when that declaration is as visible as the class's was and as static (a static
+ * method of the class that a superclass declares as an instance method is gone for its callers). An interface's static
+ * method is never inherited, so the search goes on past it, and a constructor never is. Past the supertypes with member
+ * data, java.lang.Object gives its public methods, and to a class its protected clone and finalize too (`from`
+ * OBJECT_CLASS, `value` null). `key` is the member, `was` its last value in the class, `classValue` the class's value
+ * at `vi`; `rowsOf` gives a class's rows (mergeApiRows), or null for one without member data, whose own supertypes stay
+ * unknown; `wasKind` is the kind of the class where it declared the member, and `declared` the signatures of the
+ * methods it declares at `vi` (methodSignatures): one it still declares with another return type is overridden.
  */
-export function inheritedFrom(key, was, classValue, vi, rowsOf) {
+export function inheritedFrom(key, was, classValue, vi, rowsOf, { wasKind = null, declared = null } = {}) {
   const kind = memberKind(key);
   if (kind === 'constructor') return null;
-  const wasPublic = parseApiValue(was, true)?.access === 'public';
-  const queue = supertypesOf(classValue);
+  if (kind === 'method' && declared?.has(memberSignature(key))) return null;
+  const old = parseApiValue(was, true);
+  const wasPublic = old?.access === 'public';
+  const wasStatic = staticMember(old, key, wasKind);
   const seen = new Set();
-  while (queue.length && seen.size < 64) {
-    const name = queue.shift();
-    if (seen.has(name)) continue;
+  // a supertype's say: its verdict when it declares the member (undefined when not, and the search goes on), and its own supertypes
+  const look = (name) => {
+    if (seen.has(name)) return {};
     seen.add(name);
     const rows = rowsOf(name);
     const at = rows ? apiUnionAt(rows, vi) : null;
-    if (!at) continue;
+    if (!at) return {};
+    const c = parseApiValue(at.value);
     const value = at.members.get(key);
-    if (value != null) {
-      const m = parseApiValue(value, true);
-      const ofInterface = ['interface', 'annotation'].includes(parseApiValue(at.value)?.kind);
-      if (m && !(kind === 'method' && m.static && ofInterface) && (!wasPublic || m.access === 'public')) return name;
+    const m = value == null ? null : parseApiValue(value, true);
+    let verdict;
+    if (m && !(kind === 'method' && m.static && isInterfaceKind(c?.kind))) {
+      verdict = (wasPublic && m.access !== 'public') || staticMember(m, key, c?.kind) !== wasStatic ? null : { from: name, value };
     }
-    queue.push(...supertypesOf(at.value));
+    return { verdict, superclass: c?.extends ?? null, interfaces: c?.implements ?? [] };
+  };
+  const top = parseApiValue(classValue);
+  const interfaces = [...(top?.implements ?? [])];
+  for (let name = top?.extends ?? null, hops = 0; name && hops < 64; hops++) {
+    const r = look(name);
+    if (r.verdict !== undefined) return r.verdict;
+    interfaces.push(...(r.interfaces ?? []));
+    name = r.superclass;
+  }
+  for (let i = 0; i < interfaces.length && i < 256; i++) {
+    const r = look(interfaces[i]);
+    if (r.verdict !== undefined) return r.verdict;
+    interfaces.push(...(r.interfaces ?? []));
+  }
+  const objectAccess = OBJECT_METHODS.get(key);
+  if (objectAccess && !wasStatic && (objectAccess === 'public' || !isInterfaceKind(top?.kind)) && !(wasPublic && objectAccess !== 'public')) {
+    return { from: OBJECT_CLASS, value: null };
   }
   return null;
 }
 
-/** Whether a class declares a member at release `vi`, from its rows (mergeApiRows; null for none). */
-function declaresAt(rows, key, vi) {
+/** Whether a class declares a member at release `vi`, from its rows (mergeApiRows; null for none); java.lang.Object its methods always. */
+function declaresAt(rows, key, vi, name = null) {
+  if (name === OBJECT_CLASS) return true;
   return !!rows && apiUnionAt(rows, vi)?.members.has(key) === true;
 }
 
@@ -1951,7 +2045,8 @@ function lastValueBefore(hs, a, b) {
  * (classes), 'return type' (a method kept its name and parameters; `member` is the new key, `previous` the old one,
  * `previousValue` its value) or 'signature' (a possible signature change: a method that went and one of the same name
  * that came, kept as one row) or 'inherited' (a member the class no longer declares but inherits at B, inheritedFrom:
- * `from` names the supertype, `moved` says whether it did not declare the member at A). A member row's `value` is its
+ * `from` names the supertype, `inheritedValue` is the member's value there (null for java.lang.Object), `moved` says
+ * whether the supertype did not declare the member at A). A member row's `value` is its
  * value at B, or the last one it had for 'removed' and 'inherited'; a removed class or member says in `was` how it was
  * deprecated the last time it was there (deprecationBeforeRemoval's rule). `prefer` gives the jars of each class at A
  * and B (artifactIds), to pick among several; `enclosing` the rows of the class a nested class is declared in, whose
@@ -1995,10 +2090,11 @@ export function diffApi(rowsByName, a, b, prefer = () => [[], []], enclosing = (
     });
     const lastOf = (key) => lastValueBefore(rows.map((r) => r.members.get(key)).filter(Boolean), a, b) ?? A.members.get(key);
     // a member that a supertype declares now is still there, inherited: neither removed nor half of a signature change
+    const declared = methodSignatures(B.members.keys());
     const inherited = new Map();
     for (const key of gone) {
-      const from = inheritedFrom(key, A.members.get(key), B.value, b, supertypes);
-      if (from) inherited.set(key, from);
+      const got = inheritedFrom(key, A.members.get(key), B.value, b, supertypes, { wasKind: ca?.kind, declared });
+      if (got) inherited.set(key, got);
     }
     // a method that kept its name and parameters changed its return type; another of the same name may be a new signature
     const cameBySignature = groupBy(came.filter((k) => memberKind(k) !== 'field'), memberSignature);
@@ -2022,7 +2118,9 @@ export function diffApi(rowsByName, a, b, prefer = () => [[], []], enclosing = (
         memberRow(twin, 'signature', B.members.get(twin), { previous: key, previousValue: A.members.get(key) });
       }
     }
-    for (const [key, from] of inherited) memberRow(key, 'inherited', lastOf(key), { from, moved: !declaresAt(supertypes(from), key, a) });
+    for (const [key, got] of inherited) {
+      memberRow(key, 'inherited', lastOf(key), { from: got.from, inheritedValue: got.value, moved: !declaresAt(supertypes(got.from), key, a, got.from) });
+    }
     for (const key of gone) {
       if (paired.has(key)) continue;
       const last = lastOf(key);
@@ -2083,13 +2181,15 @@ export function classApiHistory(rows, cvs, enclosing = null, supertypes = () => 
       const added = [...now.members.keys()].filter((k) => !prev.members.has(k)).length;
       const gone = [...prev.members.keys()].filter((k) => !now.members.has(k));
       const bySupertype = new Map();
+      const declared = methodSignatures(now.members.keys());
+      const wasKind = parseApiValue(prev.value)?.kind ?? null;
       for (const key of gone) {
-        const from = inheritedFrom(key, prev.members.get(key), now.value, vi, supertypes);
-        if (!from) continue;
-        const x = bySupertype.get(from) ?? { from, count: 0, moved: true };
+        const got = inheritedFrom(key, prev.members.get(key), now.value, vi, supertypes, { wasKind, declared });
+        if (!got) continue;
+        const x = bySupertype.get(got.from) ?? { from: got.from, count: 0, moved: true };
         x.count++;
-        x.moved &&= !declaresAt(supertypes(from), key, prevVi);
-        bySupertype.set(from, x);
+        x.moved &&= !declaresAt(supertypes(got.from), key, prevVi, got.from);
+        bySupertype.set(got.from, x);
       }
       const inherited = [...bySupertype.values()].sort((x, y) => y.count - x.count || cmpText(x.from, y.from));
       const removed = gone.length - inherited.reduce((n, x) => n + x.count, 0);
@@ -2159,6 +2259,7 @@ export function classMembers(rows, cvs, vi, className = '', supertypes = () => n
     }
     members.push({ key, value, parsed: parseApiValue(value, true), pretty: pretty(key, value), since });
   }
+  const declared = now ? methodSignatures([...histories.keys()].filter((key) => valueAt(key, vi) != null)) : null;
   for (const key of histories.keys()) {
     if (valueAt(key, vi) != null) continue;
     let last = null;
@@ -2166,8 +2267,9 @@ export function classMembers(rows, cvs, vi, className = '', supertypes = () => n
     if (last == null) continue;
     const value = valueAt(key, last);
     const x = { key, value, parsed: parseApiValue(value, true), pretty: pretty(key, value), last };
-    const from = now ? inheritedFrom(key, value, now.value, vi, supertypes) : null;
-    if (from) inherited.push({ ...x, from });
+    const wasKind = parseApiValue(apiAt(rows, last)?.value)?.kind ?? null;
+    const got = now ? inheritedFrom(key, value, now.value, vi, supertypes, { wasKind, declared }) : null;
+    if (got) inherited.push({ ...x, from: got.from, inheritedValue: got.value });
     else removed.push(x);
   }
   const byKey = (x, y) => cmpText(x.key, y.key);

@@ -1963,6 +1963,11 @@ mark {
   margin-top: 8px;
 }
 
+/* the API cell's second row of counts, the deprecations */
+.ledger-nums + .ledger-nums {
+  margin-top: 14px;
+}
+
 .ledger-num {
   display: flex;
   flex-direction: column;
@@ -2314,9 +2319,10 @@ mark {
   text-decoration: underline;
 }
 
-/* module groups that open and close: the chevron is the button, and the rest of the head works as one too */
+/* module groups that open and close: the chevron in the heading is the button, and the rest of the head works as one too */
 
 .cgroup-head {
+  align-items: center;
   cursor: pointer;
 }
 
@@ -2381,11 +2387,18 @@ mark {
   .groups-all {
     display: none;
   }
+
+  /* printed open, so spaced as open groups are */
+  .cgroup.is-collapsed + .cgroup.is-collapsed {
+    margin-top: 26px;
+  }
 }
 
 .cgroup-counts {
   display: inline-flex;
   gap: 12px;
+  /* on a line of its own when the module's name is long: at the right, as on one line */
+  margin-left: auto;
   font: 600 12.5px/1 var(--font-mono);
 }
 
