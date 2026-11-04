@@ -45,6 +45,7 @@ By hand, once the release is 6 hours old (a jar not yet on Maven Central would b
 java -jar target/quarkus-almanac.jar bom --versions 3.40.2
 java -jar target/quarkus-almanac.jar config --versions 3.40.2
 java -jar target/quarkus-almanac.jar api --versions 3.40.2
+java -jar target/quarkus-almanac.jar profile --versions 3.40.2
 java -jar target/quarkus-almanac.jar dataset import --versions 3.40.2 --kinds bom,config,extensions,classes,api --offline
 java -jar target/quarkus-almanac.jar dataset refresh-releases --offline
 java -jar target/quarkus-almanac.jar dataset verify --offline

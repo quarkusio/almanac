@@ -100,7 +100,7 @@ class ProfileDocumentTest {
         try (ScratchDir dir = ScratchDir.create()) {
             Path data = Files.createDirectories(dir.resolve("data"));
             Files.writeString(data.resolve("versions.json"), "{\"versions\":[{\"v\":\"3.35.0\"}]}");
-            // a file without the names of its releases cannot be read again: one of an older preview
+            // a file without the names of its releases cannot be read again: one of an older format
             Files.writeString(data.resolve("profile.json"), "{\"versions\":[0],\"artifacts\":[]}");
             ProfileDocument.write(data, new SnapshotStore(dir.resolve("snapshots"), null));
             assertFalse(Files.exists(data.resolve("profile.json")), "nothing to keep, so it is removed");

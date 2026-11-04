@@ -725,7 +725,7 @@ export function diffBom(bom, versions, a, b) {
 }
 
 /**
- * profile.json, a preview: the dependency profile of some releases, the artifacts of their BOM that Quarkus itself
+ * profile.json: the dependency profile of the releases that have one, the artifacts of their BOM that Quarkus itself
  * depends on, through its extensions (runtime and deployment artifacts), its Maven plugin and its test frameworks
  * (`quarkus-almanac profile`). `versions` lists those releases, and `artifacts` the ids Quarkus depends on at one of
  * them, with change points over those releases alone of the strongest use: "r" (runtime), "b" (build) or "t" (test),

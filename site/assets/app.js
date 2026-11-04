@@ -418,8 +418,8 @@ function loadFile(name) {
 }
 
 /**
- * A data file the site works without, platform.json or profile.json (a preview): null when it is missing or cannot be
- * read, and the pages then show nothing of it. Asked for once per visit.
+ * A data file the site works without, platform.json or profile.json: null when it is missing or cannot be read, and
+ * the pages then show nothing of it. Asked for once per visit.
  */
 function loadOptional(name) {
   const key = `optional:${name}`;
@@ -2115,8 +2115,7 @@ function comparison(ia, ib, data) {
       const other = core.diffBom(platform.used ? data.bom.raw : platformBom, V.list, ia, ib);
       platform.effect = platform.used ? core.platformDiffEffect(other, out.bom) : core.platformDiffEffect(out.bom, other);
     }
-    // the dependency profile, a preview: of the third-party changes, those Quarkus itself depends on, when both
-    // releases have one
+    // the dependency profile: of the third-party changes, those Quarkus itself depends on, when both releases have one
     const profile = data.profile?.raw;
     // `from`: the From release, which a fold names when the ways it lists are that release's
     out.profile = profile && core.hasProfile(profile, ia) && core.hasProfile(profile, ib)
@@ -2399,8 +2398,8 @@ function summaryLedger(cmp, data) {
     // counted by artifact, since all the modules a release adds share one groupId and version
     const d = cmp.bom;
     const p = cmp.profile;
-    // with the dependency profiles of both releases (a preview), the numbers count the upgrades that Quarkus itself
-    // depends on, and those the BOM only manages are a line apart
+    // with the dependency profiles of both releases, the numbers count the upgrades that Quarkus itself depends on,
+    // and those the BOM only manages are a line apart
     const t = p ? p.usedCounts : d.thirdPartyGroupCounts;
     const o = d.ownCounts;
     const kinds = ['downgrade', 'major', 'minor', 'patch', 'other'].filter((k) => t[k]).map((k) => `${fmt(t[k])} ${KIND_LABEL[k]}`);
@@ -2819,7 +2818,7 @@ function depsSection(cmp, data) {
   const state = { tags: new Set(), uses: new Set(), text: '' };
   const status = h('p', { class: 'filter-status', 'aria-live': 'polite' });
   // the project's own artifacts first, with the modules versioned with the release, then the third-party ones: with
-  // the dependency profiles of both releases (a preview), those Quarkus depends on, then those the BOM only manages.
+  // the dependency profiles of both releases, those Quarkus depends on, then those the BOM only manages.
   // Each is counted as the filter chips count: by entry of the list, a groupId and its version change. `empty` says
   // that a block without entries has none, or is left out when null. A block starts collapsed and opens while a filter
   // is active, unless the reader opened or closed it since the filter last changed, as a module group does
@@ -2968,9 +2967,9 @@ function useTags(profile, row) {
 }
 
 
-/** What the dependency profile is, under the Dependencies heading of a comparison that has one (a preview). */
+/** What the dependency profile is, under the Dependencies heading of a comparison that has one. */
 function profileNote() {
-  return h('p', { class: 'note' }, h('strong', null, 'Preview. '),
+  return h('p', { class: 'note' },
     'Used by Quarkus: what its extensions (their runtime and deployment artifacts), its Maven plugin and its test frameworks depend on, with the versions of each release\'s BOM, tagged ',
     useTag('r'), ', ', useTag('b'), ' or ', useTag('t'), ' by the strongest use. Managed only: the BOM\'s other versions, which apply when an application uses those libraries itself.');
 }

@@ -64,8 +64,8 @@ public final class AssembleCommand implements Callable<Integer> {
             reportLeftOut(dataset, work);
         }
         HistoryBuilder.assemble(source, workspace.selectForSite(withBom), site.resolve("data"), Instant.now());
-        // a preview, which the dataset does not keep: the dependency profiles of the work folder, and for the other
-        // releases those that profile.json has already
+        // what the dataset does not keep: the dependency profiles of the work folder, and for the other releases
+        // those that profile.json has already
         ProfileDocument.write(site.resolve("data"), work);
         if (includeWork) {
             Log.info("assemble: --include-work used %d BOM, %d config, %d extensions, %d classes, %d platform BOM "

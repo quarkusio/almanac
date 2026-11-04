@@ -4,7 +4,8 @@ name: Add new Quarkus releases
 # runners at once (each sends its requests to Maven Central one at a time, 1 ms apart), adds them to the dataset,
 # rebuilds the site data, commits both to main and starts the Pages deploy. It also adds the platform BOM
 # (io.quarkus.platform:quarkus-bom) of each release, including those that come out after their release, and the API
-# of each release when its extraction got it (optional: a release without it is added all the same).
+# and the dependency profile of each release when its extraction got them (optional: a release without them is added
+# all the same).
 on:
   schedule:
     - cron: '17 */12 * * *'
@@ -108,6 +109,12 @@ jobs:
         run: |
           java -jar target/quarkus-almanac.jar api --versions "$VERSION" --pause "$PAUSE" --max-requests 150 \
             || echo "::warning::no API data of $VERSION this time; api --missing lists the releases without it"
+      # optional too: the release is added without it, and its comparisons show the plain list of dependencies until
+      # a maintainer runs profile, then assemble; reads poms only, about 2,500 on an empty cache
+      - name: Extract the dependency profile
+        run: |
+          java -jar target/quarkus-almanac.jar profile --versions "$VERSION" --pause "$PAUSE" \
+            || echo "::warning::no dependency profile of $VERSION this time; profile, then assemble, adds it"
       # the snapshots, and the BOM pom whose Last-Modified dates the release
       - uses: actions/upload-artifact@v7
         with:

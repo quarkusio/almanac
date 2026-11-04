@@ -28,15 +28,15 @@ import java.util.TreeMap;
 import java.util.TreeSet;
 import java.util.concurrent.Callable;
 
-/// `profile`: writes `profile.json` snapshots, the dependency profile of each release ([DependencyProfile]). A
-/// preview: the dataset does not keep them; `assemble` publishes those of the work folder, and keeps those that
+/// `profile`: writes `profile.json` snapshots, the dependency profile of each release ([DependencyProfile]). The
+/// dataset does not keep them: `assemble` publishes those of the work folder, and keeps those that
 /// `site/data/profile.json` has already for the other releases.
 @Command(name = "profile", description = "Write profile.json snapshots: of the artifacts that a release's BOM "
         + "manages, those that Quarkus itself depends on, through its extensions (runtime and deployment artifacts), "
         + "its Maven plugin and its test frameworks, each with its strongest use (runtime, build or test). Reads poms "
-        + "only, from the repository; the BOM and extensions snapshots come from the work folder or the dataset. A "
-        + "preview: the dataset does not keep these snapshots; assemble publishes those of the work folder, and keeps "
-        + "those that site/data/profile.json has already for the other releases.")
+        + "only, from the repository; the BOM and extensions snapshots come from the work folder or the dataset. "
+        + "The dataset does not keep these snapshots: assemble publishes those of the work folder, and keeps those "
+        + "that site/data/profile.json has already for the other releases.")
 public final class ProfileCommand implements Callable<Integer> {
 
     /// The snapshot file of a dependency profile.

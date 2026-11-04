@@ -4,8 +4,9 @@
 # to main. Expects the jar and, under work/, each release's snapshots (work/snapshots/<version>/, with the platform BOM
 # when it was out) and BOM pom (work/cache/io/quarkus/quarkus-bom/<version>/, whose Last-Modified dates the release).
 # Only releases with all four snapshots (BOM, config, extensions, classes) are added, with their API when the
-# extraction got it (api.json; optional, never blocking a release); EXPECTED, the number of releases the workflow
-# extracted, makes a run where none of them is complete fail. It starts from origin/main and, when main
+# extraction got it (api.json; optional, never blocking a release) and their dependency profile likewise (profile.json,
+# which assemble takes to site/data); EXPECTED, the number of releases the workflow extracted, makes a run where none
+# of them is complete fail. It starts from origin/main and, when main
 # moves before the push, starts over from it; when main's code is no longer the code that built the jar (BUILT, a
 # commit), it adds nothing, since the next run extracts the releases again with main's code.
 # For a dry run: RESET=no (start from the checkout as it is), COMMIT=no (stage the changes only) or PUSH=no (commit

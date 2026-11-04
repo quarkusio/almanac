@@ -2734,7 +2734,7 @@ a.prop:hover {
   margin: 12px 0 4px;
 }
 
-/* the dependency profile (a preview): how Quarkus uses an upgrade or an artifact */
+/* the dependency profile: how Quarkus uses an upgrade or an artifact */
 .use-tag {
   display: inline-block;
   padding: 0 6px;

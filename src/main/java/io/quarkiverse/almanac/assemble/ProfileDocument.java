@@ -21,7 +21,7 @@ import java.util.Map;
 import java.util.TreeMap;
 import java.util.TreeSet;
 
-/// `profile.json`, a preview: the dependency profile of the releases that have one, over those releases alone.
+/// `profile.json`: the dependency profile of the releases that have one, over those releases alone.
 /// `versions` lists their indices in `versions.json` and `releases` their names, in the same order, `artifacts` each
 /// managed id that Quarkus depends on at one of them, with change points of its strongest use: `"r"` (runtime), `"b"`
 /// (build) or `"t"` (test), `null` where Quarkus does not depend on it. `parents` holds, the same way, the graph of the
@@ -103,7 +103,7 @@ public final class ProfileDocument {
         document.set("parents", parents.toJson("id"));
         document.set("starts", starts.toJson("id"));
         Json.writeCompact(file, document);
-        Log.info("assemble: wrote %s (a preview), the dependency profile of %d releases (%d of them kept from the "
+        Log.info("assemble: wrote %s, the dependency profile of %d releases (%d of them kept from the "
                 + "file, without a snapshot in the work folder), %d artifacts, %d nodes", file, indices.size(), kept,
                 history.size(), parents.size());
     }
