@@ -11,6 +11,7 @@ const {
   parseLibVersion, compareLibVersions, bomChangeKind, splitId, canonicalKey, envVar, lastSegment,
   stateAt, latestValue, configVersionsOf, configVersionFor, phaseInfo, typeLabel, configChangeKinds, enumDelta,
   diffConfig, configRows, tagCounts, filterRows, groupBy, resolveBomValue, diffBom, groupBomRows, isQuarkusGroup,
+  profileSplit, strongerUse, hasProfile, profileNodeId,
   extensionChangeKinds, diffExtensions, matchTier, buildSearchIndex, search,
   propertyHistory, extensionHistory, artifactHistory, newestFinalIndex, newestInStream, ltsStreamsPresent,
   defaultPair, quickPicks, versionNeighbours, formatDate, spanLabel, CONFIG_FILTER_TAGS, BOM_KIND_ORDER,
@@ -458,6 +459,85 @@ describe('BOM diff', () => {
     for (const k of Object.keys(d.counts)) assert.equal(d.ownCounts[k] + d.thirdPartyCounts[k], d.counts[k], k);
     assert.deepEqual(d.groups.filter((g) => g.own).map((g) => g.group), ['io.quarkus', 'io.quarkus.gizmo', 'io.quarkus', 'io.quarkus']);
     assert.ok(d.groups.every((g) => g.own === isQuarkusGroup(g.group)));
+  });
+  test('the dependency profile splits the third-party changes into used by Quarkus and managed only', () => {
+    // over both releases: netty-common at run time; vertx-core at build time, then in tests; liquibase in tests at 1 only
+    const profile = {
+      versions: [0, 1],
+      artifacts: [
+        { id: 'io.netty:netty-common', h: [[0, 'r']] },
+        { id: 'io.vertx:vertx-core', h: [[0, 'b'], [1, 't']] },
+        { id: 'org.liquibase:liquibase-core', h: [[1, 't']] },
+        { id: 'io.quarkus.gizmo:gizmo2', h: [[0, 'b']] },
+      ],
+    };
+    assert.ok(hasProfile(profile, 1) && !hasProfile(profile, 2));
+    assert.equal(strongerUse('t', 'b'), 'b');
+    assert.equal(strongerUse(null, 't'), 't');
+    const p = profileSplit(d, profile, 0, 1);
+    assert.deepEqual([...p.uses].sort(), [['io.netty:netty-common', 'r'], ['io.vertx:vertx-core', 'b'], ['org.liquibase:liquibase-core', 't']],
+      'the stronger use of the two releases; Quarkus\'s own rows are left out');
+    assert.deepEqual(p.used.map((g) => g.group).sort(), ['io.netty', 'io.vertx', 'org.liquibase']);
+    assert.deepEqual(p.managed.map((g) => g.group), ['io.netty'], 'netty-tcnative, a version change of its own that no root reaches');
+    const netty = p.used.find((g) => g.group === 'io.netty');
+    assert.equal(p.groupUse.get(netty.key), 'r');
+    assert.equal(p.usedItems.get(netty.key), 1, 'netty-common, not netty-buffer');
+    assert.deepEqual({ changed: p.usedCounts.changed, patch: p.usedCounts.patch, major: p.usedCounts.major, downgrade: p.usedCounts.downgrade },
+      { changed: 3, patch: 1, major: 1, downgrade: 1 });
+    assert.equal(p.managedCounts.changed, 1);
+    assert.deepEqual([p.usedArtifacts, p.managedArtifacts, p.byUse], [3, 2, { r: 1, b: 1, t: 1 }]);
+  });
+  test('the dependency profile says how Quarkus came to depend on an artifact', () => {
+    const profile = {
+      versions: [0, 1],
+      artifacts: [
+        { id: 'io.netty:netty-common', h: [[0, 'r']] },
+        { id: 'io.netty:netty-buffer', h: [[0, 'r']] },
+        { id: 'io.vertx:vertx-core', h: [[0, 'r'], [1, 't']] },
+        { id: 'org.liquibase:liquibase-core', h: [[1, 't']] },
+      ],
+      // the graph upward: netty-common through quarkus-netty and vertx-core, vertx-core through quarkus-vertx; netty-buffer
+      // through netty-common and a client the BOM does not manage (a node at its version), through quarkus-grpc.
+      // quarkus-kafka reaches vertx-core on a path that leaves out netty-common: another node of vertx-core, not above it
+      ids: ['io.netty:netty-common', 'io.quarkus:quarkus-grpc', 'io.quarkus:quarkus-kafka', 'io.quarkus:quarkus-netty',
+        'io.quarkus:quarkus-vertx', 'io.vertx:vertx-core', 'io.vertx:vertx-core!io.netty:netty-common', 'org.example:client@2.0'],
+      parents: [
+        { id: 'io.netty:netty-buffer', h: [[0, [0, 7]]] },
+        { id: 'io.netty:netty-common', h: [[0, [3, 5]]] },
+        { id: 'io.vertx:vertx-core', h: [[0, [4]]] },
+        { id: 'io.vertx:vertx-core!io.netty:netty-common', h: [[0, [2]]] },
+        { id: 'org.example:client@2.0', h: [[0, [1]]] },
+      ],
+      // the ways up from vertx-core start at both its nodes
+      starts: [{ id: 'io.vertx:vertx-core', h: [[0, [5, 6]], [1, null]] }],
+    };
+    assert.equal(profileNodeId('org.example:client@2.0'), 'org.example:client');
+    assert.equal(profileNodeId('io.vertx:vertx-core!io.netty:netty-common'), 'io.vertx:vertx-core');
+    assert.equal(profileNodeId('org.example:x:pom:linux@1.0!a:b,c:*'), 'org.example:x:pom:linux');
+    assert.equal(profileNodeId('io.netty:netty-buffer'), 'io.netty:netty-buffer');
+    const p = profileSplit(d, profile, 0, 1);
+    assert.deepEqual([...p.direct].sort(), ['io.netty:netty-common', 'io.vertx:vertx-core']);
+    // every artifact of Quarkus that brings netty-buffer in, each with its shortest chain by id: none lists it directly
+    assert.deepEqual(p.ways.get('io.netty:netty-buffer'), {
+      direct: [],
+      transitive: [
+        ['io.quarkus:quarkus-grpc', 'org.example:client', 'io.netty:netty-buffer'],
+        ['io.quarkus:quarkus-netty', 'io.netty:netty-common', 'io.netty:netty-buffer'],
+        ['io.quarkus:quarkus-vertx', 'io.vertx:vertx-core', 'io.netty:netty-common', 'io.netty:netty-buffer'],
+      ],
+      at: 1,
+    });
+    assert.deepEqual(p.ways.get('io.netty:netty-common'), {
+      direct: ['io.quarkus:quarkus-netty'],
+      transitive: [['io.quarkus:quarkus-vertx', 'io.vertx:vertx-core', 'io.netty:netty-common']],
+      at: 1,
+    }, 'not quarkus-kafka, whose path leaves netty-common out');
+    // used at run time at 0, in tests at 1: the ways of 0, from both its nodes, and both uses
+    assert.deepEqual(p.ways.get('io.vertx:vertx-core'), { direct: ['io.quarkus:quarkus-kafka', 'io.quarkus:quarkus-vertx'], transitive: [], at: 0 });
+    assert.deepEqual(p.sides.get('io.vertx:vertx-core'), ['r', 't']);
+    assert.deepEqual(p.sides.get('io.netty:netty-common'), ['r', 'r']);
+    assert.deepEqual(p.ways.get('org.liquibase:liquibase-core'), { direct: [], transitive: [], at: 1 }, 'none recorded');
+    assert.deepEqual(p.sides.get('org.liquibase:liquibase-core'), [null, 't'], 'not used at 0');
   });
   test('groups are counted too, one per groupId and version change', () => {
     const pick = (c) => ({ changed: c.changed, added: c.added, removed: c.removed, downgrade: c.downgrade, major: c.major, minor: c.minor, patch: c.patch, other: c.other });

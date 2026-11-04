@@ -9,6 +9,7 @@ import io.quarkiverse.almanac.cli.ConfigCommand;
 import io.quarkiverse.almanac.cli.DatasetCommand;
 import io.quarkiverse.almanac.cli.ExtensionsCommand;
 import io.quarkiverse.almanac.cli.PlatformCommand;
+import io.quarkiverse.almanac.cli.ProfileCommand;
 import io.quarkiverse.almanac.cli.VersionsCommand;
 import io.quarkiverse.almanac.util.Log;
 import io.quarkiverse.almanac.verify.VerifyCommand;
@@ -24,7 +25,8 @@ import picocli.CommandLine.Spec;
                 + "poms at their git tags, into a committed dataset, and assembles the data files of the Quarkus "
                 + "Almanac site.",
         subcommands = {VersionsCommand.class, BomCommand.class, PlatformCommand.class, ConfigCommand.class,
-                ExtensionsCommand.class, ClassesCommand.class, ApiCommand.class, AssembleCommand.class,
+                ExtensionsCommand.class, ClassesCommand.class, ApiCommand.class, ProfileCommand.class,
+                AssembleCommand.class,
                 AllCommand.class, DatasetCommand.class, VerifyCommand.class, CommandLine.HelpCommand.class})
 public final class Main implements Runnable {
 

@@ -2725,8 +2725,174 @@ a.prop:hover {
   margin-top: 18px;
 }
 
+/* closer than the extension blocks: they start collapsed, so their headings read as a list */
+.eblocks.dblocks {
+  gap: 16px;
+}
+
 .dblock .modules-line {
   margin: 12px 0 4px;
+}
+
+/* the dependency profile (a preview): how Quarkus uses an upgrade or an artifact */
+.use-tag {
+  display: inline-block;
+  padding: 0 6px;
+  font: 600 11px/1.6 var(--font-sans);
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--chip-ink);
+  background: var(--chip-bg);
+  border: 1px solid var(--chip-line);
+  border-radius: 3px;
+  white-space: nowrap;
+}
+
+.use-r {
+  color: var(--accent);
+  background: var(--accent-soft);
+  border-color: var(--accent);
+}
+
+.use-t {
+  color: var(--muted);
+}
+
+/* a release at which Quarkus does not depend on the artifact, next to one at which it does */
+.use-none {
+  color: var(--muted);
+  background: transparent;
+  border-style: dashed;
+}
+
+.use-change {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  white-space: nowrap;
+}
+
+.use-change .arrow {
+  color: var(--muted);
+  font-size: 11px;
+}
+
+.dgroup-items .use-tag {
+  margin-left: 6px;
+  font-size: 10px;
+}
+
+.dgroup-items .use-change {
+  margin-left: 6px;
+}
+
+.dgroup-items .use-change .use-tag {
+  margin-left: 0;
+}
+
+.dgroup-used {
+  font-size: 12.5px;
+  color: var(--muted);
+}
+
+/* the artifacts of an upgrade Quarkus depends on, one a line, each it uses with how it arrives */
+.dgroup-items--lines {
+  flex-direction: column;
+  flex-wrap: nowrap;
+  gap: 2px;
+}
+
+/* how many artifacts of Quarkus bring an artifact in, folded: those that list it, then those that get it through
+   others, each with its shortest chain on hover */
+.dep-ways {
+  margin: 1px 0 6px 14px;
+  font-size: 12.5px;
+  color: var(--ink-2);
+}
+
+.dep-ways > summary {
+  width: fit-content;
+  color: var(--accent);
+  cursor: pointer;
+}
+
+.dep-ways > p {
+  margin: 4px 0 0;
+  overflow-wrap: anywhere;
+}
+
+.dep-ways-k {
+  font-weight: 600;
+}
+
+/* an artifact of Quarkus that brings the artifact in through others: its shortest chain on hover */
+.dep-ways-via {
+  text-decoration: underline dotted;
+  text-underline-offset: 2px;
+  cursor: help;
+}
+
+/* the artifacts of an upgrade Quarkus depends on that it does not use itself */
+.dgroup-managed {
+  margin: 10px 0 0;
+  font-size: 12.5px;
+  color: var(--muted);
+}
+
+.dgroup-managed-k {
+  font-weight: 600;
+  color: var(--ink-2);
+}
+
+/* the Dependencies toolbar with the dependency profile: the kind chips, then the chips of how Quarkus uses an artifact */
+.fchips-rows {
+  display: grid;
+  gap: 8px;
+  min-width: 0;
+}
+
+.fchips-line {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 10px;
+}
+
+.fchips-label {
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--muted);
+}
+
+/* a block opens and closes as a module group does: the chevron in the heading is the button, and the rest of the
+   heading works as one too */
+.dblock-head {
+  align-items: center;
+  gap: 6px;
+  cursor: pointer;
+}
+
+.dblock-head .eblock-n {
+  margin-left: 4px;
+}
+
+.dblock-head:hover .cgroup-toggle {
+  background: var(--accent-soft);
+}
+
+.dblock.is-collapsed .cgroup-chev {
+  transform: rotate(-90deg);
+}
+
+@media print {
+  .dblock-body[hidden] {
+    display: block !important;
+    content-visibility: visible !important;
+  }
+
+  .dblock-head .cgroup-toggle {
+    display: none;
+  }
 }
 
 .dgroup {

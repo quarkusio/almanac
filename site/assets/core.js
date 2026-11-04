@@ -725,6 +725,160 @@ export function diffBom(bom, versions, a, b) {
 }
 
 /**
+ * profile.json, a preview: the dependency profile of some releases, the artifacts of their BOM that Quarkus itself
+ * depends on, through its extensions (runtime and deployment artifacts), its Maven plugin and its test frameworks
+ * (`quarkus-almanac profile`). `versions` lists those releases, and `artifacts` the ids Quarkus depends on at one of
+ * them, with change points over those releases alone of the strongest use: "r" (runtime), "b" (build) or "t" (test),
+ * null where Quarkus does not depend on the id. `parents` holds, the same way, the graph of the profile's walks upward:
+ * each node → the nodes whose dependency brought it in the walk of its strongest use, as indices into `ids`. A node is
+ * an id, then `@` and the version for an artifact the BOM does not manage that the release reaches at several versions,
+ * then `!` and the exclusions of its path that leave out something below it, if any (profileNodeId reads its id back).
+ * `starts` lists the nodes where the ways up from a used id start, for those whose ways do not start at the node
+ * written as the id alone. `releases` names the releases of `versions`.
+ */
+
+/** The uses of the dependency profile, the strongest first. */
+export const PROFILE_USES = ['r', 'b', 't'];
+
+/** Whether release `vi` has a dependency profile in `profile` (profile.json). */
+export function hasProfile(profile, vi) {
+  return hasPlatformBom(profile, vi);
+}
+
+/** The stronger of two uses of the dependency profile (PROFILE_USES), null when neither is one. */
+export function strongerUse(a, b) {
+  if (a == null) return b ?? null;
+  if (b == null) return a;
+  return PROFILE_USES.indexOf(a) <= PROFILE_USES.indexOf(b) ? a : b;
+}
+
+/**
+ * The id of a node of profile.json's graph: its key up to the version of an artifact the BOM does not manage (`@`) or
+ * the exclusions of its path (`!`), which ids never hold.
+ */
+export function profileNodeId(node) {
+  const end = node.search(/[@!]/);
+  return end < 0 ? node : node.slice(0, end);
+}
+
+/**
+ * Every way Quarkus came to depend on an artifact at release `vi`, from its nodes `starts` up through profile.json's
+ * graph (`parentsAt(node, vi)`: the nodes whose dependency brought a node), by the artifacts of Quarkus itself
+ * (isQuarkusGroup) that bring it in: `direct`, those that list it in their own dependencies, and `transitive`, each of
+ * the others with its shortest chain to it, that artifact's id first and the artifact's last. The graph's nodes tell
+ * apart the paths whose exclusions leave out different things, so each of these does bring it in. Every path would be
+ * too many: hundreds of thousands lead to jboss-logging. Sorted by id.
+ */
+export function profileWays(parentsAt, starts, vi) {
+  const start = new Set(starts);
+  // breadth first up from the artifact's nodes: of each node above them, the step toward them on a shortest way
+  const toward = new Map();
+  const queue = [];
+  const reach = (p, from) => {
+    if (start.has(p) || toward.has(p)) return;
+    toward.set(p, from);
+    queue.push(p);
+  };
+  const own = (x) => isQuarkusGroup(splitId(x).group);
+  const byText = (x, y) => (x < y ? -1 : x > y ? 1 : 0);
+  const listed = new Set();
+  for (const s of starts) {
+    for (const p of parentsAt(s, vi)) {
+      if (own(profileNodeId(p))) listed.add(profileNodeId(p));
+      reach(p, s);
+    }
+  }
+  for (let k = 0; k < queue.length; k++) for (const p of parentsAt(queue[k], vi)) reach(p, queue[k]);
+  // the nearest node of each artifact of Quarkus above, the order of the walk being by distance
+  const nearest = new Map();
+  for (const q of queue) {
+    const id = profileNodeId(q);
+    if (own(id) && !listed.has(id) && !nearest.has(id)) nearest.set(id, q);
+  }
+  const transitive = [...nearest.keys()].sort(byText).map((id) => {
+    const chain = [nearest.get(id)];
+    while (!start.has(chain[chain.length - 1])) chain.push(toward.get(chain[chain.length - 1]));
+    return chain.map(profileNodeId);
+  });
+  return { direct: [...listed].sort(byText), transitive };
+}
+
+/**
+ * The third-party side of a BOM diff (diffBom) split by the dependency profiles of its releases `a` and `b`, which both
+ * have one (hasProfile): `uses`, the id of each row that Quarkus depends on → the stronger of its uses at the two
+ * releases (at `b` alone for an added row, at `a` alone for a removed one), `sides`, the same id → its use at `a` and at
+ * `b` (null for none, and for the side of an added or removed row), and `ways`, every way it comes in with that use at
+ * the release that gave it (profileWays), `b` when both did, which `at` names; `direct`, those of them that an artifact
+ * of Quarkus lists in its own dependencies (the others come only through other artifacts); `used`, the third-party
+ * groups with such a row, and `managed`, the others, which the BOM only manages; their counts as bomCounts counts groups
+ * (`usedCounts`, `managedCounts`); `groupUse`, the strongest use in each used group by its key, and `usedItems`, how
+ * many of its rows Quarkus depends on; the third-party artifacts that Quarkus depends on at either release
+ * (`usedArtifacts`, of them `byUse`) and those it does not (`managedArtifacts`).
+ */
+export function profileSplit(diff, profile, a, b) {
+  const histories = new Map(profile.artifacts.map((x) => [x.id, x.h]));
+  const parentsById = new Map((profile.parents ?? []).map((x) => [x.id, x.h]));
+  const startsById = new Map((profile.starts ?? []).map((x) => [x.id, x.h]));
+  const names = profile.ids ?? [];
+  const nodesAt = (byId, key, vi) => {
+    const h = byId.get(key);
+    const list = h ? stateAt(h, vi) ?? null : null;
+    return list ? list.map((k) => names[k]) : null;
+  };
+  const parentsAt = (node, vi) => nodesAt(parentsById, node, vi) ?? [];
+  const at = (id, i) => {
+    const h = histories.get(id);
+    return h ? stateAt(h, i) ?? null : null;
+  };
+  const uses = new Map();
+  const sides = new Map();
+  const ways = new Map();
+  const direct = new Set();
+  const byUse = { r: 0, b: 0, t: 0 };
+  let managedArtifacts = 0;
+  for (const r of diff.rows) {
+    if (r.own) continue;
+    const ua = r.kind === 'added' ? null : at(r.id, a);
+    const ub = r.kind === 'removed' ? null : at(r.id, b);
+    const use = strongerUse(ua, ub);
+    if (use) {
+      const vi = ub === use ? b : a;
+      const way = profileWays(parentsAt, nodesAt(startsById, r.id, vi) ?? [r.id], vi);
+      uses.set(r.id, use);
+      sides.set(r.id, [ua, ub]);
+      ways.set(r.id, { ...way, at: vi });
+      if (way.direct.length) direct.add(r.id);
+      byUse[use]++;
+    } else managedArtifacts++;
+  }
+  const groupUse = new Map();
+  const usedItems = new Map();
+  const used = [];
+  const managed = [];
+  for (const g of diff.groups) {
+    if (g.own) continue;
+    let use = null;
+    let n = 0;
+    for (const r of g.items) {
+      const u = uses.get(r.id);
+      if (u) {
+        use = strongerUse(use, u);
+        n++;
+      }
+    }
+    if (use) {
+      used.push(g);
+      groupUse.set(g.key, use);
+      usedItems.set(g.key, n);
+    } else managed.push(g);
+  }
+  return {
+    uses, sides, ways, direct, used, managed, groupUse, usedItems, usedCounts: bomCounts(used), managedCounts: bomCounts(managed),
+    usedArtifacts: uses.size, managedArtifacts, byUse,
+  };
+}
+
+/**
  * Groups BOM rows sharing (groupId, from, to); ordered by severity
  * (downgrade, major, minor, patch, other, added, removed), then groupId, then versions. A group is Quarkus's own
  * (`own`) when its groupId is (isQuarkusGroup).

@@ -35,6 +35,17 @@ const QUARKUS_REPO = 'https://github.com/quarkusio/quarkus';
  */
 const OLDEST_SHOWN_STREAM = '3.8';
 
+/** The uses of the dependency profile (core.PROFILE_USES): a tag, and how a count of artifacts reads. */
+const USE_LABEL = { r: 'runtime', b: 'build', t: 'test' };
+const USE_PHRASE = { r: 'at run time', b: 'at build time only', t: 'in tests only' };
+/** How the artifacts of Quarkus that bring an artifact in use it, as its fold of ways in says: those of its use. */
+const WAYS_PHRASE = { r: 'at run time', b: 'at build time', t: 'for tests' };
+const USE_TITLE = {
+  r: 'A dependency of an extension\'s runtime artifact: it is part of the applications that use the extension',
+  b: 'A dependency of an extension\'s deployment artifact or of the Maven plugin only: it runs at build time',
+  t: 'A dependency of a test framework only (quarkus-junit*, quarkus-test-*)',
+};
+
 const KIND_LABEL = {
   added: 'added', removed: 'removed', changed: 'changed', default: 'default', type: 'type', phase: 'phase',
   deprecated: 'deprecated', undeprecated: 'undeprecated', enum: 'enum', extension: 'extension',
@@ -382,6 +393,10 @@ const PREPARE = {
     if (!json || !Array.isArray(json.versions) || !Array.isArray(json.artifacts)) throw new Error('platform.json: missing "versions" or "artifacts"');
     return { raw: json, byId: new Map(json.artifacts.map((a) => [a.id, a])) };
   },
+  profile(json) {
+    if (!json || !Array.isArray(json.versions) || !Array.isArray(json.artifacts)) throw new Error('profile.json: missing "versions" or "artifacts"');
+    return { raw: json };
+  },
   classes(json) {
     if (!json || !Array.isArray(json.classes) || !Array.isArray(json.artifacts) || !Array.isArray(json.packages) || !Array.isArray(json.versions)) {
       throw new Error('classes-<major>.json: missing "versions", "artifacts", "packages" or "classes"');
@@ -403,8 +418,8 @@ function loadFile(name) {
 }
 
 /**
- * A data file the site works without, platform.json: null when it is missing or cannot be read, and the pages then
- * show nothing of it. Asked for once per visit.
+ * A data file the site works without, platform.json or profile.json (a preview): null when it is missing or cannot be
+ * read, and the pages then show nothing of it. Asked for once per visit.
  */
 function loadOptional(name) {
   const key = `optional:${name}`;
@@ -1478,10 +1493,10 @@ function missingData(file, error) {
 
 function filterChips(defs, counts, active, onChange, label) {
   const wrap = h('div', { class: 'fchips', role: 'group', 'aria-label': label });
-  for (const [kind, text] of defs) {
+  for (const [kind, text, title] of defs) {
     const n = counts[kind] ?? 0;
     // a pressed chip stays enabled, so that it can be released when another filter leaves it nothing
-    const b = h('button', { type: 'button', class: `fchip tone-${KIND_TONE[kind] ?? 'neu'}`, 'aria-pressed': String(active.has(kind)), disabled: n === 0 && !active.has(kind) },
+    const b = h('button', { type: 'button', class: `fchip tone-${KIND_TONE[kind] ?? 'neu'}`, title: title ?? null, 'aria-pressed': String(active.has(kind)), disabled: n === 0 && !active.has(kind) },
       h('span', { class: 'fchip-dot', 'aria-hidden': 'true' }), text, h('span', { class: 'fchip-n' }, fmt(n)));
     b.addEventListener('click', () => {
       if (active.has(kind)) active.delete(kind);
@@ -2100,6 +2115,12 @@ function comparison(ia, ib, data) {
       const other = core.diffBom(platform.used ? data.bom.raw : platformBom, V.list, ia, ib);
       platform.effect = platform.used ? core.platformDiffEffect(other, out.bom) : core.platformDiffEffect(out.bom, other);
     }
+    // the dependency profile, a preview: of the third-party changes, those Quarkus itself depends on, when both
+    // releases have one
+    const profile = data.profile?.raw;
+    // `from`: the From release, which a fold names when the ways it lists are that release's
+    out.profile = profile && core.hasProfile(profile, ia) && core.hasProfile(profile, ib)
+      ? { ...core.profileSplit(out.bom, profile, ia, ib), from: { at: ia, text: versionText(V.list[ia].v) } } : null;
   }
   const cvs = data.config ? data.config.raw.versions : V.configVis;
   out.ca = core.configVersionFor(ia, V.list, cvs);
@@ -2140,8 +2161,9 @@ async function renderCompare(r) {
   const aa = core.apiVersionFor(ia, V.list, V.apiVis);
   const ab = core.apiVersionFor(ib, V.list, V.apiVis);
   if (aa != null && ab != null && aa !== ab) loadClasses(linesSpanning(core.classLinesOf(V.list, [aa, ab]))).catch(() => {});
-  const [data, platform] = await Promise.all([loadSettled(['bom', 'config', 'extensions']), loadOptional('platform')]);
+  const [data, platform, profile] = await Promise.all([loadSettled(['bom', 'config', 'extensions']), loadOptional('platform'), loadOptional('profile')]);
   data.platform = platform;
+  data.profile = profile;
   const cmp = comparison(ia, ib, data);
   const head = compareHeader(cmp);
   if (ia === ib) return frag(head, emptyNote('From and To are the same release, so there is nothing to compare. Change one of them above.'));
@@ -2376,16 +2398,31 @@ function summaryLedger(cmp, data) {
     // change, since one upgrade moves many artifacts; Quarkus's own artifacts (core.isQuarkusGroup) are a line apart,
     // counted by artifact, since all the modules a release adds share one groupId and version
     const d = cmp.bom;
-    const t = d.thirdPartyGroupCounts;
+    const p = cmp.profile;
+    // with the dependency profiles of both releases (a preview), the numbers count the upgrades that Quarkus itself
+    // depends on, and those the BOM only manages are a line apart
+    const t = p ? p.usedCounts : d.thirdPartyGroupCounts;
     const o = d.ownCounts;
     const kinds = ['downgrade', 'major', 'minor', 'patch', 'other'].filter((k) => t[k]).map((k) => `${fmt(t[k])} ${KIND_LABEL[k]}`);
-    const third = !(t.changed || t.added || t.removed) ? 'no third-party change'
-      : `third-party, by groupId${kinds.length ? `: ${kinds.join(' · ')}, in ${plural(d.thirdPartyCounts.changed, 'artifact')}` : ''}`;
+    const any = t.changed || t.added || t.removed;
+    let third;
+    if (p) {
+      const uses = core.PROFILE_USES.filter((u) => p.byUse[u]).map((u) => `${fmt(p.byUse[u])} ${USE_PHRASE[u]}`);
+      third = !any ? 'no change in what Quarkus depends on'
+        : `used by Quarkus, by groupId${kinds.length ? `: ${kinds.join(' · ')}` : ''}; ${plural(p.usedArtifacts, 'artifact')} it depends on at either release (${uses.join(', ')})`;
+    } else {
+      third = !any ? 'no third-party change'
+        : `third-party, by groupId${kinds.length ? `: ${kinds.join(' · ')}, in ${plural(d.thirdPartyCounts.changed, 'artifact')}` : ''}`;
+    }
+    const m = p?.managedCounts;
+    const managedOnly = p && p.managedArtifacts ? h('span', { class: 'muted' },
+      `Managed only: ${plural(m.changed + m.added + m.removed, 'change')} and ${plural(p.managedArtifacts, 'artifact')} in all that Quarkus itself does not depend on`) : null;
     const others = [['changed', o.changed], ['added', o.added], ['removed', o.removed]].filter(([, n]) => n)
       .map(([label, n], k) => (k ? `${fmt(n)} ${label}` : `${plural(n, 'artifact')} ${label}`));
     const own = [d.modules ? `${plural(d.modules, 'module')} versioned with the release` : null, others.length ? others.join(', ') : null].filter(Boolean);
     cells.push(cell('Dependencies', 'sec-deps', [[t.changed, 'changed', 'chg'], [t.added, 'added', 'add'], [t.removed, 'removed', 'rem']], [
       cmp.platform?.used ? `Platform BOM; ${third}` : `${third.charAt(0).toUpperCase()}${third.slice(1)}`,
+      managedOnly,
       own.length ? h('span', { class: 'muted' }, `${moduleWord(cmp)}: ${own.join('; ')}`) : null]));
   } else {
     cells.push(cell('Dependencies', 'sec-deps', [], 'bom.json is unavailable.'));
@@ -2750,19 +2787,28 @@ function rowDetails(r) {
 /* ---------- §2 dependencies ---------- */
 
 const BOM_CHIPS = [['downgrade', 'downgrade'], ['major', 'major'], ['minor', 'minor'], ['patch', 'patch'], ['other', 'qualifier'], ['added', 'added'], ['removed', 'removed']];
+/**
+ * With the dependency profile: the artifacts Quarkus uses at run time, at build time or in tests, and those that an
+ * artifact of Quarkus lists in its own dependencies apart from those that come only through other artifacts.
+ */
+const USE_CHIPS = [['r', 'runtime', USE_TITLE.r], ['b', 'build', USE_TITLE.b], ['t', 'test', USE_TITLE.t],
+  ['directly', 'directly', 'An artifact of Quarkus with its tagged use (runtime, build or test) lists it in its own dependencies'],
+  ['transitively', 'transitively', 'No artifact of Quarkus with its tagged use (runtime, build or test) lists it: it comes only through other artifacts']];
 
 function depsSection(cmp, data) {
   const word = moduleWord(cmp);
+  const p = cmp.profile;
   const sec = h('section', { class: 'sec', id: 'sec-deps', 'aria-labelledby': 'sec-deps-h' },
     sectionHead(2, 'Dependencies', 'sec-deps-h',
       h('p', { class: 'sec-note' }, 'Versions managed by ',
         cmp.platform?.used ? frag('the platform BOM, ', h('code', null, 'io.quarkus.platform:quarkus-bom'))
           : [...new Set([cmp.A, cmp.B].map(bomIdOf))].flatMap((id, k) => [k ? ' and ' : null, h('code', null, id)]),
         `. Artifacts that share a groupId and the same version change are listed together, ${word}'s own (`, ownGroupsText(cmp),
-        ') apart from the third-party ones.')));
+        p ? ') first, then the third-party ones that Quarkus itself depends on, then those the BOM only manages.' : ') apart from the third-party ones.')));
   if (!cmp.bom) return add(sec, [missingData('bom.json', data.errors.bom)]);
   const pnote = platformNote(cmp);
   if (pnote) sec.append(pnote);
+  if (p) sec.append(profileNote());
   const d = cmp.bom;
   const modulesLine = d.modules ? h('p', { class: 'modules-line' },
     h('span', { class: 'modules-n' }, fmt(d.modules)),
@@ -2770,24 +2816,79 @@ function depsSection(cmp, data) {
     h('span', { class: 'ver' }, versionText(cmp.B.v)), '.',
     h('span', { class: 'muted' }, ` Versioned with the release in both, ${d.modules === 1 ? 'it is' : 'they are'} not listed.`)) : null;
   if (!d.groups.length) return add(sec, [modulesLine, emptyNote('No other managed dependency changed version.')]);
-  const state = { tags: new Set(), text: '' };
+  const state = { tags: new Set(), uses: new Set(), text: '' };
   const status = h('p', { class: 'filter-status', 'aria-live': 'polite' });
-  // the project's own artifacts first, with the modules versioned with the release, then the third-party ones
-  // each counted as the filter chips count: by entry of the list, a groupId and its version change
-  const block = (title, lead, groups) => {
+  // the project's own artifacts first, with the modules versioned with the release, then the third-party ones: with
+  // the dependency profiles of both releases (a preview), those Quarkus depends on, then those the BOM only manages.
+  // Each is counted as the filter chips count: by entry of the list, a groupId and its version change. `empty` says
+  // that a block without entries has none, or is left out when null. A block starts collapsed and opens while a filter
+  // is active, unless the reader opened or closed it since the filter last changed, as a module group does
+  // (moduleGroup); find in page opens it where browsers support hidden="until-found". The reader's choices and the
+  // groups shown are kept for the visit (openDepBlocks), so that Back from an artifact finds the blocks as they were.
+  let memory = openDepBlocks.get(`${cmp.ia}:${cmp.ib}`);
+  if (!memory) {
+    memory = new Map();
+    openDepBlocks.set(`${cmp.ia}:${cmp.ib}`, memory);
+  }
+  const setOpen = (b, open) => {
+    b.toggle.setAttribute('aria-expanded', String(open));
+    if (open) b.body.removeAttribute('hidden');
+    else b.body.setAttribute('hidden', 'until-found');
+    b.el.classList.toggle('is-collapsed', !open);
+  };
+  const block = (title, lead, groups, empty) => {
+    const id = `dblock-${++depBlockSeq}`;
     const n = h('span', { class: 'eblock-n' });
     const list = h('div', { class: 'dgroups' });
-    return { el: h('div', { class: 'eblock dblock' }, h('h3', { class: 'eblock-title' }, title, n), lead, list), n, list, groups, total: groups.length };
+    const body = h('div', { class: 'dblock-body', id }, lead, list);
+    const toggle = h('button', { type: 'button', class: 'cgroup-toggle', 'aria-controls': id, 'aria-label': title }, icon('chevron', 'cgroup-chev'));
+    const head = h('h3', { class: 'eblock-title dblock-head' }, toggle, h('span', null, title), n);
+    let kept = memory.get(title);
+    if (!kept) {
+      kept = { choice: null, shown: 0 };
+      memory.set(title, kept);
+    }
+    const b = { n, list, body, toggle, groups, empty, total: groups.length, kept };
+    b.el = h('div', { class: 'eblock dblock' }, head, body);
+    const choose = (open) => {
+      kept.choice = open;
+      setOpen(b, open);
+    };
+    toggle.addEventListener('click', () => choose(toggle.getAttribute('aria-expanded') !== 'true'));
+    head.addEventListener('click', (e) => {
+      if (!e.target.closest('a, button')) choose(toggle.getAttribute('aria-expanded') !== 'true');
+    });
+    body.addEventListener('beforematch', () => choose(true));
+    return b;
   };
-  const own = block(word, modulesLine, d.groups.filter((g) => g.own));
-  const third = block('Third-party', null, d.groups.filter((g) => !g.own));
+  const own = block(word, modulesLine, d.groups.filter((g) => g.own), null);
+  const blocks = p
+    ? [own, block('Used by Quarkus', null, p.used, 'No dependency of Quarkus changed version.'),
+      block('Managed only', null, p.managed, null)]
+    : [own, block('Third-party', null, d.groups.filter((g) => !g.own), 'No third-party dependency changed version.')];
   const none = emptyNote(`No ${d.modules ? 'listed ' : ''}dependency change matches these filters.`);
   const total = d.rows.length;
+  // the filters as one string; the page opens with none
+  const signature = (words) => `${[...state.tags].sort().join(' ')}\u0000${[...state.uses].sort().join(' ')}\u0000${words.join(' ')}`;
+  let filtered = signature([]);
   const update = () => {
     const words = state.text.toLowerCase().split(/\s+/).filter(Boolean);
-    const filtering = state.tags.size > 0 || words.length > 0;
+    // the use chips: any of the uses chosen (runtime, build, test), and any of the ways chosen (directly, transitively)
+    const uses = new Set([...state.uses].filter((u) => core.PROFILE_USES.includes(u)));
+    const ways = new Set([...state.uses].filter((u) => !core.PROFILE_USES.includes(u)));
+    const byUse = uses.size > 0 || ways.size > 0;
+    const filtering = state.tags.size > 0 || byUse || words.length > 0;
+    // another filter forgets the reader's choices and the groups shown, so that its matches show
+    const filter = signature(words);
+    if (filter !== filtered) {
+      for (const b of blocks) {
+        b.kept.choice = null;
+        b.kept.shown = 0;
+      }
+      filtered = filter;
+    }
     let n = 0;
-    for (const b of [own, third]) {
+    for (const b of blocks) {
       const shown = [];
       let k = 0;
       for (const g of b.groups) {
@@ -2798,6 +2899,14 @@ function depsSection(cmp, data) {
           items = g.items.filter((it) => words.every((w) => (base + it.id.toLowerCase()).includes(w)));
           if (!items.length) continue;
         }
+        if (byUse) {
+          items = items.filter((it) => {
+            const u = p.uses.get(it.id);
+            return u != null && (!uses.size || uses.has(u))
+              && (!ways.size || ways.has(p.direct.has(it.id) ? 'directly' : 'transitively'));
+          });
+          if (!items.length) continue;
+        }
         shown.push([g, items]);
         k += items.length;
       }
@@ -2805,28 +2914,72 @@ function depsSection(cmp, data) {
       b.n.textContent = !b.total ? '' : shown.length === b.total ? fmt(b.total) : `${fmt(shown.length)} of ${fmt(b.total)}`;
       // a filter shows the blocks it matches in, and the own block whenever there are modules, whose line says that
       // they are not listed: a filter matches none of them
-      b.el.hidden = b === own ? !d.modules && (filtering ? !shown.length : !b.total) : filtering && !shown.length;
-      if (shown.length) renderDepGroups(b.list, shown);
-      else if (b === third && !filtering) b.list.replaceChildren(emptyNote('No third-party dependency changed version.'));
+      b.el.hidden = b === own ? !d.modules && (filtering ? !shown.length : !b.total)
+        : filtering ? !shown.length : !b.total && b.empty == null;
+      // the entries render collapsed too, so that find in page reaches them
+      if (shown.length) renderDepGroups(b.list, shown, p, b.kept);
+      else if (!filtering && b.empty) b.list.replaceChildren(emptyNote(b.empty));
       else b.list.replaceChildren();
+      setOpen(b, b.kept.choice ?? filtering);
     }
     none.hidden = !filtering || n > 0;
     status.textContent = n === total ? `${plural(total, 'artifact')} in ${plural(d.groups.length, 'group')}.` : `Showing ${fmt(n)} of ${plural(total, 'artifact')}.`;
   };
+  const kindChips = filterChips(BOM_CHIPS, d.groupCounts, state.tags, update, 'Show only these kinds of dependency change');
   sec.append(
     h('div', { class: 'toolbar' },
-      filterChips(BOM_CHIPS, d.groupCounts, state.tags, update, 'Show only these kinds of dependency change'),
+      p ? h('div', { class: 'fchips-rows' }, kindChips,
+        h('div', { class: 'fchips-line' }, h('span', { class: 'fchips-label' }, 'Used by Quarkus'),
+          filterChips(USE_CHIPS, { ...p.byUse, directly: p.direct.size, transitively: p.usedArtifacts - p.direct.size },
+            state.uses, update, 'Show only the artifacts Quarkus uses this way'))) : kindChips,
       textFilter('Filter by groupId, artifactId or version', (v) => {
         state.text = v;
         update();
       })),
     status,
-    h('div', { class: 'eblocks dblocks' }, own.el, third.el, none));
+    h('div', { class: 'eblocks dblocks' }, blocks.map((b) => b.el), none));
   update();
   return sec;
 }
 
-function renderDepGroups(container, groups) {
+let depBlockSeq = 0;
+
+/**
+ * The dependency blocks of each comparison during this visit, by pair of release indices ("ia:ib") and block title: the
+ * reader's choice to open or close it (null for none) and how many of its groups were shown.
+ */
+const openDepBlocks = new Map();
+
+/** A use of the dependency profile as a tag: runtime, build or test; null for none, at a release that has the artifact. */
+function useTag(use) {
+  if (use == null) return h('span', { class: 'use-tag use-none', title: 'Quarkus itself does not depend on it at this release: the BOM only manages it' }, 'none');
+  return h('span', { class: `use-tag use-${use}`, title: USE_TITLE[use] }, USE_LABEL[use]);
+}
+
+/**
+ * How Quarkus uses a row of a comparison (core.profileSplit): its tag, or both when the releases differ, the From
+ * release's first; an added or removed row has one side only.
+ */
+function useTags(profile, row) {
+  const [ua, ub] = profile.sides.get(row.id) ?? [null, null];
+  if (ua === ub || row.kind === 'added' || row.kind === 'removed') return useTag(profile.uses.get(row.id) ?? null);
+  return h('span', { class: 'use-change' }, useTag(ua), h('span', { class: 'arrow', 'aria-hidden': 'true' }, ' → '),
+    h('span', { class: 'sr-only' }, ' then '), useTag(ub));
+}
+
+
+/** What the dependency profile is, under the Dependencies heading of a comparison that has one (a preview). */
+function profileNote() {
+  return h('p', { class: 'note' }, h('strong', null, 'Preview. '),
+    'Used by Quarkus: what its extensions (their runtime and deployment artifacts), its Maven plugin and its test frameworks depend on, with the versions of each release\'s BOM, tagged ',
+    useTag('r'), ', ', useTag('b'), ' or ', useTag('t'), ' by the strongest use. Managed only: the BOM\'s other versions, which apply when an application uses those libraries itself.');
+}
+
+/**
+ * Renders dependency groups (`[group, items shown]` pairs) page by page; with `profile` (core.profileSplit), each says
+ * how Quarkus uses it. `kept.shown`, when given, is how many groups to show at first, and follows those shown.
+ */
+function renderDepGroups(container, groups, profile = null, kept = null) {
   container.replaceChildren();
   if (!groups.length) {
     container.append(emptyNote('No dependency change matches these filters.'));
@@ -2834,15 +2987,15 @@ function renderDepGroups(container, groups) {
   }
   let shown = 0;
   const more = moreButton('', () => {
-    const first = appendPage();
+    const first = appendPage(DEP_GROUP_PAGE);
     first?.querySelector('a, button')?.focus();
   });
-  const appendPage = () => {
+  const appendPage = (size) => {
     const f = document.createDocumentFragment();
     let first = null;
-    const end = Math.min(groups.length, shown + DEP_GROUP_PAGE);
+    const end = Math.min(groups.length, shown + size);
     for (; shown < end; shown++) {
-      const el = depGroup(groups[shown][0], groups[shown][1]);
+      const el = depGroup(groups[shown][0], groups[shown][1], profile);
       first = first ?? el;
       f.append(el);
     }
@@ -2853,9 +3006,10 @@ function renderDepGroups(container, groups) {
       more.textContent = `Show ${plural(rest, 'more group')}`;
       container.append(more);
     }
+    if (kept) kept.shown = shown;
     return first;
   };
-  appendPage();
+  appendPage(Math.max(DEP_GROUP_PAGE, kept?.shown ?? 0));
 }
 
 function depVersions(g) {
@@ -2865,36 +3019,83 @@ function depVersions(g) {
     h('span', { class: 'v-old' }, g.from), h('span', { class: 'arrow', 'aria-hidden': 'true' }, ' → '), h('span', { class: 'sr-only' }, ' to '), h('span', { class: 'v-new' }, g.to));
 }
 
-function depGroup(g, items) {
+function depGroup(g, items, profile = null) {
   const single = g.items.length === 1;
   const artLabel = (it) => (it.extra ? `${it.artifact}:${it.extra}` : it.artifact);
+  const artLink = (it) => h('a', { href: link.artifact(it.id) }, artLabel(it));
+  // with the dependency profile: how Quarkus uses the group; the artifacts it depends on one a line, each with how it
+  // arrives and, folded, every way in; then the group's others, which the BOM only manages
+  const use = profile?.groupUse.get(g.key) ?? null;
+  const usedN = profile?.usedItems.get(g.key) ?? 0;
+  const itemUse = (it) => profile?.uses.get(it.id) ?? null;
   const head = h('div', { class: 'dgroup-head' },
     chip(g.kind),
     single ? h('a', { class: 'dgroup-id', href: link.artifact(items[0].id) }, items[0].id) : h('span', { class: 'dgroup-id' }, g.group),
     depVersions(g),
-    single ? null : h('span', { class: 'dgroup-n' }, items.length === g.items.length ? plural(g.items.length, 'artifact') : `${fmt(items.length)} of ${plural(g.items.length, 'artifact')}`));
+    single ? null : h('span', { class: 'dgroup-n' }, items.length === g.items.length ? plural(g.items.length, 'artifact') : `${fmt(items.length)} of ${plural(g.items.length, 'artifact')}`),
+    use ? (single ? useTags(profile, items[0]) : useTag(use)) : null,
+    use && !single && usedN < g.items.length ? h('span', { class: 'dgroup-used' }, `${fmt(usedN)} used by Quarkus`) : null);
   const el = h('div', { class: `dgroup dgroup--${g.kind}` }, head);
-  if (!single) {
-    const ul = h('ul', { class: 'dgroup-items' });
-    const fill = (from, to) => {
-      const f = document.createDocumentFragment();
-      for (let i = from; i < to; i++) f.append(h('li', null, h('a', { href: link.artifact(items[i].id) }, artLabel(items[i]))));
-      return f;
-    };
-    const initial = Math.min(items.length, DEP_ITEMS_CAP);
-    ul.append(fill(0, initial));
-    el.append(ul);
-    if (items.length > initial) {
-      const btn = moreButton(`Show all ${fmt(items.length)}`, () => {
-        ul.append(fill(initial, items.length));
-        btn.remove();
-        ul.children[initial]?.querySelector('a')?.focus();
-      });
-      btn.classList.add('more--inline');
-      el.append(btn);
-    }
+  const ways = (it) => waysEl(profile.ways.get(it.id), itemUse(it), profile.from);
+  if (single) {
+    if (use) add(el, [ways(items[0])]);
+    return el;
+  }
+  if (!use) return add(el, depItems('dgroup-items', items, (it) => h('li', null, artLink(it))));
+  const usedItems = items.filter(itemUse);
+  const others = items.filter((it) => !itemUse(it));
+  add(el, depItems('dgroup-items dgroup-items--lines', usedItems, (it) => h('li', null, artLink(it), useTags(profile, it), ways(it))));
+  if (others.length) {
+    add(el, [h('p', { class: 'dgroup-managed' }, h('span', { class: 'dgroup-managed-k' }, 'Managed only'),
+      ` ${plural(others.length, 'artifact')} that Quarkus itself does not depend on`),
+    depItems('dgroup-items', others, (it) => h('li', null, artLink(it)))]);
   }
   return el;
+}
+
+/** A list of a dependency group's artifacts: the first DEP_ITEMS_CAP of them, then a button that shows the others. */
+function depItems(cls, items, renderItem) {
+  const ul = h('ul', { class: cls });
+  const initial = Math.min(items.length, DEP_ITEMS_CAP);
+  for (let i = 0; i < initial; i++) ul.append(renderItem(items[i]));
+  if (items.length <= initial) return [ul];
+  const btn = moreButton(`Show all ${fmt(items.length)}`, () => {
+    for (let i = initial; i < items.length; i++) ul.append(renderItem(items[i]));
+    btn.remove();
+    ul.children[initial]?.querySelector('a')?.focus();
+  });
+  btn.classList.add('more--inline');
+  return [ul, btn];
+}
+
+/**
+ * Every way Quarkus came to depend on an artifact with its use (core.profileWays), folded: the artifacts of Quarkus
+ * that list it in their own dependencies, then those that get it through something they depend on, by the artifactId
+ * shown (and its groupId when two of them share it); the id in full on hover, and for the latter the shortest chain
+ * (every path would be far too many for common libraries). Those of its use only, which the fold says: a runtime
+ * library's ways at build time do not show. Ways of the From release (`from`, when it gave the use) say so.
+ */
+function waysEl(ways, use, from = null) {
+  if (!ways) return null;
+  const artifactOf = (x) => x.split(':')[1] ?? x;
+  const heads = [...ways.direct, ...ways.transitive.map((chain) => chain[0])];
+  const shared = new Set(heads.map(artifactOf).filter((a, k, all) => all.indexOf(a) !== k));
+  const label = (x) => (shared.has(artifactOf(x)) ? `${artifactOf(x)} (${x.split(':')[0]})` : artifactOf(x));
+  const byName = (x, y) => (label(x) < label(y) ? -1 : label(x) > label(y) ? 1 : 0);
+  const direct = [...ways.direct].sort(byName);
+  const transitive = [...ways.transitive].sort((x, y) => byName(x[0], y[0]));
+  const n = direct.length + transitive.length;
+  const before = from && ways.at === from.at;
+  const line = (title, text, names) => h('p', null, h('span', { class: 'dep-ways-k', title }, text), names.map((x, k) => [k ? ', ' : null, x]));
+  return h('details', { class: 'dep-ways' },
+    h('summary', null, before
+      ? `${plural(n, 'Quarkus artifact')} brought it in ${WAYS_PHRASE[use] ?? ''} in ${from.text}`
+      : `${plural(n, 'Quarkus artifact')} bring${n === 1 ? 's' : ''} it in ${WAYS_PHRASE[use] ?? ''}`.trimEnd()),
+    direct.length ? line('These artifacts of Quarkus list it in their own dependencies', `Directly (${fmt(direct.length)}): `,
+      direct.map((x) => h('span', { title: x }, label(x)))) : null,
+    transitive.length ? line('These artifacts of Quarkus get it through something they depend on; each shows its shortest chain on hover',
+      `Transitively (${fmt(transitive.length)}): `,
+      transitive.map((chain) => h('span', { class: 'dep-ways-via', title: chain.join(' → ') }, label(chain[0])))) : null);
 }
 
 /* ---------- §3 extensions ---------- */
