@@ -39,6 +39,10 @@ jobs:
     # the jobs commit to main, so they run only from main's own workflow
     if: github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
+    # actions: to start the deploy of a site behind main
+    permissions:
+      contents: read
+      actions: write
     outputs:
       versions: ${{ steps.new.outputs.versions }}
       count: ${{ steps.new.outputs.count }}
@@ -104,12 +108,18 @@ jobs:
           java -jar target/quarkus-almanac.jar bom --versions "$VERSION" --pause "$PAUSE"
           # a jar missing now would be missing for good: what Maven Central lacks fails the job, and the next run reads
           # the release again, until 13 hours after the GitHub release, when it counts as never published: some BOMs
-          # list such artifacts. When GitHub does not answer, the release counts as just out. What this reads stays in
-          # the cache for the steps after it, so it adds few requests
-          released=$(gh api "repos/quarkusio/quarkus/releases/tags/$VERSION" --jq .published_at) \
-            || released=$(date -u +%FT%TZ)
-          missing=$(java -jar target/quarkus-almanac.jar available --versions "$VERSION" --pause "$PAUSE" \
-            --released "$released")
+          # list such artifacts. A release named by hand that GitHub does not have counts from its BOM, and is read
+          # again only when named again; when GitHub does not answer, the release counts as just out. What this reads
+          # stays in the cache for the steps after it, so it adds few requests
+          if released=$(gh api "repos/quarkusio/quarkus/releases/tags/$VERSION" --jq .published_at 2> gh.log); then
+            since=(--released "$released")
+          elif grep -q 'HTTP 404' gh.log; then
+            since=()
+          else
+            cat gh.log
+            since=(--released "$(date -u +%FT%TZ)")
+          fi
+          missing=$(java -jar target/quarkus-almanac.jar available --versions "$VERSION" --pause "$PAUSE" "${since[@]}")
           if [ -n "$missing" ]; then
             echo "::warning::$VERSION goes on without what Maven Central never got: $(paste -sd' ' <<< "$missing")"
           fi
@@ -125,11 +135,12 @@ jobs:
           java -jar target/quarkus-almanac.jar api --versions "$VERSION" --pause "$PAUSE" --max-requests 150 \
             || echo "::warning::no API data of $VERSION this time; api --missing lists the releases without it"
       # optional too: the release is added without it, and its comparisons show the plain list of dependencies until
-      # a maintainer runs profile, then assemble; reads poms only, about 2,500 on an empty cache
+      # a maintainer runs profile --versions <list>, then assemble --offline --pre-releases all; reads poms only, about
+      # 2,500 on an empty cache
       - name: Extract the dependency profile
         run: |
           java -jar target/quarkus-almanac.jar profile --versions "$VERSION" --pause "$PAUSE" \
-            || echo "::warning::no dependency profile of $VERSION this time; profile, then assemble, adds it"
+            || echo "::warning::no dependency profile of $VERSION this time; profile --missing lists such releases"
       # the snapshots, and the BOM pom whose Last-Modified dates the release
       - uses: actions/upload-artifact@v7
         with:
@@ -176,5 +187,6 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
           BUILT: ${{ needs.check.outputs.built }}
-          EXPECTED: ${{ needs.check.outputs.count }}
+          EXTRACTED: ${{ needs.extract.result }}
+          REQUESTED: ${{ inputs.versions }}
         run: bash .github/scripts/publish-releases.sh

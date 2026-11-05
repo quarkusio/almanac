@@ -5,10 +5,11 @@
 # when it was out) and BOM pom (work/cache/io/quarkus/quarkus-bom/<version>/, whose Last-Modified dates the release).
 # Only releases with all four snapshots (BOM, config, extensions, classes) are added, with their API when the
 # extraction got it (api.json; optional, never blocking a release) and their dependency profile likewise (profile.json,
-# which assemble takes to site/data); EXPECTED, the number of releases the workflow extracted, makes a run where none
-# of them is complete fail. It starts from origin/main and, when main
-# moves before the push, starts over from it; when main's code is no longer the code that built the jar (BUILT, a
-# commit), it adds nothing, since the next run extracts the releases again with main's code.
+# which assemble takes to site/data). A release whose extraction failed leaves nothing here, and its job makes the run
+# fail; when they all went well (EXTRACTED=success) and no release is here, this fails. It starts from origin/main and,
+# when main moves before the push, starts over from it; when main's code is no longer the code that built the jar
+# (BUILT, a commit), it adds nothing and starts a new run, given the same versions (REQUESTED), which extracts the
+# releases again with main's code.
 # For a dry run: RESET=no (start from the checkout as it is), COMMIT=no (stage the changes only) or PUSH=no (commit
 # without pushing), DEPLOY=no.
 set -euo pipefail
@@ -20,7 +21,8 @@ COMMIT=${COMMIT:-yes}
 PUSH=${PUSH:-yes}
 DEPLOY=${DEPLOY:-yes}
 BUILT=${BUILT:-}
-EXPECTED=${EXPECTED:-0}
+EXTRACTED=${EXTRACTED:-}
+REQUESTED=${REQUESTED:-}
 
 ready=()
 for dir in work/snapshots/*/; do
@@ -33,12 +35,13 @@ for dir in work/snapshots/*/; do
         echo "skipped $v: its snapshots are incomplete" >&2
     fi
 done
-if [ ${#ready[@]} -eq 0 ] && [ "$EXPECTED" != 0 ]; then
-    echo "no release was extracted completely; nothing to add" >&2
-    exit 1
-fi
 versions=$(printf '%s\n' "${ready[@]}" | sort -V | paste -sd, -)
 echo "adding ${versions:-no new release}" >&2
+# with a failed extraction, the platform BOMs still go on and its job keeps the run red; with none, nothing else would
+if [ -z "$versions" ] && [ "$EXTRACTED" = success ]; then
+    echo "::error::every extraction went well, but no release came with all its snapshots; nothing to add" >&2
+    exit 1
+fi
 
 changed=no
 platforms=
@@ -80,6 +83,7 @@ add() {
     java -jar "$JAR" dataset refresh-releases --pause "$PAUSE"
     java -jar "$JAR" dataset verify --offline --compare-work
     java -jar "$JAR" assemble --offline --pre-releases all
+    node .github/scripts/site-data-kept.mjs
     node --test site/tests/
     git add dataset site/data
     # assemble always renews the date in site/data/versions.json: only a change of the dataset is worth a commit
@@ -104,7 +108,15 @@ for attempt in 1 2 3; do
             git fetch -q origin "$BUILT" 2> /dev/null || true
         fi
         if [ -n "$BUILT" ] && ! git diff --quiet "$BUILT" HEAD -- pom.xml src .github/scripts 2> /dev/null; then
-            echo "::warning::main's code changed since $BUILT built the jar${versions:+ that extracted $versions}; adding nothing, the next run starts again with main's code" >&2
+            what="main's code changed since $BUILT built the jar${versions:+ that extracted $versions}"
+            echo "::warning::$what; adding nothing" >&2
+            if [ "$DEPLOY" = yes ]; then
+                if gh workflow run new-releases.yml --ref main ${REQUESTED:+-f "versions=$REQUESTED"}; then
+                    echo "a new run starts again with main's code" >&2
+                else
+                    echo "::warning::the new run did not start; the next scheduled run adds GitHub's releases" >&2
+                fi
+            fi
             exit 0
         fi
     fi

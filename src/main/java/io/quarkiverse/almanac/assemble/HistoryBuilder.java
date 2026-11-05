@@ -213,8 +213,8 @@ public final class HistoryBuilder {
             "BUILD_TIME", "B", "BUILD_AND_RUN_TIME_FIXED", "F", "RUN_TIME", "R", "BOOTSTRAP", "S");
 
     /// The releases whose git tag has no GitHub release, flagged `ghRelease: false` in `versions.json`. Every other
-    /// release has one: the new-releases workflow adds only releases published on GitHub. Update it if a release is
-    /// ever added by hand without one.
+    /// release has one: the new-releases workflow adds only releases published on GitHub, unless a run names others.
+    /// Update it before such a run, or before adding a release without one by hand.
     static final Set<String> WITHOUT_GITHUB_RELEASE = Set.of("3.17.1", "3.34.4");
 
     private final ArrayNode versionRows = NODES.arrayNode();

@@ -39,7 +39,8 @@ New releases come in on their own: every twelve hours, the workflow `.github/wor
 releases published on GitHub and any platform BOM the dataset lacks, commits them to `main` and deploys the site. A
 release that Maven Central lacks something of fails the run, and the next run reads it again; what is still missing 13
 hours after the GitHub release counts as never published, with a warning on the run, as some BOMs list such artifacts.
-Run the workflow from the Actions tab to add given releases.
+Run the workflow from the Actions tab to add given releases. Its notices name what it leaves to you: versions with no
+GitHub release, and releases without API data or a dependency profile.
 
 By hand, go on past `available` only when it succeeds, and read its warnings: a jar not yet on Maven Central would be
 left out for good, and without `--released` the 13 hours count from the BOM. `bom` may not know a release that just

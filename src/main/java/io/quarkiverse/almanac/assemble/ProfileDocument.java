@@ -15,9 +15,11 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.TreeMap;
 import java.util.TreeSet;
 
@@ -106,6 +108,24 @@ public final class ProfileDocument {
         Log.info("assemble: wrote %s, the dependency profile of %d releases (%d of them kept from the "
                 + "file, without a snapshot in the work folder), %d artifacts, %d nodes", file, indices.size(), kept,
                 history.size(), parents.size());
+    }
+
+    /// The releases of `versions.json` in `dataDir` that `profile.json` does not have, in its order, those never
+    /// published on Maven Central left out: they have no poms to walk.
+    public static List<String> missing(Path dataDir) throws IOException {
+        Path file = dataDir.resolve("profile.json");
+        Set<String> profiled = new HashSet<>();
+        if (Files.exists(file)) {
+            Json.readTree(Files.readAllBytes(file)).path("releases").forEach(release -> profiled.add(release.asText()));
+        }
+        List<String> missing = new ArrayList<>();
+        for (JsonNode row : Json.readTree(Files.readAllBytes(dataDir.resolve("versions.json"))).get("versions")) {
+            String version = row.get("v").asText();
+            if (!row.has("git") && !profiled.contains(version)) {
+                missing.add(version);
+            }
+        }
+        return missing;
     }
 
     /// The profiles that a `profile.json` holds, by release, as far as it says: their uses, parents and starts. Empty

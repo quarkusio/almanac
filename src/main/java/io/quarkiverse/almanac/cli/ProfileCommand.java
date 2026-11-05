@@ -1,5 +1,6 @@
 package io.quarkiverse.almanac.cli;
 
+import io.quarkiverse.almanac.assemble.ProfileDocument;
 import io.quarkiverse.almanac.maven.BomResolver;
 import io.quarkiverse.almanac.maven.DependencyProfile;
 import io.quarkiverse.almanac.maven.DependencyProfile.Root;
@@ -15,9 +16,14 @@ import io.quarkiverse.almanac.util.Log;
 import io.quarkiverse.almanac.util.SnapshotStore;
 import picocli.CommandLine.Command;
 import picocli.CommandLine.Mixin;
+import picocli.CommandLine.Model.CommandSpec;
 import picocli.CommandLine.Option;
+import picocli.CommandLine.ParameterException;
+import picocli.CommandLine.Spec;
 
 import java.io.IOException;
+import java.io.PrintWriter;
+import java.nio.file.Path;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
@@ -42,11 +48,13 @@ public final class ProfileCommand implements Callable<Integer> {
     /// The snapshot file of a dependency profile.
     static final String PROFILE = "profile.json";
 
+    @Spec
+    CommandSpec spec;
+
     @Mixin
     CommonOptions common;
 
-    @Option(names = "--versions", required = true, paramLabel = "LIST",
-            description = "Releases to process, e.g. 3.34.0,3.35.0.")
+    @Option(names = "--versions", paramLabel = "LIST", description = "Releases to process, e.g. 3.34.0,3.35.0.")
     String versions;
 
     @Option(names = "--force", description = "Rewrite existing profile snapshots.")
@@ -56,8 +64,25 @@ public final class ProfileCommand implements Callable<Integer> {
             description = "Start no further release once this run has sent more than N requests (default: no limit).")
     long maxRequests = Long.MAX_VALUE;
 
+    @Option(names = "--missing", description = "Print the releases of the site that have no dependency profile, one a "
+            + "line, and do nothing else: only its data is read.")
+    boolean missing;
+
+    @Option(names = "--site", defaultValue = "site", paramLabel = "DIR",
+            description = "Site folder that --missing reads (default: ${DEFAULT-VALUE}).")
+    Path site;
+
     @Override
     public Integer call() throws IOException {
+        if (missing) {
+            PrintWriter out = spec.commandLine().getOut();
+            ProfileDocument.missing(site.resolve("data")).forEach(out::println);
+            out.flush();
+            return 0;
+        }
+        if (versions == null) {
+            throw new ParameterException(spec.commandLine(), "--versions is needed, unless --missing is given");
+        }
         try (Workspace workspace = Workspace.open(common)) {
             SnapshotStore work = workspace.workSnapshots();
             List<QuarkusVersion> selected = Workspace.published(workspace.select(versions), "profile");

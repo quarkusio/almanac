@@ -141,7 +141,7 @@ class DatasetCommandTest {
             assertTrue(fromDataset.log().contains("1 bom.json snapshots in " + snapshots.root() + " are not in the "
                     + "dataset and are left out (3.2.0)"), fromDataset.log());
             assertTrue(fromDataset.log().contains("2 config.json snapshots in " + snapshots.root() + " are not in "
-                    + "the dataset and are left out (3.0.0.Final, 3.2.0)"), fromDataset.log());
+                    + "the dataset and are left out (3.0.0.Final,3.2.0)"), fromDataset.log());
             JsonNode versions = Json.readTree(Files.readAllBytes(site.resolve("data/versions.json")));
             assertTrue(versions.at("/versions/1/config").asBoolean());
 

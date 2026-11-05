@@ -107,6 +107,20 @@ class ProfileDocumentTest {
         }
     }
 
+    @Test
+    void theReleasesOfTheSiteWithoutAProfile() throws Exception {
+        try (ScratchDir dir = ScratchDir.create()) {
+            Path data = Files.createDirectories(dir.resolve("data"));
+            Files.writeString(data.resolve("versions.json"), "{\"versions\":[{\"v\":\"0.2.0\","
+                    + "\"git\":{\"tag\":\"0.2.0\"}},{\"v\":\"3.34.0\"},{\"v\":\"3.35.0\"}]}");
+            assertEquals(List.of("3.34.0", "3.35.0"), ProfileDocument.missing(data), "no file: all but the pre-launch");
+
+            Files.writeString(data.resolve("profile.json"), "{\"versions\":[2],\"releases\":[\"3.35.0\"]}");
+
+            assertEquals(List.of("3.34.0"), ProfileDocument.missing(data));
+        }
+    }
+
     private static ProfileSnapshot profile(String version, Map<String, String> used,
             Map<String, List<String>> parents, Map<String, List<String>> starts) {
         return new ProfileSnapshot(version, 1, 1, 0, List.of(), new TreeMap<>(used), new TreeMap<>(parents),

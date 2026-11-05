@@ -87,13 +87,13 @@ public final class AssembleCommand implements Callable<Integer> {
             if (!missing.isEmpty()) {
                 missing.sort(ReleaseOrder.COMPARATOR);
                 Log.info("assemble: %d %s snapshots in %s are not in the dataset and are left out (%s); dataset import "
-                        + "--kinds %s adds them, --include-work uses them as they are", missing.size(),
-                        kind.snapshotFile(), work.root(), abbreviated(missing), kind.label());
+                        + "--versions <list> --kinds %s adds them, --include-work uses them as they are",
+                        missing.size(), kind.snapshotFile(), work.root(), abbreviated(missing), kind.label());
             }
         }
     }
 
     private static String abbreviated(List<String> names) {
-        return names.stream().limit(5).collect(Collectors.joining(", ")) + (names.size() > 5 ? ", ..." : "");
+        return names.stream().limit(5).collect(Collectors.joining(",")) + (names.size() > 5 ? " ..." : "");
     }
 }

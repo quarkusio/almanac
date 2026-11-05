@@ -1,10 +1,17 @@
 package io.quarkiverse.almanac.cli;
 
+import io.quarkiverse.almanac.Main;
+import io.quarkiverse.almanac.ScratchDir;
 import io.quarkiverse.almanac.maven.DependencyProfile.Root;
 import io.quarkiverse.almanac.maven.DependencyProfile.Use;
 import org.junit.jupiter.api.Test;
+import picocli.CommandLine;
 
 import java.io.IOException;
+import java.io.PrintWriter;
+import java.io.StringWriter;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -12,8 +19,39 @@ import java.util.Set;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
-/// [ProfileCommand#roots]: what a release's profile starts from, in each layout the BOM has had.
+/// [ProfileCommand#roots]: what a release's profile starts from, in each layout the BOM has had; and `--missing`.
 class ProfileCommandTest {
+
+    @Test
+    void missingPrintsTheReleasesOfTheSiteWithoutAProfile() throws Exception {
+        try (ScratchDir dir = ScratchDir.create()) {
+            Path data = Files.createDirectories(dir.resolve("site/data"));
+            Files.writeString(data.resolve("versions.json"), "{\"versions\":[{\"v\":\"3.34.0\"},{\"v\":\"3.35.0\"}]}");
+            Files.writeString(data.resolve("profile.json"), "{\"versions\":[1],\"releases\":[\"3.35.0\"]}");
+            StringWriter out = new StringWriter();
+            CommandLine commandLine = new CommandLine(new Main()).setOut(new PrintWriter(out));
+
+            int exitCode = commandLine.execute("profile", "--missing", "--site", dir.resolve("site").toString());
+
+            assertEquals(0, exitCode);
+            assertEquals("3.34.0\n", out.toString().replace("\r\n", "\n"));
+        }
+    }
+
+    @Test
+    void missingReadsTheSiteOfTheRepositoryUnlessToldOtherwise() {
+        // the new-releases workflow names no --site
+        CommandLine profile = new CommandLine(new Main()).getSubcommands().get("profile");
+
+        assertEquals("site", profile.getCommandSpec().findOption("--site").defaultValue());
+    }
+
+    @Test
+    void withoutMissingItNeedsTheReleases() {
+        CommandLine commandLine = new CommandLine(new Main()).setErr(new PrintWriter(new StringWriter()));
+
+        assertEquals(2, commandLine.execute("profile"));
+    }
 
     @Test
     void theCatalogsExtensionsWithTheirDeploymentArtifactsThePluginAndTheTestFrameworks() throws IOException {
