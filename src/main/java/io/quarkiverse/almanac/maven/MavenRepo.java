@@ -13,9 +13,15 @@ import java.time.Instant;
 import java.time.ZonedDateTime;
 import java.time.format.DateTimeFormatter;
 import java.time.format.DateTimeParseException;
+import java.util.ArrayDeque;
 import java.util.ArrayList;
+import java.util.Collection;
+import java.util.Deque;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Optional;
+import java.util.Set;
+import java.util.TreeSet;
 import java.util.stream.Stream;
 
 /// A Maven repository (Maven Central by default) with a local cache under `work/cache` that mirrors the
@@ -145,6 +151,46 @@ public final class MavenRepo {
         }
         AtomicFiles.write(file, response.body());
         return Optional.of(new Download(response.body(), lastModified));
+    }
+
+    /// Drops the 404 marker of an artifact file, so that the next read asks the repository again: a release on its way
+    /// to the repository has tomorrow what it lacks today.
+    public void forgetMissing(String groupId, String artifactId, String version, String extension)
+            throws IOException {
+        Files.deleteIfExists(sibling(cacheRoot.resolve(artifactPath(groupId, artifactId, version, extension)), ".404"));
+    }
+
+    /// The poms that this repository lacks, of the artifacts `groupId:artifactId` at `version` and of their parents at
+    /// that version, asking again for those marked as missing. A pom that cannot be parsed is there: only its parent
+    /// stays unknown, with a warning.
+    ///
+    /// @return `groupId:artifactId:version` of each, sorted
+    public List<String> missingPoms(Collection<String> artifacts, String version) throws IOException {
+        Deque<String> toRead = new ArrayDeque<>(artifacts);
+        Set<String> seen = new HashSet<>();
+        Set<String> missing = new TreeSet<>();
+        while (!toRead.isEmpty()) {
+            String artifact = toRead.remove();
+            if (!seen.add(artifact)) {
+                continue;
+            }
+            String[] parts = artifact.split(":");
+            forgetMissing(parts[0], parts[1], version, "pom");
+            Optional<Download> pom = artifact(parts[0], parts[1], version, "pom");
+            if (pom.isEmpty()) {
+                missing.add(artifact + ":" + version);
+                continue;
+            }
+            try {
+                Pom.Coordinates parent = Pom.parse(pom.get().content()).parent();
+                if (parent != null && version.equals(parent.version())) {
+                    toRead.add(parent.groupId() + ":" + parent.artifactId());
+                }
+            } catch (IOException e) {
+                Log.warn("%s:%s: %s, so its parent is not looked for", artifact, version, e.getMessage());
+            }
+        }
+        return List.copyOf(missing);
     }
 
     /// Repository path of an artifact file with a classifier, e.g.

@@ -41,7 +41,7 @@ public final class VersionJars {
         Optional<String> relocationOf(JarSource jar) throws IOException;
     }
 
-    private record Indexed(List<JarSource> existing, Map<String, String> relocations) {
+    private record Indexed(List<JarSource> existing, List<JarSource> missing, Map<String, String> relocations) {
     }
 
     private record Probe(JarSource jar, boolean exists, String relocation) {
@@ -162,6 +162,12 @@ public final class VersionJars {
         return indexed().existing();
     }
 
+    /// The listed jars that the repository does not have, relocated artifacts left out (they publish no jar), sorted by
+    /// artifactId.
+    public List<JarSource> missing() throws IOException {
+        return indexed().missing();
+    }
+
     /// The existing jars that contain an entry with exactly this name, sorted by artifactId.
     public List<JarSource> jarsContaining(String entry) throws IOException {
         List<JarSource> result = new ArrayList<>();
@@ -235,18 +241,20 @@ public final class VersionJars {
             return new Probe(jar, exists, relocation);
         });
         List<JarSource> existing = new ArrayList<>();
+        List<JarSource> missing = new ArrayList<>();
         Map<String, String> relocations = new TreeMap<>();
         for (Probe probe : probes) {
             if (probe.exists()) {
                 existing.add(probe.jar());
             } else if (probe.relocation() == null) {
+                missing.add(probe.jar());
                 Log.debug("%s: %s:%s has no jar", quarkusVersion, probe.jar().artifactId(), probe.jar().version());
             }
             if (probe.relocation() != null) {
                 relocations.put(probe.jar().artifactId(), probe.relocation());
             }
         }
-        return new Indexed(List.copyOf(existing), Collections.unmodifiableMap(relocations));
+        return new Indexed(List.copyOf(existing), List.copyOf(missing), Collections.unmodifiableMap(relocations));
     }
 
     private Map<String, JarSource> classIndex() throws IOException {

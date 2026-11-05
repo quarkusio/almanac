@@ -1,8 +1,10 @@
 #!/usr/bin/env bash
-# The releases the new-releases workflow adds to the dataset: those of quarkusio/quarkus's GitHub releases published at
-# least 6 hours ago (or of REQUESTED, a comma-separated list) that Maven Central serves for the almanac's selection
-# (every release, pre-releases included) and that the site data does not have yet. The 6 hours let every jar of a
-# release reach Maven Central before it is read: a jar missing then would be missing from the dataset for good.
+# The releases the new-releases workflow adds to the dataset: those of quarkusio/quarkus's GitHub releases (or of
+# REQUESTED, a comma-separated list) that Maven Central serves for the almanac's selection (every release, pre-releases
+# included) and that the site data does not have yet. Nothing waits for the jars: the BOM of each release measured so
+# far was on Maven Central before its GitHub release, by about 2 hours at least since 2022, and the extract job's
+# available command fails on what Maven Central lacks, for the next run to read the release again: a jar missing when
+# it is read would be missing from the dataset for good.
 # Prints, in the format of $GITHUB_OUTPUT, versions=<JSON array> and count=<n>, and platforms=<n>: how many releases of
 # the dataset lack a platform BOM that Maven Central now serves (it often comes out days after the release). The
 # releases of the dataset without API data (it is optional) are a notice only. Needs java, node and gh (with
@@ -16,8 +18,7 @@ WORK=${WORK:-work}
 if [ -n "${REQUESTED:-}" ]; then
     wanted=$(tr ', ' '\n\n' <<< "$REQUESTED" | grep -v '^$' || true)
 else
-    wanted=$(gh api 'repos/quarkusio/quarkus/releases?per_page=100' \
-        --jq '.[] | select((.draft | not) and .published_at < (now - 6 * 3600 | todate)) | .tag_name')
+    wanted=$(gh api 'repos/quarkusio/quarkus/releases?per_page=100' --jq '.[] | select(.draft | not) | .tag_name')
 fi
 # One release a line (version, kind, stream...), then a count; the log goes to stderr. The empty dataset leaves
 # versions no list to fall back on, so a maven-metadata.xml that cannot be read fails the run instead of finding nothing.

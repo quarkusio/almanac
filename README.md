@@ -36,13 +36,18 @@ To browse the site locally, serve the `site` folder with any static web server, 
 ## Adding a release
 
 New releases come in on their own: every twelve hours, the workflow `.github/workflows/new-releases.yml` adds the
-releases published on GitHub at least 6 hours ago and any platform BOM the dataset lacks, commits them to `main` and
-deploys the site. Run it from the Actions tab to add given releases.
+releases published on GitHub and any platform BOM the dataset lacks, commits them to `main` and deploys the site. A
+release that Maven Central lacks something of fails the run, and the next run reads it again; what is still missing 13
+hours after the GitHub release counts as never published, with a warning on the run, as some BOMs list such artifacts.
+Run the workflow from the Actions tab to add given releases.
 
-By hand, once the release is 6 hours old (a jar not yet on Maven Central would be left out for good):
+By hand, go on past `available` only when it succeeds, and read its warnings: a jar not yet on Maven Central would be
+left out for good, and without `--released` the 13 hours count from the BOM. `bom` may not know a release that just
+came out, as the release list is cached for 6 hours:
 
 ```sh
 java -jar target/quarkus-almanac.jar bom --versions 3.40.2
+java -jar target/quarkus-almanac.jar available --versions 3.40.2
 java -jar target/quarkus-almanac.jar config --versions 3.40.2
 java -jar target/quarkus-almanac.jar api --versions 3.40.2
 java -jar target/quarkus-almanac.jar profile --versions 3.40.2

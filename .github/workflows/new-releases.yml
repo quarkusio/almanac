@@ -5,16 +5,18 @@ name: Add new Quarkus releases
 # rebuilds the site data, commits both to main and starts the Pages deploy. It also adds the platform BOM
 # (io.quarkus.platform:quarkus-bom) of each release, including those that come out after their release, and the API
 # and the dependency profile of each release when its extraction got them (optional: a release without them is added
-# all the same).
+# all the same). A release that Maven Central lacks something of fails its extraction, and the next run reads it again;
+# what is still missing 13 hours after the GitHub release counts as never published, with a warning.
 on:
   schedule:
+    # the 13 hours of the available command go with this: a little longer than the time between two runs
     - cron: '17 */12 * * *'
   workflow_dispatch:
     inputs:
       versions:
         description: >-
-          Releases to add, comma-separated. Empty: every GitHub release of quarkusio/quarkus published at least 6 hours
-          ago. Only releases missing from the site data are added.
+          Releases to add, comma-separated. Empty: every GitHub release of quarkusio/quarkus. Only releases missing
+          from the site data are added.
         required: false
         default: ''
 
@@ -96,8 +98,21 @@ jobs:
           name: almanac-jar
           path: target
       - name: Extract the BOM, platform BOM, config, extensions and classes
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: |
           java -jar target/quarkus-almanac.jar bom --versions "$VERSION" --pause "$PAUSE"
+          # a jar missing now would be missing for good: what Maven Central lacks fails the job, and the next run reads
+          # the release again, until 13 hours after the GitHub release, when it counts as never published: some BOMs
+          # list such artifacts. When GitHub does not answer, the release counts as just out. What this reads stays in
+          # the cache for the steps after it, so it adds few requests
+          released=$(gh api "repos/quarkusio/quarkus/releases/tags/$VERSION" --jq .published_at) \
+            || released=$(date -u +%FT%TZ)
+          missing=$(java -jar target/quarkus-almanac.jar available --versions "$VERSION" --pause "$PAUSE" \
+            --released "$released")
+          if [ -n "$missing" ]; then
+            echo "::warning::$VERSION goes on without what Maven Central never got: $(paste -sd' ' <<< "$missing")"
+          fi
           # often published days after the release: when it is missing or fails, a later run adds it
           java -jar target/quarkus-almanac.jar platform --versions "$VERSION" --pause "$PAUSE" \
             || echo "::warning::no platform BOM of $VERSION this time; a later run adds it"

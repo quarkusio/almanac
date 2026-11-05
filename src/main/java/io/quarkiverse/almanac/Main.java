@@ -3,6 +3,7 @@ package io.quarkiverse.almanac;
 import io.quarkiverse.almanac.cli.AllCommand;
 import io.quarkiverse.almanac.cli.ApiCommand;
 import io.quarkiverse.almanac.cli.AssembleCommand;
+import io.quarkiverse.almanac.cli.AvailableCommand;
 import io.quarkiverse.almanac.cli.BomCommand;
 import io.quarkiverse.almanac.cli.ClassesCommand;
 import io.quarkiverse.almanac.cli.ConfigCommand;
@@ -24,9 +25,9 @@ import picocli.CommandLine.Spec;
                 + "API) from Maven Central, and the BOMs of the pre-launch releases never published there from the "
                 + "poms at their git tags, into a committed dataset, and assembles the data files of the Quarkus "
                 + "Almanac site.",
-        subcommands = {VersionsCommand.class, BomCommand.class, PlatformCommand.class, ConfigCommand.class,
-                ExtensionsCommand.class, ClassesCommand.class, ApiCommand.class, ProfileCommand.class,
-                AssembleCommand.class,
+        subcommands = {VersionsCommand.class, BomCommand.class, AvailableCommand.class, PlatformCommand.class,
+                ConfigCommand.class, ExtensionsCommand.class, ClassesCommand.class, ApiCommand.class,
+                ProfileCommand.class, AssembleCommand.class,
                 AllCommand.class, DatasetCommand.class, VerifyCommand.class, CommandLine.HelpCommand.class})
 public final class Main implements Runnable {
 
