@@ -1205,13 +1205,13 @@
 {"key":"quarkus.hibernate-orm.schema-management.create-schemas","h":[["3.23.0.CR1","6b963d4b017e6b68"]]}
 {"key":"quarkus.hibernate-orm.schema-management.extra-physical-table-types","h":[["3.29.0.CR1","051ff2a1221293ae"]]}
 {"key":"quarkus.hibernate-orm.schema-management.halt-on-error","h":[["3.23.0.CR1","d4192250bafa84ef"]]}
-{"key":"quarkus.hibernate-orm.schema-management.init-script","h":[["4.0.0.Beta2","17832375a145a630"]]}
+{"key":"quarkus.hibernate-orm.schema-management.init-script","h":[["4.0.0.Beta2","17832375a145a630"],["4.0.0.Beta3","4d2457e5531d6f6e"]]}
 {"key":"quarkus.hibernate-orm.schema-management.strategy","h":[["3.23.0.CR1","098df91a5b104f9a"],["3.31.0.CR1","791b425afe6f7109"]]}
 {"key":"quarkus.hibernate-orm.scripts.generation","h":[["2.0.0.Alpha1","ef92c21f33beace3"],["3.9.0.CR1","d541d16d07ce362e"],["3.31.0.CR1","f7c7ff328437c984"]]}
 {"key":"quarkus.hibernate-orm.scripts.generation.create-target","h":[["2.0.0.Alpha1","1c6d8b1fd7737d11"],["3.9.0.CR1","6964e8001598cce3"]]}
 {"key":"quarkus.hibernate-orm.scripts.generation.drop-target","h":[["2.0.0.Alpha1","924bb23743609d41"],["3.9.0.CR1","5d35d3792bbecb36"]]}
 {"key":"quarkus.hibernate-orm.second-level-caching-enabled","h":[["1.6.0.CR1","02687da4d848469a"],["1.8.0.CR1","4a4530f5ecb77767"],["3.9.0.CR1","9e97520ace09a14a"]]}
-{"key":"quarkus.hibernate-orm.sql-load-script","h":[["0.11.0","ab9533f60b60e73d"],["0.13.0",null],["1.6.0.CR1","28c00a81c39a3174"],["1.8.0.CR1","f9390f11e6b8a3e8"],["2.4.0.CR1","9ec6b8205ad7ca8c"],["2.7.3.Final","0cab5867b429fdee"],["3.9.0.CR1","f3f6e2322f96ec37"],["3.12.0","ed778c35a4c56f9f"],["4.0.0.Beta2","494294cb0ad3c268"]]}
+{"key":"quarkus.hibernate-orm.sql-load-script","h":[["0.11.0","ab9533f60b60e73d"],["0.13.0",null],["1.6.0.CR1","28c00a81c39a3174"],["1.8.0.CR1","f9390f11e6b8a3e8"],["2.4.0.CR1","9ec6b8205ad7ca8c"],["2.7.3.Final","0cab5867b429fdee"],["3.9.0.CR1","f3f6e2322f96ec37"],["3.12.0","ed778c35a4c56f9f"],["4.0.0.Beta2","494294cb0ad3c268"],["4.0.0.Beta3","18e5fc1f46580f34"]]}
 {"key":"quarkus.hibernate-orm.statistics","h":[["0.11.0","5f952c90a74c71b3"],["0.13.0",null],["1.6.0.CR1","44815532ebbc7d4d"]]}
 {"key":"quarkus.hibernate-orm.unsupported-properties.*","h":[["2.11.0.CR1","2c9b32babc247f80"],["3.9.0.CR1","028414d931c14db7"]]}
 {"key":"quarkus.hibernate-orm.validate-in-dev-mode","h":[["2.5.0.CR1","bac90576a8e3f29e"],["3.9.0.CR1","3e375a920cd72acc"]]}
@@ -1699,7 +1699,7 @@
 {"key":"quarkus.http.compress-media-types","h":[["2.9.0.CR1","96cfc768936b9771"],["3.5.0.CR1","e5f06f85fdfe7215"],["3.16.0.CR1","89b59bd28bea6650"],["3.19.0.CR1","8e84157c0797a235"]]}
 {"key":"quarkus.http.compression-content-size-threshold","h":[["4.0.0.Beta1","27df88513db75ac4"]]}
 {"key":"quarkus.http.compression-level","h":[["2.9.0.CR1","55e4016c158e589f"],["3.19.0.CR1","a21155b02cea118c"]]}
-{"key":"quarkus.http.compressors","h":[["3.12.0.CR1","70ff83dc65868cca"],["3.19.0.CR1","b725eba9e8357e60"]]}
+{"key":"quarkus.http.compressors","h":[["3.12.0.CR1","70ff83dc65868cca"],["3.19.0.CR1","b725eba9e8357e60"],["4.0.0.Beta3","7e718978e8e11916"]]}
 {"key":"quarkus.http.console-path","h":[["1.6.0.CR1","e2f5820674c4a8f5"],["1.11.1.Final",null]]}
 {"key":"quarkus.http.cors","h":[["0.16.0","ddccef92cb2586cc"],["0.17.0","983282339c770ebb"],["0.20.0","a5f422792a16a2fc"],["0.23.0","772a20b9ea1d1fee"],["3.19.0.CR1","dc905a5d71a00393"],["3.28.0.CR1",null]]}
 {"key":"quarkus.http.cors.access-control-allow-credentials","h":[["1.7.0.CR1","275cd77ca2ffcd68"],["3.18.0.CR1","095240edfedc7d36"]]}
@@ -5971,7 +5971,7 @@
 {"key":"quarkus.rest.exception-mapping.disable-mapper-for","h":[["3.31.0.CR1","f9f7bca79e5a67e9"]]}
 {"key":"quarkus.rest.fail-on-duplicate","h":[["3.9.0.CR1","8e8e370d0c939071"]]}
 {"key":"quarkus.rest.input-buffer-size","h":[["1.11.0.Beta1","88965a251d49f905"],["2.0.0.Alpha1",null],["3.9.0.CR1","fbd761ec6be3a713"],["3.22.0.CR1","279c62f992f50eba"]]}
-{"key":"quarkus.rest.jackson.optimization.enable-reflection-free-serializers","h":[["3.14.0.CR1","f77e8aaf6a29bde1"],["3.35.0.CR1","ae0c7f3c4351682f"],["3.35.1","f77e8aaf6a29bde1"],["3.37.0.CR1","ae0c7f3c4351682f"],["3.39.0","f77e8aaf6a29bde1"],["4.0.0.Beta1","ae0c7f3c4351682f"]]}
+{"key":"quarkus.rest.jackson.optimization.enable-reflection-free-serializers","h":[["3.14.0.CR1","f77e8aaf6a29bde1"],["3.35.0.CR1","ae0c7f3c4351682f"],["3.35.1","f77e8aaf6a29bde1"],["3.37.0.CR1","ae0c7f3c4351682f"],["3.39.0","f77e8aaf6a29bde1"],["4.0.0.Beta1","ae0c7f3c4351682f"],["4.0.0.Beta3","f77e8aaf6a29bde1"]]}
 {"key":"quarkus.rest.min-chunk-size","h":[["3.9.0.CR1","0bf4d5e3e9c406eb"]]}
 {"key":"quarkus.rest.multipart.input-part.default-charset","h":[["3.9.0.CR1","cbc7a1cff1f460a4"]]}
 {"key":"quarkus.rest.output-buffer-size","h":[["3.9.0.CR1","28debe40b6cae233"]]}

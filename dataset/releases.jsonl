@@ -525,3 +525,4 @@
 {"version":"3.40.1.1","date":"2026-10-19","bom":true,"config":{"source":"model","extractor":"model-json/1","roots":266},"extensions":true,"classes":true,"platform":{"date":"2026-10-19"},"api":{"reader":"api/1"}}
 {"version":"4.0.0.Beta1","date":"2026-09-30","bom":true,"config":{"source":"model","extractor":"model-json/1","roots":273},"extensions":true,"classes":true,"platform":{"date":"2026-10-01"},"api":{"reader":"api/1"}}
 {"version":"4.0.0.Beta2","date":"2026-10-28","bom":true,"config":{"source":"model","extractor":"model-json/1","roots":276},"extensions":true,"classes":true,"platform":{"date":"2026-10-28"},"api":{"reader":"api/1"}}
+{"version":"4.0.0.Beta3","date":"2026-11-04","bom":true,"config":{"source":"model","extractor":"model-json/1","roots":276},"extensions":true,"classes":true,"platform":{"date":"2026-11-04"},"api":{"reader":"api/1"}}
