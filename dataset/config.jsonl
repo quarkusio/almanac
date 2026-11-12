@@ -531,6 +531,7 @@
 {"key":"quarkus.datasource.reactive.name","h":[["2.7.0.CR1","889b5d37b8cde54f"],["3.16.0.CR1","a302a4c6c6581ec9"]]}
 {"key":"quarkus.datasource.reactive.pool-cleaner-period","h":[["4.0.0.Beta1","e393261d8f69d61a"]]}
 {"key":"quarkus.datasource.reactive.postgresql.cache-prepared-statements","h":[["1.3.0.CR1","4fd137926346a2e7"],["1.6.0.CR1","190f46cfe49da93e"],["3.0.0.Alpha4",null]]}
+{"key":"quarkus.datasource.reactive.postgresql.channel-binding","h":[["4.0.0.CR1","4bfc40a172bffa41"]]}
 {"key":"quarkus.datasource.reactive.postgresql.pipelining-limit","h":[["1.3.0.CR1","0e6db2a35a8d825e"],["3.3.0.CR1","eb7cec745fada819"]]}
 {"key":"quarkus.datasource.reactive.postgresql.ssl-mode","h":[["1.6.0.CR1","c59b467756bc720d"],["3.3.0.CR1","63cf4c7e75ab71a7"],["3.26.0.CR1","0b1357a47d8bfb65"]]}
 {"key":"quarkus.datasource.reactive.postgresql.ssl-negotiation","h":[["4.0.0.Beta1","cfef5b72cd4f53e3"]]}
@@ -1034,6 +1035,7 @@
 {"key":"quarkus.grpc.server.xds.secure","h":[["2.16.0.CR1","6e58fec2f7e4951e"],["3.0.0.Alpha1",null],["3.0.0.Alpha3","6e58fec2f7e4951e"],["3.19.0.CR1","01d200ca8b135bba"],["4.0.0.Beta1",null]]}
 {"key":"quarkus.health.extensions.enabled","h":[["1.6.0.CR1","af3062e3dbf28041"],["2.10.1.Final","423fce6556553630"],["3.14.0.CR1","2ac3a26ef2011997"],["3.19.0.CR1",null]]}
 {"key":"quarkus.health.openapi.included","h":[["1.9.0.CR1","9a4766fbfa4c9156"],["2.10.1.Final","c4562ddb9ca34a54"],["3.14.0.CR1","a75d582f2778adb7"],["3.19.0.CR1",null]]}
+{"key":"quarkus.hibernate-accessor.strategy","h":[["4.0.0.CR1","81b7807d01b0e5f8"]]}
 {"key":"quarkus.hibernate-envers.*.active","h":[["2.12.0.CR1","934579fdbcb12104"],["2.13.1.Final","c67fb42a079cca5d"],["3.9.0.CR1",null]]}
 {"key":"quarkus.hibernate-envers.*.allow-identifier-reuse","h":[["2.15.0.CR1","57da4eec10ef6eda"],["3.0.0.Alpha1",null],["3.0.0.Alpha3","57da4eec10ef6eda"],["3.9.0.CR1",null]]}
 {"key":"quarkus.hibernate-envers.*.audit-strategy","h":[["2.15.0.CR1","68139aa27ce88fe9"],["3.0.0.Alpha1",null],["3.0.0.Alpha3","68139aa27ce88fe9"],["3.9.0.CR1",null]]}
@@ -1184,6 +1186,7 @@
 {"key":"quarkus.hibernate-orm.mapping.format.global","h":[["3.25.0.CR1","3046ad52b67d8c26"],["3.26.0.CR1","0958f30dd8fd702b"],["4.0.0.Beta1","0b5897ad91402265"]]}
 {"key":"quarkus.hibernate-orm.mapping.id.optimizer.default","h":[["3.0.0.Beta1","2230f0ff4d271286"],["3.2.1.Final","bcec3f0802b3298b"],["3.9.0.CR1","8e8f5f8cfd5c82d4"],["3.26.0.CR1","caa01549de90ec68"]]}
 {"key":"quarkus.hibernate-orm.mapping.instant.preferred-jdbc-type","h":[["3.30.0.CR1","2c59531e5bcfe5de"]]}
+{"key":"quarkus.hibernate-orm.mapping.java-time.use-direct-jdbc","h":[["4.0.0.CR1","6453f9b4c872d54d"]]}
 {"key":"quarkus.hibernate-orm.mapping.timezone.default-storage","h":[["3.0.0.Alpha6","f959e066d6b1c3ef"],["3.2.1.Final","9bec28753dbfda3c"],["3.9.0.CR1","445443f852c5d91d"],["3.26.0.CR1","bd95ed94390c41ac"],["3.31.0.CR1","943e18537b1ff4a8"]]}
 {"key":"quarkus.hibernate-orm.mapping.uuid.preferred-jdbc-type","h":[["3.30.0.CR1","cdcb1764e9f5b090"]]}
 {"key":"quarkus.hibernate-orm.max-fetch-depth","h":[["1.8.0.CR1","199b72855b35c469"],["1.9.0.CR1","b5155451ca300cf3"],["3.9.0.CR1","e07e706ffb920019"],["4.0.0.Beta1",null]]}
@@ -2806,6 +2809,7 @@
 {"key":"quarkus.kotlin-serialization.json.explicit-nulls","h":[["2.7.0.CR1","df5739d914094615"],["2.13.2.Final","87249e57b15e1ae0"],["3.9.0.CR1","1bc44df8248b1fd9"]]}
 {"key":"quarkus.kotlin-serialization.json.ignore-unknown-keys","h":[["2.7.0.CR1","18b24c1b8d57c584"],["2.13.2.Final","fd79bcf8dd11952a"],["3.9.0.CR1","e0185ed0d32e1ff1"]]}
 {"key":"quarkus.kotlin-serialization.json.is-lenient","h":[["2.7.0.CR1","eb6a889c30fc9a1c"],["2.13.2.Final","19bf80b415b13cbf"],["3.9.0.CR1","906daf47e4b58524"]]}
+{"key":"quarkus.kotlin-serialization.json.max-nesting-depth","h":[["4.0.0.CR1","d66ca567eb7b04a0"]]}
 {"key":"quarkus.kotlin-serialization.json.naming-strategy","h":[["3.0.0.Alpha5","5b9ebd7f579a410d"],["3.9.0.CR1","ed9afc460c0cb36c"]]}
 {"key":"quarkus.kotlin-serialization.json.pretty-print","h":[["2.7.0.CR1","e871fc19e381cb53"],["2.13.2.Final","a5fc84e883330e39"],["3.9.0.CR1","a068b85436890134"]]}
 {"key":"quarkus.kotlin-serialization.json.pretty-print-indent","h":[["2.7.0.CR1","5c10ce9e2bc79363"],["2.13.2.Final","158e41c1070bd653"],["3.9.0.CR1","400fdcf962e8e4ea"]]}
@@ -4175,7 +4179,7 @@
 {"key":"quarkus.neo4j.trust-settings.hostname-verification-enabled","h":[["1.7.0.CR1","0cb574a861792805"],["2.6.0.CR1",null]]}
 {"key":"quarkus.neo4j.trust-settings.strategy","h":[["1.7.0.CR1","ddea70980d571c8b"],["2.6.0.CR1",null]]}
 {"key":"quarkus.neo4j.uri","h":[["0.19.0","3d9238b1e7082ec6"],["2.6.0.CR1",null]]}
-{"key":"quarkus.netty.allocator-max-order","h":[["2.0.0.Alpha2","0265d3dd52b74bd4"]]}
+{"key":"quarkus.netty.allocator-max-order","h":[["2.0.0.Alpha2","0265d3dd52b74bd4"],["4.0.0.CR1","84c044a15d78f407"]]}
 {"key":"quarkus.oauth2.ca-cert-file","h":[["0.20.0","4217f28f5c7709a9"],["0.21.0","36fc11444212cdeb"],["0.27.0","d1c02b22513f62a3"],["1.6.0.Final","8752b175c839070d"]]}
 {"key":"quarkus.oauth2.client-id","h":[["0.20.0","cca354e60b0ea099"],["0.27.0","3170cd0a82488348"],["1.2.0.Final","c5c98a6244bb826d"],["1.6.0.Final","6031a45290c6c8b4"]]}
 {"key":"quarkus.oauth2.client-secret","h":[["0.20.0","835cbf9acbff4af7"],["0.27.0","d3aa324388373114"],["1.2.0.Final","533bacd440d0661e"],["1.6.0.Final","fac2184dc5d4929e"]]}
@@ -4752,6 +4756,7 @@
 {"key":"quarkus.oidc.jwks.resolve-early","h":[["3.6.0.CR1","e3136fcb8d0ca19e"],["3.17.0.CR1","b7b797bb2e6e0c80"]]}
 {"key":"quarkus.oidc.jwks.try-all","h":[["3.14.0.CR1","4ff84146d7d80b7e"],["3.17.0.CR1","fb29624941164582"]]}
 {"key":"quarkus.oidc.logout.backchannel.clean-up-timer-interval","h":[["3.2.1.Final","64051ef40023ace2"],["3.17.0.CR1","e577b612edd755dc"]]}
+{"key":"quarkus.oidc.logout.backchannel.logout-all-sessions","h":[["4.0.0.CR1","5687dce89504cbcc"]]}
 {"key":"quarkus.oidc.logout.backchannel.logout-token-key","h":[["3.2.1.Final","7cc5b54b3e17ab72"],["3.7.0","d8970029c21ea149"],["3.17.0.CR1","e07da0cca61d5bb7"]]}
 {"key":"quarkus.oidc.logout.backchannel.path","h":[["2.9.0.CR1","7219d99dd380d3b2"],["3.17.0.CR1","bd19fb05891ecf29"]]}
 {"key":"quarkus.oidc.logout.backchannel.token-cache-size","h":[["3.2.1.Final","b57f938568b2a970"],["3.17.0.CR1","ba5d68fdc692f889"]]}
@@ -5419,7 +5424,7 @@
 {"key":"quarkus.otel.traces.exporter","h":[["3.0.0.Beta1","4dfcd2bb3a4f0d22"]]}
 {"key":"quarkus.otel.traces.include-static-resources","h":[["3.0.0.Beta1","b5bb62ed67066d47"],["3.0.0.CR1","1d569b22455cf78b"]]}
 {"key":"quarkus.otel.traces.sampler","h":[["3.0.0.Beta1","7fc40e79ec0dd267"],["3.0.0.CR1","8e99bc60dd9d49c7"],["4.0.0.Beta1","6f8c42c817ac0987"]]}
-{"key":"quarkus.otel.traces.sampler.arg","h":[["3.0.0.Beta1","9d891cfd591886c6"],["3.0.0.CR1","822fe6cc30022b27"],["3.6.0.CR1","61116370b9ff5c36"],["4.0.0.Beta1","2ec46ccdc01bbdf3"]]}
+{"key":"quarkus.otel.traces.sampler.arg","h":[["3.0.0.Beta1","9d891cfd591886c6"],["3.0.0.CR1","822fe6cc30022b27"],["3.6.0.CR1","61116370b9ff5c36"],["4.0.0.Beta1","2ec46ccdc01bbdf3"],["4.0.0.CR1","212b584014e5755a"]]}
 {"key":"quarkus.otel.traces.suppress-application-uris","h":[["3.18.0.CR1","cf9bda32e4138e18"]]}
 {"key":"quarkus.otel.traces.suppress-non-application-uris","h":[["3.0.0.Beta1","a28327326b10b3a5"],["3.0.0.CR1","b4e89666cd9411ff"]]}
 {"key":"quarkus.package.add-runner-suffix","h":[["2.11.0.CR1","4cf171973fb816fd"],["3.10.0.CR1",null]]}
@@ -6532,7 +6537,7 @@
 {"key":"quarkus.spiffe-client.devservices.transport","h":[["4.0.0.Beta1","81cb28f1818c9820"]]}
 {"key":"quarkus.spiffe-client.enabled","h":[["4.0.0.Beta1","f707c8665da6b2c2"]]}
 {"key":"quarkus.spiffe-client.endpoint-socket","h":[["4.0.0.Beta1","283d86da4a8ab1d6"]]}
-{"key":"quarkus.spring-boot-properties.configuration-properties-naming-strategy","h":[["2.14.0.CR1","f0fa23d517cb8a93"],["3.0.0.Alpha1",null],["3.0.0.Alpha2","f0fa23d517cb8a93"],["3.26.0.CR1","aa6589441ab65393"]]}
+{"key":"quarkus.spring-boot-properties.configuration-properties-naming-strategy","h":[["2.14.0.CR1","f0fa23d517cb8a93"],["3.0.0.Alpha1",null],["3.0.0.Alpha2","f0fa23d517cb8a93"],["3.26.0.CR1","aa6589441ab65393"],["4.0.0.CR1",null]]}
 {"key":"quarkus.spring-cloud-config.connection-timeout","h":[["1.3.0.CR1","4dc35d5bc1700b1f"],["3.0.0.Alpha4","153784be5235e23e"]]}
 {"key":"quarkus.spring-cloud-config.discovery.enabled","h":[["3.25.0.CR1","d919ad37969c5080"]]}
 {"key":"quarkus.spring-cloud-config.discovery.eureka-config.registry-fetch-interval-seconds","h":[["3.25.0.CR1","fdfeb12ede6e7280"]]}
@@ -7078,7 +7083,7 @@
 {"key":"quarkus.vertx.resolver.round-robin-inet-address","h":[["3.13.0.CR1","c7c0c7db9839518b"]]}
 {"key":"quarkus.vertx.resolver.search-domains","h":[["3.13.0.CR1","dc1a764d025a1337"]]}
 {"key":"quarkus.vertx.resolver.servers","h":[["3.13.0.CR1","a4eddf7f5afbe4f9"],["3.21.0.CR1","b3aeb805bd5b91dc"]]}
-{"key":"quarkus.vertx.use-async-dns","h":[["0.13.0","3762fd43b64c2e21"],["0.17.0","b9b8fe0cc824a82f"],["0.23.0","173e4ff89f99fc5e"],["2.3.0.CR1","d405f60e8f96ee0d"]]}
+{"key":"quarkus.vertx.use-async-dns","h":[["0.13.0","3762fd43b64c2e21"],["0.17.0","b9b8fe0cc824a82f"],["0.23.0","173e4ff89f99fc5e"],["2.3.0.CR1","d405f60e8f96ee0d"],["4.0.0.CR1","9951d893688d372b"]]}
 {"key":"quarkus.vertx.warning-exception-time","h":[["0.13.0","d8646137f5a69501"],["0.16.0","2848d3355d2f4be6"],["0.17.0","e589ef9f5b2d96dd"],["0.23.0","b05f4b9c033bebcf"],["2.3.0.CR1","57d1b6f79dc9d01c"]]}
 {"key":"quarkus.vertx.worker-pool-size","h":[["0.13.0","2280ae194d991bf3"],["0.17.0","9074a24b784a6465"],["0.23.0","e5bae3945005476d"],["2.3.0.CR1","2af8f595a883b30b"],["3.4.0.CR1","d47ab07603dc191b"],["3.30.1","b83f491066be1c16"],["4.0.0.Beta1",null]]}
 {"key":"quarkus.virtual-threads.enabled","h":[["3.5.0.CR1","24300c61da889dc1"]]}
