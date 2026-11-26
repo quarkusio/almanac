@@ -3052,6 +3052,7 @@
 {"id":"quarkus-bootstrap-app-model io.quarkus.maven.dependency.ArtifactCoords TYPE_JAR:Ljava/lang/String;","h":[["4.0.0.Beta1","+"]]}
 {"id":"quarkus-bootstrap-app-model io.quarkus.maven.dependency.ArtifactCoords TYPE_POM:Ljava/lang/String;","h":[["4.0.0.Beta1","+"]]}
 {"id":"quarkus-bootstrap-app-model io.quarkus.maven.dependency.ArtifactCoords TYPE_TEST_JAR:Ljava/lang/String;","h":[["4.0.0.Beta1","+"]]}
+{"id":"quarkus-bootstrap-app-model io.quarkus.maven.dependency.ArtifactCoords TYPE_ZIP:Ljava/lang/String;","h":[["4.0.0","+"]]}
 {"id":"quarkus-bootstrap-app-model io.quarkus.maven.dependency.ArtifactCoords fromString(Ljava/lang/String;)Lio/quarkus/maven/dependency/ArtifactCoords;","h":[["4.0.0.Beta1","+s"]]}
 {"id":"quarkus-bootstrap-app-model io.quarkus.maven.dependency.ArtifactCoords getArtifactId()Ljava/lang/String;","h":[["4.0.0.Beta1","+"]]}
 {"id":"quarkus-bootstrap-app-model io.quarkus.maven.dependency.ArtifactCoords getClassifier()Ljava/lang/String;","h":[["4.0.0.Beta1","+"]]}
@@ -3059,6 +3060,7 @@
 {"id":"quarkus-bootstrap-app-model io.quarkus.maven.dependency.ArtifactCoords getKey()Lio/quarkus/maven/dependency/ArtifactKey;","h":[["4.0.0.Beta1","+"]]}
 {"id":"quarkus-bootstrap-app-model io.quarkus.maven.dependency.ArtifactCoords getType()Ljava/lang/String;","h":[["4.0.0.Beta1","+"]]}
 {"id":"quarkus-bootstrap-app-model io.quarkus.maven.dependency.ArtifactCoords getVersion()Ljava/lang/String;","h":[["4.0.0.Beta1","+"]]}
+{"id":"quarkus-bootstrap-app-model io.quarkus.maven.dependency.ArtifactCoords isClasspathArchive()Z","h":[["4.0.0","+d"]]}
 {"id":"quarkus-bootstrap-app-model io.quarkus.maven.dependency.ArtifactCoords isJar()Z","h":[["4.0.0.Beta1","+d"]]}
 {"id":"quarkus-bootstrap-app-model io.quarkus.maven.dependency.ArtifactCoords isSnapshot()Z","h":[["4.0.0.Beta1","+d"]]}
 {"id":"quarkus-bootstrap-app-model io.quarkus.maven.dependency.ArtifactCoords jar(Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;)Lio/quarkus/maven/dependency/ArtifactCoords;","h":[["4.0.0.Beta1","+s"]]}
@@ -5743,7 +5745,11 @@
 {"id":"quarkus-container-image-deployment io.quarkus.container.image.deployment.ContainerImageConfig push()Ljava/util/Optional;","h":[["4.0.0.Beta1","+"]]}
 {"id":"quarkus-container-image-deployment io.quarkus.container.image.deployment.ContainerImageConfig registry()Ljava/util/Optional;","h":[["4.0.0.Beta1","+"]]}
 {"id":"quarkus-container-image-deployment io.quarkus.container.image.deployment.ContainerImageConfig tag()Ljava/util/Optional;","h":[["4.0.0.Beta1","+"]]}
+{"id":"quarkus-container-image-deployment io.quarkus.container.image.deployment.ContainerImageConfig tar()Lio/quarkus/container/image/deployment/ContainerImageConfig$Tar;","h":[["4.0.0","+"]]}
 {"id":"quarkus-container-image-deployment io.quarkus.container.image.deployment.ContainerImageConfig username()Ljava/util/Optional;","h":[["4.0.0.Beta1","+"]]}
+{"id":"quarkus-container-image-deployment io.quarkus.container.image.deployment.ContainerImageConfig$Tar","h":[["4.0.0","+i"]]}
+{"id":"quarkus-container-image-deployment io.quarkus.container.image.deployment.ContainerImageConfig$Tar enabled()Z","h":[["4.0.0","+"]]}
+{"id":"quarkus-container-image-deployment io.quarkus.container.image.deployment.ContainerImageConfig$Tar file()Ljava/util/Optional;","h":[["4.0.0","+"]]}
 {"id":"quarkus-container-image-deployment io.quarkus.container.image.deployment.ContainerImageProcessor","h":[["4.0.0.Beta1","+"]]}
 {"id":"quarkus-container-image-deployment io.quarkus.container.image.deployment.ContainerImageProcessor <init>()V","h":[["4.0.0.Beta1","+"]]}
 {"id":"quarkus-container-image-deployment io.quarkus.container.image.deployment.ContainerImageProcessor ignoreCredentialsChange(Lio/quarkus/deployment/annotations/BuildProducer;)V","h":[["4.0.0.Beta1","+"]]}
@@ -7293,6 +7299,7 @@
 {"id":"quarkus-core io.quarkus.runtime.logging.LogRuntimeConfig$CleanupFilterConfig ifStartsWith()Ljava/util/List;","h":[["4.0.0.Beta1","+"]]}
 {"id":"quarkus-core io.quarkus.runtime.logging.LogRuntimeConfig$CleanupFilterConfig targetLevel()Ljava/util/logging/Level;","h":[["4.0.0.Beta1","+"]]}
 {"id":"quarkus-core io.quarkus.runtime.logging.LogRuntimeConfig$ConsoleConfig","h":[["4.0.0.Beta1","+i"]]}
+{"id":"quarkus-core io.quarkus.runtime.logging.LogRuntimeConfig$ConsoleConfig DEFAULT_FORMAT:Ljava/lang/String;","h":[["4.0.0","+"]]}
 {"id":"quarkus-core io.quarkus.runtime.logging.LogRuntimeConfig$ConsoleConfig async()Lio/quarkus/runtime/logging/LogRuntimeConfig$AsyncConfig;","h":[["4.0.0.Beta1","+"]]}
 {"id":"quarkus-core io.quarkus.runtime.logging.LogRuntimeConfig$ConsoleConfig darken()I","h":[["4.0.0.Beta1","+"]]}
 {"id":"quarkus-core io.quarkus.runtime.logging.LogRuntimeConfig$ConsoleConfig enabled()Z","h":[["4.0.0.Beta1","+"]]}
@@ -7301,6 +7308,7 @@
 {"id":"quarkus-core io.quarkus.runtime.logging.LogRuntimeConfig$ConsoleConfig level()Ljava/util/logging/Level;","h":[["4.0.0.Beta1","+"]]}
 {"id":"quarkus-core io.quarkus.runtime.logging.LogRuntimeConfig$ConsoleConfig stderr()Z","h":[["4.0.0.Beta1","+"]]}
 {"id":"quarkus-core io.quarkus.runtime.logging.LogRuntimeConfig$FileConfig","h":[["4.0.0.Beta1","+i"]]}
+{"id":"quarkus-core io.quarkus.runtime.logging.LogRuntimeConfig$FileConfig DEFAULT_FORMAT:Ljava/lang/String;","h":[["4.0.0","+"]]}
 {"id":"quarkus-core io.quarkus.runtime.logging.LogRuntimeConfig$FileConfig DEFAULT_LOG_FILE_NAME:Ljava/lang/String;","h":[["4.0.0.Beta1","+"]]}
 {"id":"quarkus-core io.quarkus.runtime.logging.LogRuntimeConfig$FileConfig async()Lio/quarkus/runtime/logging/LogRuntimeConfig$AsyncConfig;","h":[["4.0.0.Beta1","+"]]}
 {"id":"quarkus-core io.quarkus.runtime.logging.LogRuntimeConfig$FileConfig enabled()Z","h":[["4.0.0.Beta1","+"]]}
@@ -7317,6 +7325,7 @@
 {"id":"quarkus-core io.quarkus.runtime.logging.LogRuntimeConfig$FileConfig$RotationConfig maxFileSize()Lio/quarkus/runtime/configuration/MemorySize;","h":[["4.0.0.Beta1","+"]]}
 {"id":"quarkus-core io.quarkus.runtime.logging.LogRuntimeConfig$FileConfig$RotationConfig rotateOnBoot()Z","h":[["4.0.0.Beta1","+"]]}
 {"id":"quarkus-core io.quarkus.runtime.logging.LogRuntimeConfig$SocketConfig","h":[["4.0.0.Beta1","+i"]]}
+{"id":"quarkus-core io.quarkus.runtime.logging.LogRuntimeConfig$SocketConfig DEFAULT_FORMAT:Ljava/lang/String;","h":[["4.0.0","+"]]}
 {"id":"quarkus-core io.quarkus.runtime.logging.LogRuntimeConfig$SocketConfig async()Lio/quarkus/runtime/logging/LogRuntimeConfig$AsyncConfig;","h":[["4.0.0.Beta1","+"]]}
 {"id":"quarkus-core io.quarkus.runtime.logging.LogRuntimeConfig$SocketConfig blockOnReconnect()Z","h":[["4.0.0.Beta1","+"]]}
 {"id":"quarkus-core io.quarkus.runtime.logging.LogRuntimeConfig$SocketConfig enabled()Z","h":[["4.0.0.Beta1","+"]]}
@@ -7326,6 +7335,7 @@
 {"id":"quarkus-core io.quarkus.runtime.logging.LogRuntimeConfig$SocketConfig level()Ljava/util/logging/Level;","h":[["4.0.0.Beta1","+"]]}
 {"id":"quarkus-core io.quarkus.runtime.logging.LogRuntimeConfig$SocketConfig protocol()Lorg/jboss/logmanager/handlers/SocketHandler$Protocol;","h":[["4.0.0.Beta1","+"]]}
 {"id":"quarkus-core io.quarkus.runtime.logging.LogRuntimeConfig$SyslogConfig","h":[["4.0.0.Beta1","+i"]]}
+{"id":"quarkus-core io.quarkus.runtime.logging.LogRuntimeConfig$SyslogConfig DEFAULT_FORMAT:Ljava/lang/String;","h":[["4.0.0","+"]]}
 {"id":"quarkus-core io.quarkus.runtime.logging.LogRuntimeConfig$SyslogConfig appName()Ljava/util/Optional;","h":[["4.0.0.Beta1","+"]]}
 {"id":"quarkus-core io.quarkus.runtime.logging.LogRuntimeConfig$SyslogConfig async()Lio/quarkus/runtime/logging/LogRuntimeConfig$AsyncConfig;","h":[["4.0.0.Beta1","+"]]}
 {"id":"quarkus-core io.quarkus.runtime.logging.LogRuntimeConfig$SyslogConfig blockOnReconnect()Z","h":[["4.0.0.Beta1","+"]]}
@@ -7349,12 +7359,15 @@
 {"id":"quarkus-core io.quarkus.runtime.logging.LogRuntimeConfig$SyslogConfig$CountingFraming values()[Lio/quarkus/runtime/logging/LogRuntimeConfig$SyslogConfig$CountingFraming;","h":[["4.0.0.Beta1","+s"]]}
 {"id":"quarkus-core io.quarkus.runtime.logging.LoggingCompatBridge","h":[["4.0.0.Beta2","+i"]]}
 {"id":"quarkus-core io.quarkus.runtime.logging.LoggingCompatBridge additionalHandlers()Ljava/util/List;","h":[["4.0.0.Beta2","+"]]}
+{"id":"quarkus-core io.quarkus.runtime.logging.LoggingCompatBridge additionalNamedHandlers()Ljava/util/List;","h":[["4.0.0","+"]]}
 {"id":"quarkus-core io.quarkus.runtime.logging.LoggingCompatBridge banner()Lio/quarkus/runtime/logging/LogBanner;","h":[["4.0.0.Beta2","+"]]}
 {"id":"quarkus-core io.quarkus.runtime.logging.LoggingCompatBridge namedHandlerFormatters()Lio/quarkus/runtime/logging/NamedHandlerFormatters;","h":[["4.0.0.Beta2","+"]]}
 {"id":"quarkus-core io.quarkus.runtime.logging.LoggingCompatBridge streaming()Lio/quarkus/runtime/logging/StreamingLogHandler;","h":[["4.0.0.Beta2","+"]]}
 {"id":"quarkus-core io.quarkus.runtime.logging.LoggingCompatBridge$Impl","h":[["4.0.0.Beta2","+r implements io.quarkus.runtime.logging.LoggingCompatBridge"]]}
-{"id":"quarkus-core io.quarkus.runtime.logging.LoggingCompatBridge$Impl <init>(Lio/quarkus/runtime/logging/StreamingLogHandler;Lio/quarkus/runtime/logging/LogBanner;Lio/quarkus/runtime/logging/NamedHandlerFormatters;Ljava/util/List;)V","h":[["4.0.0.Beta2","+"]]}
+{"id":"quarkus-core io.quarkus.runtime.logging.LoggingCompatBridge$Impl <init>(Lio/quarkus/runtime/logging/StreamingLogHandler;Lio/quarkus/runtime/logging/LogBanner;Lio/quarkus/runtime/logging/NamedHandlerFormatters;Ljava/util/List;)V","h":[["4.0.0.Beta2","+"],["4.0.0",null]]}
+{"id":"quarkus-core io.quarkus.runtime.logging.LoggingCompatBridge$Impl <init>(Lio/quarkus/runtime/logging/StreamingLogHandler;Lio/quarkus/runtime/logging/LogBanner;Lio/quarkus/runtime/logging/NamedHandlerFormatters;Ljava/util/List;Ljava/util/List;)V","h":[["4.0.0","+"]]}
 {"id":"quarkus-core io.quarkus.runtime.logging.LoggingCompatBridge$Impl additionalHandlers()Ljava/util/List;","h":[["4.0.0.Beta2","+"]]}
+{"id":"quarkus-core io.quarkus.runtime.logging.LoggingCompatBridge$Impl additionalNamedHandlers()Ljava/util/List;","h":[["4.0.0","+"]]}
 {"id":"quarkus-core io.quarkus.runtime.logging.LoggingCompatBridge$Impl banner()Lio/quarkus/runtime/logging/LogBanner;","h":[["4.0.0.Beta2","+"]]}
 {"id":"quarkus-core io.quarkus.runtime.logging.LoggingCompatBridge$Impl equals(Ljava/lang/Object;)Z","h":[["4.0.0.Beta2","+f"]]}
 {"id":"quarkus-core io.quarkus.runtime.logging.LoggingCompatBridge$Impl hashCode()I","h":[["4.0.0.Beta2","+f"]]}
@@ -7363,11 +7376,13 @@
 {"id":"quarkus-core io.quarkus.runtime.logging.LoggingCompatBridge$Impl toString()Ljava/lang/String;","h":[["4.0.0.Beta2","+f"]]}
 {"id":"quarkus-core io.quarkus.runtime.logging.LoggingCompatRecorder","h":[["4.0.0.Beta2","+"]]}
 {"id":"quarkus-core io.quarkus.runtime.logging.LoggingCompatRecorder <init>()V","h":[["4.0.0.Beta2","+"]]}
-{"id":"quarkus-core io.quarkus.runtime.logging.LoggingCompatRecorder buildBridge(Lio/quarkus/runtime/RuntimeValue;Lio/quarkus/runtime/RuntimeValue;Ljava/util/List;Ljava/util/List;)Lio/quarkus/runtime/logging/LoggingCompatBridge;","h":[["4.0.0.Beta2","+"]]}
+{"id":"quarkus-core io.quarkus.runtime.logging.LoggingCompatRecorder buildBridge(Lio/quarkus/runtime/RuntimeValue;Lio/quarkus/runtime/RuntimeValue;Ljava/util/List;Ljava/util/List;)Lio/quarkus/runtime/logging/LoggingCompatBridge;","h":[["4.0.0.Beta2","+"],["4.0.0",null]]}
+{"id":"quarkus-core io.quarkus.runtime.logging.LoggingCompatRecorder buildBridge(Lio/quarkus/runtime/RuntimeValue;Lio/quarkus/runtime/RuntimeValue;Ljava/util/List;Ljava/util/List;Ljava/util/List;)Lio/quarkus/runtime/logging/LoggingCompatBridge;","h":[["4.0.0","+"]]}
 {"id":"quarkus-core io.quarkus.runtime.logging.LoggingCompatRecorder resolveFormatter(Ljava/util/List;)Ljava/util/logging/Formatter;","h":[["4.0.0.Beta2","+"]]}
 {"id":"quarkus-core io.quarkus.runtime.logging.LoggingSetup","h":[["4.0.0.Beta2","+f"]]}
 {"id":"quarkus-core io.quarkus.runtime.logging.LoggingSetup addNamedHandlersToCategory(Lio/quarkus/runtime/logging/LogRuntimeConfig$CategoryConfig;Ljava/util/Map;Lorg/jboss/logmanager/Logger;Ljava/util/logging/ErrorManager;Z)V","h":[["4.0.0.Beta2","+s"]]}
-{"id":"quarkus-core io.quarkus.runtime.logging.LoggingSetup addNamedHandlersToRootHandlers(Ljava/util/Optional;Ljava/util/Map;Ljava/util/ArrayList;Ljava/util/logging/ErrorManager;)V","h":[["4.0.0.Beta2","+s"]]}
+{"id":"quarkus-core io.quarkus.runtime.logging.LoggingSetup addNamedHandlersToRootHandlers(Ljava/util/Optional;Ljava/util/Map;Ljava/util/ArrayList;Ljava/util/logging/ErrorManager;)V","h":[["4.0.0.Beta2","+s"],["4.0.0",null]]}
+{"id":"quarkus-core io.quarkus.runtime.logging.LoggingSetup addNamedHandlersToRootHandlers(Ljava/util/Optional;Ljava/util/Map;Ljava/util/ArrayList;Ljava/util/logging/ErrorManager;Z)V","h":[["4.0.0","+s"]]}
 {"id":"quarkus-core io.quarkus.runtime.logging.LoggingSetup addToNamedHandlers(Ljava/util/Map;Ljava/util/logging/Handler;Ljava/lang/String;)V","h":[["4.0.0.Beta2","+s"]]}
 {"id":"quarkus-core io.quarkus.runtime.logging.LoggingSetup buildCleanupFilter(Lio/quarkus/runtime/logging/LogRuntimeConfig;Lio/quarkus/runtime/logging/LoggingSetup$ShutdownNotifier;)Lio/quarkus/runtime/logging/LogCleanupFilter;","h":[["4.0.0.Beta2","+s"]]}
 {"id":"quarkus-core io.quarkus.runtime.logging.LoggingSetup buildConsoleHandler(Lio/quarkus/runtime/logging/LogRuntimeConfig$ConsoleConfig;Lio/quarkus/runtime/console/ConsoleRuntimeConfig;Ljava/util/logging/ErrorManager;Lio/quarkus/runtime/logging/LogCleanupFilter;Ljava/util/Map;Ljava/util/logging/Formatter;Ljava/util/function/Supplier;Z)Lio/quarkus/runtime/logging/LoggingSetup$ConsoleHandlerResult;","h":[["4.0.0.Beta2","+s"]]}
@@ -7375,7 +7390,8 @@
 {"id":"quarkus-core io.quarkus.runtime.logging.LoggingSetup configureConsoleHandler(Lio/quarkus/runtime/logging/LogRuntimeConfig$ConsoleConfig;Lio/quarkus/runtime/console/ConsoleRuntimeConfig;Ljava/util/logging/ErrorManager;Lio/quarkus/runtime/logging/LogCleanupFilter;Ljava/util/Map;Ljava/util/logging/Formatter;Ljava/util/function/Supplier;Lio/quarkus/runtime/LaunchMode;Z)Ljava/util/logging/Handler;","h":[["4.0.0.Beta2","+s"]]}
 {"id":"quarkus-core io.quarkus.runtime.logging.LoggingSetup configureFileHandler(Lio/quarkus/runtime/logging/LogRuntimeConfig$FileConfig;Ljava/util/logging/ErrorManager;Lio/quarkus/runtime/logging/LogCleanupFilter;Ljava/util/Map;Ljava/util/List;Z)Ljava/util/logging/Handler;","h":[["4.0.0.Beta2","+s"]]}
 {"id":"quarkus-core io.quarkus.runtime.logging.LoggingSetup configureFileHandler(Lio/quarkus/runtime/logging/LogRuntimeConfig$FileConfig;Ljava/util/logging/ErrorManager;Lio/quarkus/runtime/logging/LogCleanupFilter;Ljava/util/Map;Ljava/util/logging/Formatter;Z)Ljava/util/logging/Handler;","h":[["4.0.0.Beta2","+s"]]}
-{"id":"quarkus-core io.quarkus.runtime.logging.LoggingSetup configureRuntimeLogging(Lio/quarkus/runtime/logging/LogBuildTimeConfig;Lio/quarkus/runtime/logging/LogRuntimeConfig;Lio/quarkus/runtime/console/ConsoleRuntimeConfig;Ljava/util/Map;Lio/quarkus/runtime/logging/LoggingSetup$ShutdownNotifier;Lio/quarkus/runtime/logging/LogCleanupFilter;Ljava/util/logging/ErrorManager;Ljava/util/Map;Ljava/util/Collection;Ljava/util/Collection;Lio/quarkus/runtime/logging/StreamingLogHandler;Ljava/util/logging/Formatter;Ljava/util/logging/Formatter;Ljava/util/logging/Formatter;Ljava/util/logging/Formatter;Lio/quarkus/runtime/logging/NamedHandlerFormatters;Lio/quarkus/runtime/logging/LogBanner;Lio/quarkus/runtime/LaunchMode;ZZ)V","h":[["4.0.0.Beta2","+s"]]}
+{"id":"quarkus-core io.quarkus.runtime.logging.LoggingSetup configureRuntimeLogging(Lio/quarkus/runtime/logging/LogBuildTimeConfig;Lio/quarkus/runtime/logging/LogRuntimeConfig;Lio/quarkus/runtime/console/ConsoleRuntimeConfig;Ljava/util/Map;Lio/quarkus/runtime/logging/LoggingSetup$ShutdownNotifier;Lio/quarkus/runtime/logging/LogCleanupFilter;Ljava/util/logging/ErrorManager;Ljava/util/Map;Ljava/util/Collection;Ljava/util/Collection;Lio/quarkus/runtime/logging/StreamingLogHandler;Ljava/util/logging/Formatter;Ljava/util/logging/Formatter;Ljava/util/logging/Formatter;Ljava/util/logging/Formatter;Lio/quarkus/runtime/logging/NamedHandlerFormatters;Lio/quarkus/runtime/logging/LogBanner;Lio/quarkus/runtime/LaunchMode;ZZ)V","h":[["4.0.0.Beta2","+s"],["4.0.0",null]]}
+{"id":"quarkus-core io.quarkus.runtime.logging.LoggingSetup configureRuntimeLogging(Lio/quarkus/runtime/logging/LogBuildTimeConfig;Lio/quarkus/runtime/logging/LogRuntimeConfig;Lio/quarkus/runtime/console/ConsoleRuntimeConfig;Ljava/util/Map;Lio/quarkus/runtime/logging/LoggingSetup$ShutdownNotifier;Lio/quarkus/runtime/logging/LogCleanupFilter;Ljava/util/logging/ErrorManager;Ljava/util/Map;Ljava/util/Collection;Ljava/util/Collection;Ljava/util/List;Lio/quarkus/runtime/logging/StreamingLogHandler;Ljava/util/logging/Formatter;Ljava/util/logging/Formatter;Ljava/util/logging/Formatter;Ljava/util/logging/Formatter;Lio/quarkus/runtime/logging/NamedHandlerFormatters;Lio/quarkus/runtime/logging/LogBanner;Lio/quarkus/runtime/LaunchMode;ZZ)V","h":[["4.0.0","+s"]]}
 {"id":"quarkus-core io.quarkus.runtime.logging.LoggingSetup configureSocketHandler(Lio/quarkus/runtime/logging/LogRuntimeConfig$SocketConfig;Ljava/util/logging/ErrorManager;Lio/quarkus/runtime/logging/LogCleanupFilter;Ljava/util/Map;Ljava/util/List;Z)Ljava/util/logging/Handler;","h":[["4.0.0.Beta2","+s"]]}
 {"id":"quarkus-core io.quarkus.runtime.logging.LoggingSetup configureSocketHandler(Lio/quarkus/runtime/logging/LogRuntimeConfig$SocketConfig;Ljava/util/logging/ErrorManager;Lio/quarkus/runtime/logging/LogCleanupFilter;Ljava/util/Map;Ljava/util/logging/Formatter;Z)Ljava/util/logging/Handler;","h":[["4.0.0.Beta2","+s"]]}
 {"id":"quarkus-core io.quarkus.runtime.logging.LoggingSetup configureSyslogHandler(Lio/quarkus/runtime/logging/LogRuntimeConfig$SyslogConfig;Ljava/util/logging/ErrorManager;Lio/quarkus/runtime/logging/LogCleanupFilter;Ljava/util/Map;Ljava/util/List;Z)Ljava/util/logging/Handler;","h":[["4.0.0.Beta2","+s"]]}
@@ -7388,7 +7404,8 @@
 {"id":"quarkus-core io.quarkus.runtime.logging.LoggingSetup getLogLevelNoInheritance(Ljava/lang/String;Ljava/util/Map;Ljava/util/function/Function;Ljava/util/Map;)Lio/quarkus/runtime/logging/InheritableLevel;","h":[["4.0.0.Beta2","+s"]]}
 {"id":"quarkus-core io.quarkus.runtime.logging.LoggingSetup mergeNamedHandlerFormatters(Ljava/util/List;)Ljava/util/Map;","h":[["4.0.0.Beta2","+s"]]}
 {"id":"quarkus-core io.quarkus.runtime.logging.LoggingSetup releaseCleanupFilter(Lio/quarkus/runtime/logging/LogCleanupFilter;)V","h":[["4.0.0.CR1","+s"]]}
-{"id":"quarkus-core io.quarkus.runtime.logging.LoggingSetup resolveFormatters(Ljava/lang/String;Ljava/util/Map;Ljava/util/List;)Ljava/util/List;","h":[["4.0.0.Beta2","+s"]]}
+{"id":"quarkus-core io.quarkus.runtime.logging.LoggingSetup resolveFormatters(Ljava/lang/String;Ljava/util/Map;Ljava/util/List;)Ljava/util/List;","h":[["4.0.0.Beta2","+s"],["4.0.0",null]]}
+{"id":"quarkus-core io.quarkus.runtime.logging.LoggingSetup resolveFormatters(Ljava/lang/String;Ljava/util/Map;Ljava/util/List;Ljava/lang/String;Ljava/lang/String;)Ljava/util/List;","h":[["4.0.0","+s"]]}
 {"id":"quarkus-core io.quarkus.runtime.logging.LoggingSetup setUpCategoryLoggers(Lio/quarkus/runtime/logging/LogBuildTimeConfig;Ljava/util/Map;Ljava/util/Map;Lorg/jboss/logmanager/LogContext;Ljava/util/logging/ErrorManager;Ljava/util/Map;Z)V","h":[["4.0.0.Beta2","+s"]]}
 {"id":"quarkus-core io.quarkus.runtime.logging.LoggingSetup shouldCreateNamedHandlers(Lio/quarkus/runtime/logging/LogRuntimeConfig;Ljava/util/List;)Z","h":[["4.0.0.Beta2","+s"]]}
 {"id":"quarkus-core io.quarkus.runtime.logging.LoggingSetup wrapConsoleHandler(Lio/quarkus/runtime/logging/LoggingSetup$ConsoleHandlerResult;Lio/quarkus/runtime/logging/LogRuntimeConfig$ConsoleConfig;Lio/quarkus/runtime/LaunchMode;)Ljava/util/logging/Handler;","h":[["4.0.0.Beta2","+s"]]}
@@ -7547,6 +7564,9 @@
 {"id":"quarkus-core io.quarkus.runtime.util.ClassPathUtils readStream(Ljava/net/URL;Ljava/util/function/Function;)Ljava/lang/Object;","h":[["4.0.0.Beta1","+s"]]}
 {"id":"quarkus-core io.quarkus.runtime.util.ClassPathUtils toLocalPath(Ljava/net/URL;)Ljava/nio/file/Path;","h":[["4.0.0.Beta1","+s"]]}
 {"id":"quarkus-core io.quarkus.runtime.util.ClassPathUtils toResourceName(Ljava/nio/file/Path;)Ljava/lang/String;","h":[["4.0.0.Beta1","+s"]]}
+{"id":"quarkus-core io.quarkus.runtime.util.CommandLineQuoting","h":[["4.0.0","+f"]]}
+{"id":"quarkus-core io.quarkus.runtime.util.CommandLineQuoting quote(Ljava/lang/String;)Ljava/lang/String;","h":[["4.0.0","+s"]]}
+{"id":"quarkus-core io.quarkus.runtime.util.CommandLineQuoting quoteForArgumentFile(Ljava/lang/String;)Ljava/lang/String;","h":[["4.0.0","+s"]]}
 {"id":"quarkus-core io.quarkus.runtime.util.EnumerationUtil","h":[["4.0.0.Beta1","+"]]}
 {"id":"quarkus-core io.quarkus.runtime.util.EnumerationUtil <init>()V","h":[["4.0.0.Beta1","+"]]}
 {"id":"quarkus-core io.quarkus.runtime.util.EnumerationUtil from(Ljava/util/Iterator;)Ljava/util/Enumeration;","h":[["4.0.0.Beta1","+s"]]}
@@ -10272,6 +10292,7 @@
 {"id":"quarkus-core-deployment io.quarkus.deployment.Capability JSONB:Ljava/lang/String;","h":[["4.0.0.Beta1","+"]]}
 {"id":"quarkus-core-deployment io.quarkus.deployment.Capability JWT:Ljava/lang/String;","h":[["4.0.0.Beta1","+"]]}
 {"id":"quarkus-core-deployment io.quarkus.deployment.Capability KAFKA:Ljava/lang/String;","h":[["4.0.0.Beta1","+"]]}
+{"id":"quarkus-core-deployment io.quarkus.deployment.Capability KEYCLOAK_ADMIN_CLIENT:Ljava/lang/String;","h":[["4.0.0","+"]]}
 {"id":"quarkus-core-deployment io.quarkus.deployment.Capability KEYCLOAK_AUTHORIZATION:Ljava/lang/String;","h":[["4.0.0.Beta1","+"]]}
 {"id":"quarkus-core-deployment io.quarkus.deployment.Capability KOTLIN:Ljava/lang/String;","h":[["4.0.0.Beta1","+"]]}
 {"id":"quarkus-core-deployment io.quarkus.deployment.Capability KUBERNETES_CLIENT:Ljava/lang/String;","h":[["4.0.0.Beta1","+"]]}
@@ -13397,6 +13418,14 @@
 {"id":"quarkus-core-deployment io.quarkus.deployment.pkg.builditem.NativeImageSourceJarBuildItem <init>(Ljava/nio/file/Path;Ljava/nio/file/Path;)V","h":[["4.0.0.Beta1","+"]]}
 {"id":"quarkus-core-deployment io.quarkus.deployment.pkg.builditem.NativeImageSourceJarBuildItem getLibraryDir()Ljava/nio/file/Path;","h":[["4.0.0.Beta1","+"]]}
 {"id":"quarkus-core-deployment io.quarkus.deployment.pkg.builditem.NativeImageSourceJarBuildItem getPath()Ljava/nio/file/Path;","h":[["4.0.0.Beta1","+"]]}
+{"id":"quarkus-core-deployment io.quarkus.deployment.pkg.builditem.NativeImageSourcesBuildItem","h":[["4.0.0","+f extends io.quarkus.builder.item.SimpleBuildItem"]]}
+{"id":"quarkus-core-deployment io.quarkus.deployment.pkg.builditem.NativeImageSourcesBuildItem <init>(Ljava/nio/file/Path;Ljava/lang/String;Ljava/lang/String;Ljava/util/List;Ljava/lang/String;Ljava/util/Optional;)V","h":[["4.0.0","+"]]}
+{"id":"quarkus-core-deployment io.quarkus.deployment.pkg.builditem.NativeImageSourcesBuildItem getBuilderImage()Ljava/util/Optional;","h":[["4.0.0","+"]]}
+{"id":"quarkus-core-deployment io.quarkus.deployment.pkg.builditem.NativeImageSourcesBuildItem getDirectory()Ljava/nio/file/Path;","h":[["4.0.0","+"]]}
+{"id":"quarkus-core-deployment io.quarkus.deployment.pkg.builditem.NativeImageSourcesBuildItem getGraalVMVersion()Ljava/lang/String;","h":[["4.0.0","+"]]}
+{"id":"quarkus-core-deployment io.quarkus.deployment.pkg.builditem.NativeImageSourcesBuildItem getNativeImageArgs()Ljava/util/List;","h":[["4.0.0","+"]]}
+{"id":"quarkus-core-deployment io.quarkus.deployment.pkg.builditem.NativeImageSourcesBuildItem getNativeImageName()Ljava/lang/String;","h":[["4.0.0","+"]]}
+{"id":"quarkus-core-deployment io.quarkus.deployment.pkg.builditem.NativeImageSourcesBuildItem getRunnerJarName()Ljava/lang/String;","h":[["4.0.0","+"]]}
 {"id":"quarkus-core-deployment io.quarkus.deployment.pkg.builditem.OutputTargetBuildItem","h":[["4.0.0.Beta1","+f extends io.quarkus.builder.item.SimpleBuildItem"]]}
 {"id":"quarkus-core-deployment io.quarkus.deployment.pkg.builditem.OutputTargetBuildItem <init>(Ljava/nio/file/Path;Ljava/nio/file/Path;Ljava/lang/String;Ljava/lang/String;ZLjava/util/Properties;Ljava/util/Optional;)V","h":[["4.0.0.Beta1","+"]]}
 {"id":"quarkus-core-deployment io.quarkus.deployment.pkg.builditem.OutputTargetBuildItem getBaseName()Ljava/lang/String;","h":[["4.0.0.Beta1","+"]]}
@@ -13598,6 +13627,7 @@
 {"id":"quarkus-core-deployment io.quarkus.deployment.pkg.steps.NativeImageBuildRunner","h":[["4.0.0.Beta1","+a"]]}
 {"id":"quarkus-core-deployment io.quarkus.deployment.pkg.steps.NativeImageBuildRunner <init>()V","h":[["4.0.0.Beta1","+"]]}
 {"id":"quarkus-core-deployment io.quarkus.deployment.pkg.steps.NativeImageBuildRunner build(Ljava/util/List;Ljava/lang/String;Ljava/lang/String;Ljava/nio/file/Path;Lio/quarkus/deployment/pkg/steps/GraalVM$Version;ZZ)V","h":[["4.0.0.Beta1","+"]]}
+{"id":"quarkus-core-deployment io.quarkus.deployment.pkg.steps.NativeImageBuildRunner build(Ljava/util/List;Ljava/lang/String;Ljava/lang/String;Ljava/nio/file/Path;Lio/quarkus/deployment/pkg/steps/GraalVM$Version;ZZZ)V","h":[["4.0.0","+"]]}
 {"id":"quarkus-core-deployment io.quarkus.deployment.pkg.steps.NativeImageBuildRunner getBuildCommand(Ljava/nio/file/Path;Ljava/util/List;)[Ljava/lang/String;","h":[["4.0.0.Beta1","#a"]]}
 {"id":"quarkus-core-deployment io.quarkus.deployment.pkg.steps.NativeImageBuildRunner getGraalVMVersion()Lio/quarkus/deployment/pkg/steps/GraalVM$Version;","h":[["4.0.0.Beta1","+"]]}
 {"id":"quarkus-core-deployment io.quarkus.deployment.pkg.steps.NativeImageBuildRunner getGraalVMVersionCommand(Ljava/util/List;)[Ljava/lang/String;","h":[["4.0.0.Beta1","#a"]]}
@@ -14125,17 +14155,17 @@
 {"id":"quarkus-cyclonedx-generator io.quarkus.cyclonedx.generator.CycloneDxSbomGenerator setPrettyPrint(Z)Lio/quarkus/cyclonedx/generator/CycloneDxSbomGenerator;","h":[["4.0.0.Beta1","+"]]}
 {"id":"quarkus-cyclonedx-generator io.quarkus.cyclonedx.generator.CycloneDxSbomGenerator setRuntimeOnly(Z)Lio/quarkus/cyclonedx/generator/CycloneDxSbomGenerator;","h":[["4.0.0.Beta1","+"]]}
 {"id":"quarkus-cyclonedx-generator io.quarkus.cyclonedx.generator.CycloneDxSbomGenerator setSchemaVersion(Ljava/lang/String;)Lio/quarkus/cyclonedx/generator/CycloneDxSbomGenerator;","h":[["4.0.0.Beta1","+"]]}
-{"id":"quarkus-cyclonedx-generator io.quarkus.cyclonedx.generator.ProvidesAwareBomJsonGenerator","h":[["4.0.0.Beta1","+ extends org.cyclonedx.generators.json.BomJsonGenerator"]]}
-{"id":"quarkus-cyclonedx-generator io.quarkus.cyclonedx.generator.ProvidesAwareBomJsonGenerator <init>(Lorg/cyclonedx/model/Bom;Lorg/cyclonedx/Version;)V","h":[["4.0.0.Beta1","+"]]}
-{"id":"quarkus-cyclonedx-generator io.quarkus.cyclonedx.generator.ProvidesAwareDependencySerializer","h":[["4.0.0.Beta1","+ extends org.cyclonedx.util.serializer.DependencySerializer"]]}
-{"id":"quarkus-cyclonedx-generator io.quarkus.cyclonedx.generator.ProvidesAwareDependencySerializer <init>()V","h":[["4.0.0.Beta1","+"]]}
-{"id":"quarkus-cyclonedx-generator io.quarkus.cyclonedx.generator.ProvidesAwareDependencySerializer <init>(ZLjava/lang/String;)V","h":[["4.0.0.Beta1","+"]]}
-{"id":"quarkus-cyclonedx-generator io.quarkus.cyclonedx.generator.ProvidesAwareDependencySerializer createContextual(Lcom/fasterxml/jackson/databind/SerializerProvider;Lcom/fasterxml/jackson/databind/BeanProperty;)Lcom/fasterxml/jackson/databind/JsonSerializer;","h":[["4.0.0.Beta1","+"]]}
-{"id":"quarkus-cyclonedx-generator io.quarkus.cyclonedx.generator.ProvidesAwareDependencySerializer serialize(Lorg/cyclonedx/model/DependencyList;Lcom/fasterxml/jackson/core/JsonGenerator;Lcom/fasterxml/jackson/databind/SerializerProvider;)V","h":[["4.0.0.Beta1","+"]]}
-{"id":"quarkus-cyclonedx-generator io.quarkus.cyclonedx.generator.ProvidesDependency","h":[["4.0.0.Beta1","+ extends org.cyclonedx.model.Dependency"]]}
-{"id":"quarkus-cyclonedx-generator io.quarkus.cyclonedx.generator.ProvidesDependency <init>(Ljava/lang/String;)V","h":[["4.0.0.Beta1","+"]]}
-{"id":"quarkus-cyclonedx-generator io.quarkus.cyclonedx.generator.ProvidesDependency addProvides(Ljava/lang/String;)V","h":[["4.0.0.Beta1","+"]]}
-{"id":"quarkus-cyclonedx-generator io.quarkus.cyclonedx.generator.ProvidesDependency getProvides()Ljava/util/List;","h":[["4.0.0.Beta1","+"]]}
+{"id":"quarkus-cyclonedx-generator io.quarkus.cyclonedx.generator.ProvidesAwareBomJsonGenerator","h":[["4.0.0.Beta1","+ extends org.cyclonedx.generators.json.BomJsonGenerator"],["4.0.0",null]]}
+{"id":"quarkus-cyclonedx-generator io.quarkus.cyclonedx.generator.ProvidesAwareBomJsonGenerator <init>(Lorg/cyclonedx/model/Bom;Lorg/cyclonedx/Version;)V","h":[["4.0.0.Beta1","+"],["4.0.0",null]]}
+{"id":"quarkus-cyclonedx-generator io.quarkus.cyclonedx.generator.ProvidesAwareDependencySerializer","h":[["4.0.0.Beta1","+ extends org.cyclonedx.util.serializer.DependencySerializer"],["4.0.0",null]]}
+{"id":"quarkus-cyclonedx-generator io.quarkus.cyclonedx.generator.ProvidesAwareDependencySerializer <init>()V","h":[["4.0.0.Beta1","+"],["4.0.0",null]]}
+{"id":"quarkus-cyclonedx-generator io.quarkus.cyclonedx.generator.ProvidesAwareDependencySerializer <init>(ZLjava/lang/String;)V","h":[["4.0.0.Beta1","+"],["4.0.0",null]]}
+{"id":"quarkus-cyclonedx-generator io.quarkus.cyclonedx.generator.ProvidesAwareDependencySerializer createContextual(Lcom/fasterxml/jackson/databind/SerializerProvider;Lcom/fasterxml/jackson/databind/BeanProperty;)Lcom/fasterxml/jackson/databind/JsonSerializer;","h":[["4.0.0.Beta1","+"],["4.0.0",null]]}
+{"id":"quarkus-cyclonedx-generator io.quarkus.cyclonedx.generator.ProvidesAwareDependencySerializer serialize(Lorg/cyclonedx/model/DependencyList;Lcom/fasterxml/jackson/core/JsonGenerator;Lcom/fasterxml/jackson/databind/SerializerProvider;)V","h":[["4.0.0.Beta1","+"],["4.0.0",null]]}
+{"id":"quarkus-cyclonedx-generator io.quarkus.cyclonedx.generator.ProvidesDependency","h":[["4.0.0.Beta1","+ extends org.cyclonedx.model.Dependency"],["4.0.0",null]]}
+{"id":"quarkus-cyclonedx-generator io.quarkus.cyclonedx.generator.ProvidesDependency <init>(Ljava/lang/String;)V","h":[["4.0.0.Beta1","+"],["4.0.0",null]]}
+{"id":"quarkus-cyclonedx-generator io.quarkus.cyclonedx.generator.ProvidesDependency addProvides(Ljava/lang/String;)V","h":[["4.0.0.Beta1","+"],["4.0.0",null]]}
+{"id":"quarkus-cyclonedx-generator io.quarkus.cyclonedx.generator.ProvidesDependency getProvides()Ljava/util/List;","h":[["4.0.0.Beta1","+"],["4.0.0",null]]}
 {"id":"quarkus-data-hibernate io.quarkus.data.hibernate.DataQuery","h":[["4.0.0.Beta1","+i"]]}
 {"id":"quarkus-data-hibernate io.quarkus.data.hibernate.DataQuery count()Ljava/lang/Object;","h":[["4.0.0.Beta1","+"]]}
 {"id":"quarkus-data-hibernate io.quarkus.data.hibernate.DataQuery filter(Ljava/lang/String;)Lio/quarkus/data/hibernate/DataQuery;","h":[["4.0.0.Beta1","+"]]}
@@ -19493,6 +19523,7 @@
 {"id":"quarkus-devui-deployment-spi io.quarkus.devui.spi.JsonRPCProvidersBuildItem <init>(Ljava/lang/Class;)V","h":[["4.0.0.Beta1","+"]]}
 {"id":"quarkus-devui-deployment-spi io.quarkus.devui.spi.JsonRPCProvidersBuildItem <init>(Ljava/lang/Class;Lorg/jboss/jandex/DotName;)V","h":[["4.0.0.Beta1","+"]]}
 {"id":"quarkus-devui-deployment-spi io.quarkus.devui.spi.JsonRPCProvidersBuildItem <init>(Ljava/lang/String;Ljava/lang/Class;)V","h":[["4.0.0.Beta1","+"]]}
+{"id":"quarkus-devui-deployment-spi io.quarkus.devui.spi.JsonRPCProvidersBuildItem getConvertedItem()Lio/quarkus/devjsonrpc/spi/JsonRPCProvidersBuildItem;","h":[["4.0.0","+"]]}
 {"id":"quarkus-devui-deployment-spi io.quarkus.devui.spi.JsonRPCProvidersBuildItem getCustomIdentifier()Ljava/lang/String;","h":[["4.0.0.Beta1","+"]]}
 {"id":"quarkus-devui-deployment-spi io.quarkus.devui.spi.JsonRPCProvidersBuildItem getDefaultBeanScope()Lorg/jboss/jandex/DotName;","h":[["4.0.0.Beta1","+"]]}
 {"id":"quarkus-devui-deployment-spi io.quarkus.devui.spi.JsonRPCProvidersBuildItem getJsonRPCMethodProviderClass()Ljava/lang/Class;","h":[["4.0.0.Beta1","+"]]}
@@ -20234,13 +20265,25 @@
 {"id":"quarkus-elytron-security-ldap io.quarkus.elytron.security.ldap.LdapRecorder <init>()V","h":[["4.0.0.Beta2","+"]]}
 {"id":"quarkus-elytron-security-ldap io.quarkus.elytron.security.ldap.LdapRecorder <init>(Lio/quarkus/runtime/RuntimeValue;)V","h":[["4.0.0.Beta1","+"],["4.0.0.Beta2",null]]}
 {"id":"quarkus-elytron-security-ldap io.quarkus.elytron.security.ldap.LdapRecorder createRealm()Lio/quarkus/runtime/RuntimeValue;","h":[["4.0.0.Beta1","+"],["4.0.0.Beta2",null]]}
-{"id":"quarkus-elytron-security-ldap io.quarkus.elytron.security.ldap.LdapRecorder createRealm(Lio/quarkus/elytron/security/ldap/config/LdapSecurityRealmRuntimeConfig;)Lorg/wildfly/security/auth/server/SecurityRealm;","h":[["4.0.0.Beta2","+s"]]}
+{"id":"quarkus-elytron-security-ldap io.quarkus.elytron.security.ldap.LdapRecorder createRealm(Lio/quarkus/elytron/security/ldap/config/LdapSecurityRealmRuntimeConfig;)Lorg/wildfly/security/auth/server/SecurityRealm;","h":[["4.0.0.Beta2","+s"],["4.0.0",null]]}
+{"id":"quarkus-elytron-security-ldap io.quarkus.elytron.security.ldap.LdapRecorder createRealm(Lio/quarkus/elytron/security/ldap/config/LdapSecurityRealmRuntimeConfig;Lio/quarkus/tls/TlsConfigurationRegistry;)Lorg/wildfly/security/auth/server/SecurityRealm;","h":[["4.0.0","+s"]]}
+{"id":"quarkus-elytron-security-ldap io.quarkus.elytron.security.ldap.LdapTlsConfigurationObserver","h":[["4.0.0","+"]]}
+{"id":"quarkus-elytron-security-ldap io.quarkus.elytron.security.ldap.LdapTlsConfigurationObserver <init>()V","h":[["4.0.0","+"]]}
 {"id":"quarkus-elytron-security-ldap io.quarkus.elytron.security.ldap.QuarkusDirContextFactory","h":[["4.0.0.Beta1","+ implements org.wildfly.security.auth.realm.ldap.DirContextFactory"]]}
-{"id":"quarkus-elytron-security-ldap io.quarkus.elytron.security.ldap.QuarkusDirContextFactory <init>(Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Ljava/time/Duration;Ljava/time/Duration;)V","h":[["4.0.0.Beta1","+"]]}
+{"id":"quarkus-elytron-security-ldap io.quarkus.elytron.security.ldap.QuarkusDirContextFactory <init>(Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Ljava/time/Duration;Ljava/time/Duration;)V","h":[["4.0.0.Beta1","+"],["4.0.0",null]]}
+{"id":"quarkus-elytron-security-ldap io.quarkus.elytron.security.ldap.QuarkusDirContextFactory <init>(Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Ljava/time/Duration;Ljava/time/Duration;Z)V","h":[["4.0.0","+"]]}
 {"id":"quarkus-elytron-security-ldap io.quarkus.elytron.security.ldap.QuarkusDirContextFactory INITIAL_CONTEXT_FACTORY:Ljava/lang/String;","h":[["4.0.0.Beta1","+sf"]]}
 {"id":"quarkus-elytron-security-ldap io.quarkus.elytron.security.ldap.QuarkusDirContextFactory obtainDirContext(Ljavax/security/auth/callback/CallbackHandler;Lorg/wildfly/security/auth/realm/ldap/DirContextFactory$ReferralMode;)Ljavax/naming/directory/DirContext;","h":[["4.0.0.Beta1","+"]]}
 {"id":"quarkus-elytron-security-ldap io.quarkus.elytron.security.ldap.QuarkusDirContextFactory obtainDirContext(Lorg/wildfly/security/auth/realm/ldap/DirContextFactory$ReferralMode;)Ljavax/naming/directory/DirContext;","h":[["4.0.0.Beta1","+"]]}
 {"id":"quarkus-elytron-security-ldap io.quarkus.elytron.security.ldap.QuarkusDirContextFactory returnContext(Ljavax/naming/directory/DirContext;)V","h":[["4.0.0.Beta1","+"]]}
+{"id":"quarkus-elytron-security-ldap io.quarkus.elytron.security.ldap.QuarkusLdapSocketFactory","h":[["4.0.0","+ extends javax.net.SocketFactory"]]}
+{"id":"quarkus-elytron-security-ldap io.quarkus.elytron.security.ldap.QuarkusLdapSocketFactory <init>()V","h":[["4.0.0","+"]]}
+{"id":"quarkus-elytron-security-ldap io.quarkus.elytron.security.ldap.QuarkusLdapSocketFactory createSocket()Ljava/net/Socket;","h":[["4.0.0","+"]]}
+{"id":"quarkus-elytron-security-ldap io.quarkus.elytron.security.ldap.QuarkusLdapSocketFactory createSocket(Ljava/lang/String;I)Ljava/net/Socket;","h":[["4.0.0","+"]]}
+{"id":"quarkus-elytron-security-ldap io.quarkus.elytron.security.ldap.QuarkusLdapSocketFactory createSocket(Ljava/lang/String;ILjava/net/InetAddress;I)Ljava/net/Socket;","h":[["4.0.0","+"]]}
+{"id":"quarkus-elytron-security-ldap io.quarkus.elytron.security.ldap.QuarkusLdapSocketFactory createSocket(Ljava/net/InetAddress;I)Ljava/net/Socket;","h":[["4.0.0","+"]]}
+{"id":"quarkus-elytron-security-ldap io.quarkus.elytron.security.ldap.QuarkusLdapSocketFactory createSocket(Ljava/net/InetAddress;ILjava/net/InetAddress;I)Ljava/net/Socket;","h":[["4.0.0","+"]]}
+{"id":"quarkus-elytron-security-ldap io.quarkus.elytron.security.ldap.QuarkusLdapSocketFactory getDefault()Ljavax/net/SocketFactory;","h":[["4.0.0","+s"]]}
 {"id":"quarkus-elytron-security-ldap io.quarkus.elytron.security.ldap.config.AttributeMappingConfig","h":[["4.0.0.Beta1","+i"]]}
 {"id":"quarkus-elytron-security-ldap io.quarkus.elytron.security.ldap.config.AttributeMappingConfig filter()Ljava/lang/String;","h":[["4.0.0.Beta1","+"]]}
 {"id":"quarkus-elytron-security-ldap io.quarkus.elytron.security.ldap.config.AttributeMappingConfig filterBaseDn()Ljava/lang/String;","h":[["4.0.0.Beta1","+"]]}
@@ -20257,6 +20300,7 @@
 {"id":"quarkus-elytron-security-ldap io.quarkus.elytron.security.ldap.config.DirContextConfig principal()Ljava/util/Optional;","h":[["4.0.0.Beta1","+"]]}
 {"id":"quarkus-elytron-security-ldap io.quarkus.elytron.security.ldap.config.DirContextConfig readTimeout()Ljava/time/Duration;","h":[["4.0.0.Beta1","+"]]}
 {"id":"quarkus-elytron-security-ldap io.quarkus.elytron.security.ldap.config.DirContextConfig referralMode()Lorg/wildfly/security/auth/realm/ldap/DirContextFactory$ReferralMode;","h":[["4.0.0.Beta1","+"]]}
+{"id":"quarkus-elytron-security-ldap io.quarkus.elytron.security.ldap.config.DirContextConfig tlsConfigurationName()Ljava/util/Optional;","h":[["4.0.0","+"]]}
 {"id":"quarkus-elytron-security-ldap io.quarkus.elytron.security.ldap.config.DirContextConfig toString()Ljava/lang/String;","h":[["4.0.0.Beta1","+"]]}
 {"id":"quarkus-elytron-security-ldap io.quarkus.elytron.security.ldap.config.DirContextConfig url()Ljava/lang/String;","h":[["4.0.0.Beta1","+"]]}
 {"id":"quarkus-elytron-security-ldap io.quarkus.elytron.security.ldap.config.IdentityMappingConfig","h":[["4.0.0.Beta1","+i"]]}
@@ -22046,10 +22090,10 @@
 {"id":"quarkus-grpc io.quarkus.grpc.runtime.stork.StorkGrpcChannel close()V","h":[["4.0.0.Beta1","+"]]}
 {"id":"quarkus-grpc io.quarkus.grpc.runtime.stork.StorkGrpcChannel newCall(Lio/grpc/MethodDescriptor;Lio/grpc/CallOptions;)Lio/grpc/ClientCall;","h":[["4.0.0.Beta1","+"]]}
 {"id":"quarkus-grpc io.quarkus.grpc.runtime.stork.StorkGrpcChannel toString()Ljava/lang/String;","h":[["4.0.0.Beta1","+"]]}
-{"id":"quarkus-grpc io.quarkus.grpc.runtime.stork.StorkMeasuringGrpcInterceptor","h":[["4.0.0.Beta1","+D implements io.grpc.ClientInterceptor,jakarta.enterprise.inject.spi.Prioritized"]]}
-{"id":"quarkus-grpc io.quarkus.grpc.runtime.stork.StorkMeasuringGrpcInterceptor <init>()V","h":[["4.0.0.Beta1","+"]]}
-{"id":"quarkus-grpc io.quarkus.grpc.runtime.stork.StorkMeasuringGrpcInterceptor getPriority()I","h":[["4.0.0.Beta1","+"]]}
-{"id":"quarkus-grpc io.quarkus.grpc.runtime.stork.StorkMeasuringGrpcInterceptor interceptCall(Lio/grpc/MethodDescriptor;Lio/grpc/CallOptions;Lio/grpc/Channel;)Lio/grpc/ClientCall;","h":[["4.0.0.Beta1","+"]]}
+{"id":"quarkus-grpc io.quarkus.grpc.runtime.stork.StorkMeasuringGrpcInterceptor","h":[["4.0.0.Beta1","+D implements io.grpc.ClientInterceptor,jakarta.enterprise.inject.spi.Prioritized"],["4.0.0",null]]}
+{"id":"quarkus-grpc io.quarkus.grpc.runtime.stork.StorkMeasuringGrpcInterceptor <init>()V","h":[["4.0.0.Beta1","+"],["4.0.0",null]]}
+{"id":"quarkus-grpc io.quarkus.grpc.runtime.stork.StorkMeasuringGrpcInterceptor getPriority()I","h":[["4.0.0.Beta1","+"],["4.0.0",null]]}
+{"id":"quarkus-grpc io.quarkus.grpc.runtime.stork.StorkMeasuringGrpcInterceptor interceptCall(Lio/grpc/MethodDescriptor;Lio/grpc/CallOptions;Lio/grpc/Channel;)Lio/grpc/ClientCall;","h":[["4.0.0.Beta1","+"],["4.0.0",null]]}
 {"id":"quarkus-grpc io.quarkus.grpc.runtime.stork.VertxStorkMeasuringGrpcInterceptor","h":[["4.0.0.Beta1","+ implements io.grpc.ClientInterceptor,jakarta.enterprise.inject.spi.Prioritized"]]}
 {"id":"quarkus-grpc io.quarkus.grpc.runtime.stork.VertxStorkMeasuringGrpcInterceptor <init>()V","h":[["4.0.0.Beta1","+"]]}
 {"id":"quarkus-grpc io.quarkus.grpc.runtime.stork.VertxStorkMeasuringGrpcInterceptor getPriority()I","h":[["4.0.0.Beta1","+"]]}
@@ -24107,6 +24151,7 @@
 {"id":"quarkus-hibernate-orm io.quarkus.hibernate.orm.runtime.FastBootHibernatePersistenceProvider generateSchema(Ljakarta/persistence/spi/PersistenceUnitInfo;Ljava/util/Map;)V","h":[["4.0.0.Beta1","+"]]}
 {"id":"quarkus-hibernate-orm io.quarkus.hibernate.orm.runtime.FastBootHibernatePersistenceProvider generateSchema(Ljava/lang/String;Ljava/util/Map;)Z","h":[["4.0.0.Beta1","+"]]}
 {"id":"quarkus-hibernate-orm io.quarkus.hibernate.orm.runtime.FastBootHibernatePersistenceProvider getClassTransformer(Ljakarta/persistence/spi/PersistenceUnitInfo;Ljava/util/Map;)Ljakarta/persistence/spi/ClassTransformer;","h":[["4.0.0.Beta1","+"]]}
+{"id":"quarkus-hibernate-orm io.quarkus.hibernate.orm.runtime.FastBootHibernatePersistenceProvider getClientClassTransformer(Ljakarta/persistence/spi/PersistenceUnitInfo;Ljava/util/Map;)Ljakarta/persistence/spi/ClassTransformer;","h":[["4.0.0","+"]]}
 {"id":"quarkus-hibernate-orm io.quarkus.hibernate.orm.runtime.FastBootHibernatePersistenceProvider getEntityManagerFactoryBuilder(Ljakarta/persistence/spi/PersistenceUnitInfo;Ljava/util/Map;)Lorg/hibernate/jpa/boot/spi/EntityManagerFactoryBuilder;","h":[["4.0.0.Beta1","+"]]}
 {"id":"quarkus-hibernate-orm io.quarkus.hibernate.orm.runtime.FastBootHibernatePersistenceProvider getEntityManagerFactoryBuilder(Ljava/lang/String;Ljava/util/Map;)Lorg/hibernate/jpa/boot/spi/EntityManagerFactoryBuilder;","h":[["4.0.0.Beta1","+"]]}
 {"id":"quarkus-hibernate-orm io.quarkus.hibernate.orm.runtime.FastBootHibernatePersistenceProvider getProviderUtil()Lio/quarkus/hibernate/orm/runtime/ProviderUtil;","h":[["4.0.0.Beta1","+"]]}
@@ -24864,7 +24909,7 @@
 {"id":"quarkus-hibernate-orm io.quarkus.hibernate.orm.runtime.session.TransactionScopedSession lock(Ljava/lang/Object;Ljakarta/persistence/LockModeType;[Ljakarta/persistence/LockOption;)V","h":[["4.0.0.Beta1","+v"]]}
 {"id":"quarkus-hibernate-orm io.quarkus.hibernate.orm.runtime.session.TransactionScopedSession lock(Ljava/lang/Object;Lorg/hibernate/LockMode;)V","h":[["4.0.0.Beta1","+"]]}
 {"id":"quarkus-hibernate-orm io.quarkus.hibernate.orm.runtime.session.TransactionScopedSession lock(Ljava/lang/Object;Lorg/hibernate/LockMode;[Ljakarta/persistence/LockOption;)V","h":[["4.0.0.Beta1","+v"]]}
-{"id":"quarkus-hibernate-orm io.quarkus.hibernate.orm.runtime.session.TransactionScopedSession lock(Ljava/lang/Object;Lorg/hibernate/LockOptions;)V","h":[["4.0.0.Beta1","+"]]}
+{"id":"quarkus-hibernate-orm io.quarkus.hibernate.orm.runtime.session.TransactionScopedSession lock(Ljava/lang/Object;Lorg/hibernate/LockOptions;)V","h":[["4.0.0.Beta1","+"],["4.0.0",null]]}
 {"id":"quarkus-hibernate-orm io.quarkus.hibernate.orm.runtime.session.TransactionScopedSession merge(Ljava/lang/Object;)Ljava/lang/Object;","h":[["4.0.0.Beta1","+"]]}
 {"id":"quarkus-hibernate-orm io.quarkus.hibernate.orm.runtime.session.TransactionScopedSession merge(Ljava/lang/Object;Ljakarta/persistence/EntityGraph;)Ljava/lang/Object;","h":[["4.0.0.Beta1","+"]]}
 {"id":"quarkus-hibernate-orm io.quarkus.hibernate.orm.runtime.session.TransactionScopedSession merge(Ljava/lang/String;Ljava/lang/Object;)Ljava/lang/Object;","h":[["4.0.0.Beta1","+"]]}
@@ -24873,7 +24918,7 @@
 {"id":"quarkus-hibernate-orm io.quarkus.hibernate.orm.runtime.session.TransactionScopedSession refresh(Ljava/lang/Object;)V","h":[["4.0.0.Beta1","+"]]}
 {"id":"quarkus-hibernate-orm io.quarkus.hibernate.orm.runtime.session.TransactionScopedSession refresh(Ljava/lang/Object;Ljakarta/persistence/LockModeType;Ljava/util/Map;)V","h":[["4.0.0.Beta1","+"]]}
 {"id":"quarkus-hibernate-orm io.quarkus.hibernate.orm.runtime.session.TransactionScopedSession refresh(Ljava/lang/Object;Ljava/util/Map;)V","h":[["4.0.0.Beta1","+"]]}
-{"id":"quarkus-hibernate-orm io.quarkus.hibernate.orm.runtime.session.TransactionScopedSession refresh(Ljava/lang/Object;Lorg/hibernate/LockOptions;)V","h":[["4.0.0.Beta1","+"]]}
+{"id":"quarkus-hibernate-orm io.quarkus.hibernate.orm.runtime.session.TransactionScopedSession refresh(Ljava/lang/Object;Lorg/hibernate/LockOptions;)V","h":[["4.0.0.Beta1","+"],["4.0.0",null]]}
 {"id":"quarkus-hibernate-orm io.quarkus.hibernate.orm.runtime.session.TransactionScopedSession refresh(Ljava/lang/Object;[Ljakarta/persistence/RefreshOption;)V","h":[["4.0.0.Beta1","+v"]]}
 {"id":"quarkus-hibernate-orm io.quarkus.hibernate.orm.runtime.session.TransactionScopedSession remove(Ljava/lang/Object;)V","h":[["4.0.0.Beta1","+"]]}
 {"id":"quarkus-hibernate-orm io.quarkus.hibernate.orm.runtime.session.TransactionScopedSession unwrap(Ljava/lang/Class;)Ljava/lang/Object;","h":[["4.0.0.Beta1","+"]]}
@@ -25367,6 +25412,7 @@
 {"id":"quarkus-hibernate-orm-deployment-spi io.quarkus.hibernate.orm.deployment.spi.AdditionalPersistenceUnitBuildItem getExplicitDialect()Ljava/util/Optional;","h":[["4.0.0.Beta1","+"]]}
 {"id":"quarkus-hibernate-orm-deployment-spi io.quarkus.hibernate.orm.deployment.spi.AdditionalPersistenceUnitBuildItem getManagedClassNames()Ljava/util/Set;","h":[["4.0.0.Beta1","+"]]}
 {"id":"quarkus-hibernate-orm-deployment-spi io.quarkus.hibernate.orm.deployment.spi.AdditionalPersistenceUnitBuildItem getMappingFileNames()Ljava/util/Set;","h":[["4.0.0.Beta1","+"]]}
+{"id":"quarkus-hibernate-orm-deployment-spi io.quarkus.hibernate.orm.deployment.spi.AdditionalPersistenceUnitBuildItem getPackageNames()Ljava/util/Set;","h":[["4.0.1","+"]]}
 {"id":"quarkus-hibernate-orm-deployment-spi io.quarkus.hibernate.orm.deployment.spi.AdditionalPersistenceUnitBuildItem getPersistenceUnitName()Ljava/lang/String;","h":[["4.0.0.Beta1","+"]]}
 {"id":"quarkus-hibernate-orm-deployment-spi io.quarkus.hibernate.orm.deployment.spi.AdditionalPersistenceUnitBuildItem getProperties()Ljava/util/Map;","h":[["4.0.0.Beta1","+"]]}
 {"id":"quarkus-hibernate-orm-deployment-spi io.quarkus.hibernate.orm.deployment.spi.AdditionalPersistenceUnitBuildItem getReason()Lio/quarkus/runtime/util/Reason;","h":[["4.0.0.Beta1","+"]]}
@@ -25378,6 +25424,8 @@
 {"id":"quarkus-hibernate-orm-deployment-spi io.quarkus.hibernate.orm.deployment.spi.AdditionalPersistenceUnitBuildItem$Builder managedClasses(Ljava/util/Collection;)Lio/quarkus/hibernate/orm/deployment/spi/AdditionalPersistenceUnitBuildItem$Builder;","h":[["4.0.0.Beta1","+"]]}
 {"id":"quarkus-hibernate-orm-deployment-spi io.quarkus.hibernate.orm.deployment.spi.AdditionalPersistenceUnitBuildItem$Builder mappingFile(Ljava/lang/String;)Lio/quarkus/hibernate/orm/deployment/spi/AdditionalPersistenceUnitBuildItem$Builder;","h":[["4.0.0.Beta1","+"]]}
 {"id":"quarkus-hibernate-orm-deployment-spi io.quarkus.hibernate.orm.deployment.spi.AdditionalPersistenceUnitBuildItem$Builder mappingFiles(Ljava/util/Collection;)Lio/quarkus/hibernate/orm/deployment/spi/AdditionalPersistenceUnitBuildItem$Builder;","h":[["4.0.0.Beta1","+"]]}
+{"id":"quarkus-hibernate-orm-deployment-spi io.quarkus.hibernate.orm.deployment.spi.AdditionalPersistenceUnitBuildItem$Builder packages(Ljava/util/Collection;)Lio/quarkus/hibernate/orm/deployment/spi/AdditionalPersistenceUnitBuildItem$Builder;","h":[["4.0.1","+"]]}
+{"id":"quarkus-hibernate-orm-deployment-spi io.quarkus.hibernate.orm.deployment.spi.AdditionalPersistenceUnitBuildItem$Builder packages([Ljava/lang/String;)Lio/quarkus/hibernate/orm/deployment/spi/AdditionalPersistenceUnitBuildItem$Builder;","h":[["4.0.1","+v"]]}
 {"id":"quarkus-hibernate-orm-deployment-spi io.quarkus.hibernate.orm.deployment.spi.AdditionalPersistenceUnitBuildItem$Builder properties(Ljava/util/Map;)Lio/quarkus/hibernate/orm/deployment/spi/AdditionalPersistenceUnitBuildItem$Builder;","h":[["4.0.0.Beta1","+"]]}
 {"id":"quarkus-hibernate-orm-deployment-spi io.quarkus.hibernate.orm.deployment.spi.AdditionalPersistenceUnitBuildItem$Builder property(Ljava/lang/String;Ljava/lang/String;)Lio/quarkus/hibernate/orm/deployment/spi/AdditionalPersistenceUnitBuildItem$Builder;","h":[["4.0.0.Beta1","+"]]}
 {"id":"quarkus-hibernate-orm-deployment-spi io.quarkus.hibernate.orm.deployment.spi.DatabaseKindDialectBuildItem","h":[["4.0.0.Beta1","+f extends io.quarkus.builder.item.MultiBuildItem"]]}
@@ -26294,6 +26342,7 @@
 {"id":"quarkus-hibernate-reactive io.quarkus.hibernate.reactive.runtime.FastBootHibernateReactivePersistenceProvider generateSchema(Ljakarta/persistence/spi/PersistenceUnitInfo;Ljava/util/Map;)V","h":[["4.0.0.Beta1","+"]]}
 {"id":"quarkus-hibernate-reactive io.quarkus.hibernate.reactive.runtime.FastBootHibernateReactivePersistenceProvider generateSchema(Ljava/lang/String;Ljava/util/Map;)Z","h":[["4.0.0.Beta1","+"]]}
 {"id":"quarkus-hibernate-reactive io.quarkus.hibernate.reactive.runtime.FastBootHibernateReactivePersistenceProvider getClassTransformer(Ljakarta/persistence/spi/PersistenceUnitInfo;Ljava/util/Map;)Ljakarta/persistence/spi/ClassTransformer;","h":[["4.0.0.Beta1","+"]]}
+{"id":"quarkus-hibernate-reactive io.quarkus.hibernate.reactive.runtime.FastBootHibernateReactivePersistenceProvider getClientClassTransformer(Ljakarta/persistence/spi/PersistenceUnitInfo;Ljava/util/Map;)Ljakarta/persistence/spi/ClassTransformer;","h":[["4.0.0","+"]]}
 {"id":"quarkus-hibernate-reactive io.quarkus.hibernate.reactive.runtime.FastBootHibernateReactivePersistenceProvider getProviderUtil()Ljakarta/persistence/spi/ProviderUtil;","h":[["4.0.0.Beta1","+"]]}
 {"id":"quarkus-hibernate-reactive io.quarkus.hibernate.reactive.runtime.HibernateReactive","h":[["4.0.0.Beta1","+"]]}
 {"id":"quarkus-hibernate-reactive io.quarkus.hibernate.reactive.runtime.HibernateReactive <init>()V","h":[["4.0.0.Beta1","+"]]}
@@ -29461,6 +29510,7 @@
 {"id":"quarkus-junit-internal io.quarkus.test.QuarkusDevModeTest setBuildSystemProperty(Ljava/lang/String;Ljava/lang/String;)Lio/quarkus/test/QuarkusDevModeTest;","h":[["4.0.0.Beta1","+"]]}
 {"id":"quarkus-junit-internal io.quarkus.test.QuarkusDevModeTest setCodeGenSources([Ljava/lang/String;)Lio/quarkus/test/QuarkusDevModeTest;","h":[["4.0.0.Beta1","+v"]]}
 {"id":"quarkus-junit-internal io.quarkus.test.QuarkusDevModeTest setCommandLineArgs([Ljava/lang/String;)Lio/quarkus/test/QuarkusDevModeTest;","h":[["4.0.0.Beta1","+"]]}
+{"id":"quarkus-junit-internal io.quarkus.test.QuarkusDevModeTest setForcedDependencies(Ljava/util/List;)Lio/quarkus/test/QuarkusDevModeTest;","h":[["4.0.0","+"]]}
 {"id":"quarkus-junit-internal io.quarkus.test.QuarkusDevModeTest setLogRecordPredicate(Ljava/util/function/Predicate;)Lio/quarkus/test/QuarkusDevModeTest;","h":[["4.0.0.Beta1","+"]]}
 {"id":"quarkus-junit-internal io.quarkus.test.QuarkusDevModeTest setTestArchiveProducer(Ljava/util/function/Supplier;)Lio/quarkus/test/QuarkusDevModeTest;","h":[["4.0.0.Beta1","+"]]}
 {"id":"quarkus-junit-internal io.quarkus.test.QuarkusDevModeTest supportsParameter(Lorg/junit/jupiter/api/extension/ParameterContext;Lorg/junit/jupiter/api/extension/ExtensionContext;)Z","h":[["4.0.0.Beta1","+"]]}
@@ -30110,8 +30160,8 @@
 {"id":"quarkus-kafka-streams-dev io.quarkus.kafka.streams.runtime.dev.ui.KafkaStreamsJsonRPCService","h":[["4.0.0.Beta1","+"]]}
 {"id":"quarkus-kafka-streams-dev io.quarkus.kafka.streams.runtime.dev.ui.KafkaStreamsJsonRPCService <init>()V","h":[["4.0.0.Beta1","+"]]}
 {"id":"quarkus-kafka-streams-dev io.quarkus.kafka.streams.runtime.dev.ui.KafkaStreamsJsonRPCService getTopology()Lio/vertx/core/json/JsonObject;","h":[["4.0.0.Beta1","+"]]}
-{"id":"quarkus-keycloak-admin-client-common io.quarkus.keycloak.admin.client.common.runtime.Jackson2JsonNodeModule","h":[["4.0.0.Beta1","+ extends tools.jackson.databind.module.SimpleModule"]]}
-{"id":"quarkus-keycloak-admin-client-common io.quarkus.keycloak.admin.client.common.runtime.Jackson2JsonNodeModule <init>()V","h":[["4.0.0.Beta1","+"]]}
+{"id":"quarkus-keycloak-admin-client-common io.quarkus.keycloak.admin.client.common.runtime.Jackson2JsonNodeModule","h":[["4.0.0.Beta1","+ extends tools.jackson.databind.module.SimpleModule"],["4.0.0",null]]}
+{"id":"quarkus-keycloak-admin-client-common io.quarkus.keycloak.admin.client.common.runtime.Jackson2JsonNodeModule <init>()V","h":[["4.0.0.Beta1","+"],["4.0.0",null]]}
 {"id":"quarkus-keycloak-admin-client-common io.quarkus.keycloak.admin.client.common.runtime.KeycloakAdminClientConfig","h":[["4.0.0.Beta1","+i"]]}
 {"id":"quarkus-keycloak-admin-client-common io.quarkus.keycloak.admin.client.common.runtime.KeycloakAdminClientConfig clientId()Ljava/lang/String;","h":[["4.0.0.Beta1","+"]]}
 {"id":"quarkus-keycloak-admin-client-common io.quarkus.keycloak.admin.client.common.runtime.KeycloakAdminClientConfig clientSecret()Ljava/util/Optional;","h":[["4.0.0.Beta1","+"]]}
@@ -30132,6 +30182,10 @@
 {"id":"quarkus-keycloak-admin-client-common io.quarkus.keycloak.admin.client.common.runtime.KeycloakAdminClientConfigUtil <init>()V","h":[["4.0.0.Beta1","+"]]}
 {"id":"quarkus-keycloak-admin-client-common io.quarkus.keycloak.admin.client.common.runtime.KeycloakAdminClientConfigUtil validate(Lio/quarkus/keycloak/admin/client/common/runtime/KeycloakAdminClientConfig;)V","h":[["4.0.0.Beta1","+s"]]}
 {"id":"quarkus-keycloak-admin-client-common io.quarkus.keycloak.admin.client.common.runtime.KeycloakAdminClientConfigUtil$KeycloakAdminClientException","h":[["4.0.0.Beta1","+fs extends java.lang.RuntimeException"]]}
+{"id":"quarkus-keycloak-admin-client-common io.quarkus.keycloak.admin.client.common.runtime.KeycloakAdminClientJsonMapper","h":[["4.0.0","+f"]]}
+{"id":"quarkus-keycloak-admin-client-common io.quarkus.keycloak.admin.client.common.runtime.KeycloakAdminClientJsonMapper <init>(Ltools/jackson/databind/json/JsonMapper;)V","h":[["4.0.0","+"]]}
+{"id":"quarkus-keycloak-admin-client-common io.quarkus.keycloak.admin.client.common.runtime.KeycloakAdminClientJsonMapper keycloak()Lio/quarkus/keycloak/admin/client/common/runtime/KeycloakAdminClientJsonMapper;","h":[["4.0.0","+s"]]}
+{"id":"quarkus-keycloak-admin-client-common io.quarkus.keycloak.admin.client.common.runtime.KeycloakAdminClientJsonMapper mapper()Ltools/jackson/databind/json/JsonMapper;","h":[["4.0.0","+"]]}
 {"id":"quarkus-keycloak-admin-client-common-deployment io.quarkus.keycloak.admin.client.common.deployment.KeycloakAdminClientBuildTimeConfig","h":[["4.0.0.Beta1","+i"]]}
 {"id":"quarkus-keycloak-admin-client-common-deployment io.quarkus.keycloak.admin.client.common.deployment.KeycloakAdminClientBuildTimeConfig enabled()Z","h":[["4.0.0.Beta1","+"]]}
 {"id":"quarkus-keycloak-admin-client-common-deployment io.quarkus.keycloak.admin.client.common.deployment.KeycloakAdminClientInjectionEnabled","h":[["4.0.0.Beta1","+ implements java.util.function.BooleanSupplier"]]}
@@ -30139,28 +30193,37 @@
 {"id":"quarkus-keycloak-admin-client-common-deployment io.quarkus.keycloak.admin.client.common.deployment.KeycloakAdminClientInjectionEnabled getAsBoolean()Z","h":[["4.0.0.Beta1","+"]]}
 {"id":"quarkus-keycloak-admin-client-common-deployment io.quarkus.keycloak.admin.client.common.deployment.KeycloakAdminClientProcessor","h":[["4.0.0.Beta1","+"]]}
 {"id":"quarkus-keycloak-admin-client-common-deployment io.quarkus.keycloak.admin.client.common.deployment.KeycloakAdminClientProcessor <init>()V","h":[["4.0.0.Beta1","+"]]}
-{"id":"quarkus-keycloak-admin-client-common-deployment io.quarkus.keycloak.admin.client.common.deployment.KeycloakAdminClientProcessor nativeImage(Lio/quarkus/deployment/annotations/BuildProducer;)V","h":[["4.0.0.Beta1","+"]]}
+{"id":"quarkus-keycloak-admin-client-common-deployment io.quarkus.keycloak.admin.client.common.deployment.KeycloakAdminClientProcessor nativeImage(Lio/quarkus/deployment/annotations/BuildProducer;)V","h":[["4.0.0.Beta1","+"],["4.0.0",null]]}
+{"id":"quarkus-keycloak-admin-client-common-deployment io.quarkus.keycloak.admin.client.common.deployment.KeycloakAdminClientProcessor nativeImage(Lio/quarkus/deployment/annotations/BuildProducer;Lio/quarkus/deployment/annotations/BuildProducer;Lio/quarkus/deployment/annotations/BuildProducer;)V","h":[["4.0.0","+"]]}
 {"id":"quarkus-keycloak-admin-rest-client io.quarkus.keycloak.admin.rest.client.runtime.KeycloakAdminClientCreator","h":[["4.0.0.Beta2","+ implements io.quarkus.arc.BeanCreator"]]}
 {"id":"quarkus-keycloak-admin-rest-client io.quarkus.keycloak.admin.rest.client.runtime.KeycloakAdminClientCreator <init>()V","h":[["4.0.0.Beta2","+"]]}
 {"id":"quarkus-keycloak-admin-rest-client io.quarkus.keycloak.admin.rest.client.runtime.KeycloakAdminClientCreator create(Lio/quarkus/arc/SyntheticCreationalContext;)Lorg/keycloak/admin/client/Keycloak;","h":[["4.0.0.Beta2","+"]]}
 {"id":"quarkus-keycloak-admin-rest-client io.quarkus.keycloak.admin.rest.client.runtime.KeycloakAdminRestClientProvider","h":[["4.0.0.Beta1","+ implements org.keycloak.admin.client.spi.ResteasyClientProvider"]]}
-{"id":"quarkus-keycloak-admin-rest-client io.quarkus.keycloak.admin.rest.client.runtime.KeycloakAdminRestClientProvider <init>(Lio/quarkus/tls/TlsConfiguration;)V","h":[["4.0.0.Beta1","+"]]}
-{"id":"quarkus-keycloak-admin-rest-client io.quarkus.keycloak.admin.rest.client.runtime.KeycloakAdminRestClientProvider <init>(Z)V","h":[["4.0.0.Beta1","+"]]}
+{"id":"quarkus-keycloak-admin-rest-client io.quarkus.keycloak.admin.rest.client.runtime.KeycloakAdminRestClientProvider <init>(Lio/quarkus/tls/TlsConfiguration;)V","h":[["4.0.0.Beta1","+"],["4.0.0",null]]}
+{"id":"quarkus-keycloak-admin-rest-client io.quarkus.keycloak.admin.rest.client.runtime.KeycloakAdminRestClientProvider <init>(Lio/quarkus/tls/TlsConfiguration;Ltools/jackson/databind/json/JsonMapper;)V","h":[["4.0.0","+"]]}
+{"id":"quarkus-keycloak-admin-rest-client io.quarkus.keycloak.admin.rest.client.runtime.KeycloakAdminRestClientProvider <init>(Z)V","h":[["4.0.0.Beta1","+"],["4.0.0",null]]}
+{"id":"quarkus-keycloak-admin-rest-client io.quarkus.keycloak.admin.rest.client.runtime.KeycloakAdminRestClientProvider <init>(ZLtools/jackson/databind/json/JsonMapper;)V","h":[["4.0.0","+"]]}
 {"id":"quarkus-keycloak-admin-rest-client io.quarkus.keycloak.admin.rest.client.runtime.KeycloakAdminRestClientProvider newRestEasyClient(Ljava/lang/Object;Ljavax/net/ssl/SSLContext;Z)Ljakarta/ws/rs/client/Client;","h":[["4.0.0.Beta1","+"]]}
 {"id":"quarkus-keycloak-admin-rest-client io.quarkus.keycloak.admin.rest.client.runtime.KeycloakAdminRestClientProvider targetProxy(Ljakarta/ws/rs/client/WebTarget;Ljava/lang/Class;)Ljava/lang/Object;","h":[["4.0.0.Beta1","+"]]}
+{"id":"quarkus-keycloak-admin-rest-client io.quarkus.keycloak.admin.rest.client.runtime.KeycloakAdminRestClientProviderPlaceholder","h":[["4.0.0","+f implements org.keycloak.admin.client.spi.ResteasyClientProvider"]]}
+{"id":"quarkus-keycloak-admin-rest-client io.quarkus.keycloak.admin.rest.client.runtime.KeycloakAdminRestClientProviderPlaceholder <init>()V","h":[["4.0.0","+"]]}
+{"id":"quarkus-keycloak-admin-rest-client io.quarkus.keycloak.admin.rest.client.runtime.KeycloakAdminRestClientProviderPlaceholder newRestEasyClient(Ljava/lang/Object;Ljavax/net/ssl/SSLContext;Z)Ljakarta/ws/rs/client/Client;","h":[["4.0.0","+"]]}
+{"id":"quarkus-keycloak-admin-rest-client io.quarkus.keycloak.admin.rest.client.runtime.KeycloakAdminRestClientProviderPlaceholder targetProxy(Ljakarta/ws/rs/client/WebTarget;Ljava/lang/Class;)Ljava/lang/Object;","h":[["4.0.0","+"]]}
 {"id":"quarkus-keycloak-admin-rest-client io.quarkus.keycloak.admin.rest.client.runtime.KeycloakAdminRestClientRecorder","h":[["4.0.0.Beta1","+"]]}
 {"id":"quarkus-keycloak-admin-rest-client io.quarkus.keycloak.admin.rest.client.runtime.KeycloakAdminRestClientRecorder <init>()V","h":[["4.0.0.Beta2","+"]]}
 {"id":"quarkus-keycloak-admin-rest-client io.quarkus.keycloak.admin.rest.client.runtime.KeycloakAdminRestClientRecorder <init>(Lio/quarkus/runtime/RuntimeValue;)V","h":[["4.0.0.Beta1","+"],["4.0.0.Beta2",null]]}
-{"id":"quarkus-keycloak-admin-rest-client io.quarkus.keycloak.admin.rest.client.runtime.KeycloakAdminRestClientRecorder avoidRuntimeInitIssueInClientBuilderWrapper()V","h":[["4.0.0.Beta1","+"],["4.0.0.Beta2","+s"]]}
+{"id":"quarkus-keycloak-admin-rest-client io.quarkus.keycloak.admin.rest.client.runtime.KeycloakAdminRestClientRecorder avoidRuntimeInitIssueInClientBuilderWrapper()V","h":[["4.0.0.Beta1","+"],["4.0.0.Beta2","+s"],["4.0.0",null]]}
 {"id":"quarkus-keycloak-admin-rest-client io.quarkus.keycloak.admin.rest.client.runtime.KeycloakAdminRestClientRecorder createAdminClient()Ljava/util/function/Supplier;","h":[["4.0.0.Beta1","+"],["4.0.0.Beta2",null]]}
 {"id":"quarkus-keycloak-admin-rest-client io.quarkus.keycloak.admin.rest.client.runtime.KeycloakAdminRestClientRecorder createAdminClient(Lio/quarkus/keycloak/admin/client/common/runtime/KeycloakAdminClientConfig;)Lorg/keycloak/admin/client/Keycloak;","h":[["4.0.0.Beta2","+s"]]}
-{"id":"quarkus-keycloak-admin-rest-client io.quarkus.keycloak.admin.rest.client.runtime.KeycloakAdminRestClientRecorder setClientProvider(Lio/quarkus/tls/TlsConfigurationRegistry;Lio/quarkus/keycloak/admin/client/common/runtime/KeycloakAdminClientConfig;)V","h":[["4.0.0.Beta2","+s"]]}
+{"id":"quarkus-keycloak-admin-rest-client io.quarkus.keycloak.admin.rest.client.runtime.KeycloakAdminRestClientRecorder setClientProvider(Lio/quarkus/tls/TlsConfigurationRegistry;Lio/quarkus/keycloak/admin/client/common/runtime/KeycloakAdminClientConfig;)V","h":[["4.0.0.Beta2","+s"],["4.0.0",null]]}
+{"id":"quarkus-keycloak-admin-rest-client io.quarkus.keycloak.admin.rest.client.runtime.KeycloakAdminRestClientRecorder setClientProvider(Lio/quarkus/tls/TlsConfigurationRegistry;Lio/quarkus/keycloak/admin/client/common/runtime/KeycloakAdminClientConfig;Ltools/jackson/databind/json/JsonMapper;)V","h":[["4.0.0","+s"]]}
 {"id":"quarkus-keycloak-admin-rest-client io.quarkus.keycloak.admin.rest.client.runtime.KeycloakAdminRestClientRecorder setClientProvider(Ljava/util/function/Supplier;)V","h":[["4.0.0.Beta1","+"],["4.0.0.Beta2",null]]}
 {"id":"quarkus-keycloak-admin-rest-client-deployment io.quarkus.keycloak.admin.rest.client.deployment.KeycloakAdminRestClientProcessor","h":[["4.0.0.Beta1","+"]]}
 {"id":"quarkus-keycloak-admin-rest-client-deployment io.quarkus.keycloak.admin.rest.client.deployment.KeycloakAdminRestClientProcessor <init>()V","h":[["4.0.0.Beta1","+"]]}
 {"id":"quarkus-keycloak-admin-rest-client-deployment io.quarkus.keycloak.admin.rest.client.deployment.KeycloakAdminRestClientProcessor integrate(Lio/quarkus/core/deployment/service/ServiceRegistrar;)V","h":[["4.0.0.Beta2","+"]]}
 {"id":"quarkus-keycloak-admin-rest-client-deployment io.quarkus.keycloak.admin.rest.client.deployment.KeycloakAdminRestClientProcessor integrate(Lio/quarkus/keycloak/admin/rest/client/runtime/KeycloakAdminRestClientRecorder;Lio/quarkus/tls/deployment/spi/TlsRegistryBuildItem;)V","h":[["4.0.0.Beta1","+"],["4.0.0.Beta2",null]]}
-{"id":"quarkus-keycloak-admin-rest-client-deployment io.quarkus.keycloak.admin.rest.client.deployment.KeycloakAdminRestClientProcessor nativeImage(Lio/quarkus/deployment/annotations/BuildProducer;Lio/quarkus/deployment/annotations/BuildProducer;Lio/quarkus/deployment/annotations/BuildProducer;)V","h":[["4.0.0.Beta1","+"]]}
+{"id":"quarkus-keycloak-admin-rest-client-deployment io.quarkus.keycloak.admin.rest.client.deployment.KeycloakAdminRestClientProcessor nativeImage(Lio/quarkus/deployment/annotations/BuildProducer;Lio/quarkus/deployment/annotations/BuildProducer;)V","h":[["4.0.0","+"]]}
+{"id":"quarkus-keycloak-admin-rest-client-deployment io.quarkus.keycloak.admin.rest.client.deployment.KeycloakAdminRestClientProcessor nativeImage(Lio/quarkus/deployment/annotations/BuildProducer;Lio/quarkus/deployment/annotations/BuildProducer;Lio/quarkus/deployment/annotations/BuildProducer;)V","h":[["4.0.0.Beta1","+"],["4.0.0",null]]}
 {"id":"quarkus-keycloak-admin-rest-client-deployment io.quarkus.keycloak.admin.rest.client.deployment.KeycloakAdminRestClientProcessor registerKeycloakAdminClientBeans(Lio/quarkus/core/deployment/service/ServiceRegistrar;Lio/quarkus/deployment/annotations/BuildProducer;)V","h":[["4.0.0.Beta2","+"]]}
 {"id":"quarkus-keycloak-admin-rest-client-deployment io.quarkus.keycloak.admin.rest.client.deployment.KeycloakAdminRestClientProcessor registerKeycloakAdminClientBeans(Lio/quarkus/keycloak/admin/rest/client/runtime/KeycloakAdminRestClientRecorder;Lio/quarkus/deployment/annotations/BuildProducer;)V","h":[["4.0.0.Beta1","+"],["4.0.0.Beta2",null]]}
 {"id":"quarkus-keycloak-admin-rest-client-deployment io.quarkus.keycloak.admin.rest.client.deployment.devservices.KeycloakDevServiceRequiredBuildStep","h":[["4.0.0.Beta1","+"]]}
@@ -30168,13 +30231,18 @@
 {"id":"quarkus-keycloak-admin-resteasy-client io.quarkus.keycloak.admin.resteasy.client.runtime.KeycloakAdminClientCreator","h":[["4.0.0.Beta2","+ implements io.quarkus.arc.BeanCreator"]]}
 {"id":"quarkus-keycloak-admin-resteasy-client io.quarkus.keycloak.admin.resteasy.client.runtime.KeycloakAdminClientCreator <init>()V","h":[["4.0.0.Beta2","+"]]}
 {"id":"quarkus-keycloak-admin-resteasy-client io.quarkus.keycloak.admin.resteasy.client.runtime.KeycloakAdminClientCreator create(Lio/quarkus/arc/SyntheticCreationalContext;)Lorg/keycloak/admin/client/Keycloak;","h":[["4.0.0.Beta2","+"]]}
+{"id":"quarkus-keycloak-admin-resteasy-client io.quarkus.keycloak.admin.resteasy.client.runtime.KeycloakAdminResteasyClientProvider","h":[["4.0.0","+ implements org.keycloak.admin.client.spi.ResteasyClientProvider"]]}
+{"id":"quarkus-keycloak-admin-resteasy-client io.quarkus.keycloak.admin.resteasy.client.runtime.KeycloakAdminResteasyClientProvider <init>(Lio/quarkus/tls/TlsConfiguration;ZLtools/jackson/databind/json/JsonMapper;)V","h":[["4.0.0","+"]]}
+{"id":"quarkus-keycloak-admin-resteasy-client io.quarkus.keycloak.admin.resteasy.client.runtime.KeycloakAdminResteasyClientProvider newRestEasyClient(Ljava/lang/Object;Ljavax/net/ssl/SSLContext;Z)Ljakarta/ws/rs/client/Client;","h":[["4.0.0","+"]]}
+{"id":"quarkus-keycloak-admin-resteasy-client io.quarkus.keycloak.admin.resteasy.client.runtime.KeycloakAdminResteasyClientProvider targetProxy(Ljakarta/ws/rs/client/WebTarget;Ljava/lang/Class;)Ljava/lang/Object;","h":[["4.0.0","+"]]}
 {"id":"quarkus-keycloak-admin-resteasy-client io.quarkus.keycloak.admin.resteasy.client.runtime.KeycloakAdminResteasyClientRecorder","h":[["4.0.0.Beta1","+"]]}
 {"id":"quarkus-keycloak-admin-resteasy-client io.quarkus.keycloak.admin.resteasy.client.runtime.KeycloakAdminResteasyClientRecorder <init>()V","h":[["4.0.0.Beta2","+"]]}
 {"id":"quarkus-keycloak-admin-resteasy-client io.quarkus.keycloak.admin.resteasy.client.runtime.KeycloakAdminResteasyClientRecorder <init>(Lio/quarkus/runtime/RuntimeValue;)V","h":[["4.0.0.Beta1","+"],["4.0.0.Beta2",null]]}
-{"id":"quarkus-keycloak-admin-resteasy-client io.quarkus.keycloak.admin.resteasy.client.runtime.KeycloakAdminResteasyClientRecorder avoidRuntimeInitIssueInClientBuilderWrapper()V","h":[["4.0.0.Beta1","+"],["4.0.0.Beta2","+s"]]}
+{"id":"quarkus-keycloak-admin-resteasy-client io.quarkus.keycloak.admin.resteasy.client.runtime.KeycloakAdminResteasyClientRecorder avoidRuntimeInitIssueInClientBuilderWrapper()V","h":[["4.0.0.Beta1","+"],["4.0.0.Beta2","+s"],["4.0.0",null]]}
 {"id":"quarkus-keycloak-admin-resteasy-client io.quarkus.keycloak.admin.resteasy.client.runtime.KeycloakAdminResteasyClientRecorder createAdminClient()Ljava/util/function/Supplier;","h":[["4.0.0.Beta1","+"],["4.0.0.Beta2",null]]}
 {"id":"quarkus-keycloak-admin-resteasy-client io.quarkus.keycloak.admin.resteasy.client.runtime.KeycloakAdminResteasyClientRecorder createAdminClient(Lio/quarkus/keycloak/admin/client/common/runtime/KeycloakAdminClientConfig;)Lorg/keycloak/admin/client/Keycloak;","h":[["4.0.0.Beta2","+s"]]}
-{"id":"quarkus-keycloak-admin-resteasy-client io.quarkus.keycloak.admin.resteasy.client.runtime.KeycloakAdminResteasyClientRecorder setClientProvider(Lio/quarkus/tls/TlsConfigurationRegistry;Lio/quarkus/keycloak/admin/client/common/runtime/KeycloakAdminClientConfig;)V","h":[["4.0.0.Beta2","+s"]]}
+{"id":"quarkus-keycloak-admin-resteasy-client io.quarkus.keycloak.admin.resteasy.client.runtime.KeycloakAdminResteasyClientRecorder setClientProvider(Lio/quarkus/tls/TlsConfigurationRegistry;Lio/quarkus/keycloak/admin/client/common/runtime/KeycloakAdminClientConfig;)V","h":[["4.0.0.Beta2","+s"],["4.0.0",null]]}
+{"id":"quarkus-keycloak-admin-resteasy-client io.quarkus.keycloak.admin.resteasy.client.runtime.KeycloakAdminResteasyClientRecorder setClientProvider(Lio/quarkus/tls/TlsConfigurationRegistry;Lio/quarkus/keycloak/admin/client/common/runtime/KeycloakAdminClientConfig;Ltools/jackson/databind/json/JsonMapper;)V","h":[["4.0.0","+s"]]}
 {"id":"quarkus-keycloak-admin-resteasy-client io.quarkus.keycloak.admin.resteasy.client.runtime.KeycloakAdminResteasyClientRecorder setClientProvider(Ljava/util/function/Supplier;)V","h":[["4.0.0.Beta1","+"],["4.0.0.Beta2",null]]}
 {"id":"quarkus-keycloak-admin-resteasy-client-deployment io.quarkus.keycloak.admin.resteasy.client.deployment.KeycloakAdminResteasyClientProcessor","h":[["4.0.0.Beta1","+"]]}
 {"id":"quarkus-keycloak-admin-resteasy-client-deployment io.quarkus.keycloak.admin.resteasy.client.deployment.KeycloakAdminResteasyClientProcessor <init>()V","h":[["4.0.0.Beta1","+"]]}
@@ -30233,6 +30301,8 @@
 {"id":"quarkus-keycloak-authorization io.quarkus.keycloak.pep.runtime.HttpClientBuilder$HostnameVerificationPolicy WILDCARD:Lio/quarkus/keycloak/pep/runtime/HttpClientBuilder$HostnameVerificationPolicy;","h":[["4.0.0.Beta1","+e"]]}
 {"id":"quarkus-keycloak-authorization io.quarkus.keycloak.pep.runtime.HttpClientBuilder$HostnameVerificationPolicy valueOf(Ljava/lang/String;)Lio/quarkus/keycloak/pep/runtime/HttpClientBuilder$HostnameVerificationPolicy;","h":[["4.0.0.Beta1","+s"]]}
 {"id":"quarkus-keycloak-authorization io.quarkus.keycloak.pep.runtime.HttpClientBuilder$HostnameVerificationPolicy values()[Lio/quarkus/keycloak/pep/runtime/HttpClientBuilder$HostnameVerificationPolicy;","h":[["4.0.0.Beta1","+s"]]}
+{"id":"quarkus-keycloak-authorization io.quarkus.keycloak.pep.runtime.KeycloakAdminClientJackson2Bridge","h":[["4.0.0","+f"]]}
+{"id":"quarkus-keycloak-authorization io.quarkus.keycloak.pep.runtime.KeycloakAdminClientJackson2Bridge jsonMapper()Lio/quarkus/keycloak/admin/client/common/runtime/KeycloakAdminClientJsonMapper;","h":[["4.0.0","+s"]]}
 {"id":"quarkus-keycloak-authorization io.quarkus.keycloak.pep.runtime.KeycloakPolicyEnforcerAuthorizer","h":[["4.0.0.Beta1","+ implements io.quarkus.vertx.http.runtime.security.HttpSecurityPolicy"]]}
 {"id":"quarkus-keycloak-authorization io.quarkus.keycloak.pep.runtime.KeycloakPolicyEnforcerAuthorizer <init>()V","h":[["4.0.0.Beta1","+"]]}
 {"id":"quarkus-keycloak-authorization io.quarkus.keycloak.pep.runtime.KeycloakPolicyEnforcerAuthorizer checkPermission(Lio/vertx/ext/web/RoutingContext;Lio/smallrye/mutiny/Uni;Lio/quarkus/vertx/http/runtime/security/HttpSecurityPolicy$AuthorizationRequestContext;)Lio/smallrye/mutiny/Uni;","h":[["4.0.0.Beta1","+"]]}
@@ -30346,6 +30416,8 @@
 {"id":"quarkus-keycloak-authorization io.quarkus.keycloak.pep.runtime.VertxHttpFacade sendError(I)V","h":[["4.0.0.Beta1","+"]]}
 {"id":"quarkus-keycloak-authorization io.quarkus.keycloak.pep.runtime.VertxHttpFacade sendError(ILjava/lang/String;)V","h":[["4.0.0.Beta1","+"]]}
 {"id":"quarkus-keycloak-authorization io.quarkus.keycloak.pep.runtime.VertxHttpFacade setHeader(Ljava/lang/String;Ljava/lang/String;)V","h":[["4.0.0.Beta1","+"]]}
+{"id":"quarkus-keycloak-authorization-deployment io.quarkus.keycloak.pep.deployment.KeycloakAdminClientSupportProcessor","h":[["4.0.0","+"]]}
+{"id":"quarkus-keycloak-authorization-deployment io.quarkus.keycloak.pep.deployment.KeycloakAdminClientSupportProcessor <init>()V","h":[["4.0.0","+"]]}
 {"id":"quarkus-keycloak-authorization-deployment io.quarkus.keycloak.pep.deployment.KeycloakPolicyEnforcerBuildStep","h":[["4.0.0.Beta1","+"]]}
 {"id":"quarkus-keycloak-authorization-deployment io.quarkus.keycloak.pep.deployment.KeycloakPolicyEnforcerBuildStep <init>()V","h":[["4.0.0.Beta1","+"]]}
 {"id":"quarkus-keycloak-authorization-deployment io.quarkus.keycloak.pep.deployment.KeycloakPolicyEnforcerBuildStep beans(Lio/quarkus/oidc/deployment/OidcBuildTimeConfig;)Lio/quarkus/arc/deployment/AdditionalBeanBuildItem;","h":[["4.0.0.Beta1","+"]]}
@@ -33368,8 +33440,8 @@
 {"id":"quarkus-micrometer io.quarkus.micrometer.runtime.binder.redis.RedisMetricsBean report(Ljava/lang/String;JZ)V","h":[["4.0.0.Beta1","+"]]}
 {"id":"quarkus-micrometer io.quarkus.micrometer.runtime.binder.stork.StorkObservationCollectorBean","h":[["4.0.0.Beta1","+ implements io.smallrye.stork.api.observability.ObservationCollector,io.smallrye.stork.api.observability.StorkEventHandler"]]}
 {"id":"quarkus-micrometer io.quarkus.micrometer.runtime.binder.stork.StorkObservationCollectorBean <init>(Lio/micrometer/core/instrument/MeterRegistry;)V","h":[["4.0.0.Beta1","+"]]}
-{"id":"quarkus-micrometer io.quarkus.micrometer.runtime.binder.stork.StorkObservationCollectorBean METRICS_SUFFIX:Ljava/lang/String;","h":[["4.0.0.Beta1","+sf"]]}
-{"id":"quarkus-micrometer io.quarkus.micrometer.runtime.binder.stork.StorkObservationCollectorBean STORK_METRICS:Ljava/util/Map;","h":[["4.0.0.Beta1","+sf"]]}
+{"id":"quarkus-micrometer io.quarkus.micrometer.runtime.binder.stork.StorkObservationCollectorBean METRICS_SUFFIX:Ljava/lang/String;","h":[["4.0.0.Beta1","+sf"],["4.0.0",null]]}
+{"id":"quarkus-micrometer io.quarkus.micrometer.runtime.binder.stork.StorkObservationCollectorBean STORK_METRICS:Ljava/util/Map;","h":[["4.0.0.Beta1","+sf"],["4.0.0",null]]}
 {"id":"quarkus-micrometer io.quarkus.micrometer.runtime.binder.stork.StorkObservationCollectorBean complete(Lio/smallrye/stork/api/observability/StorkObservation;)V","h":[["4.0.0.Beta1","+"]]}
 {"id":"quarkus-micrometer io.quarkus.micrometer.runtime.binder.stork.StorkObservationCollectorBean create(Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;)Lio/smallrye/stork/api/observability/StorkObservation;","h":[["4.0.0.Beta1","+"]]}
 {"id":"quarkus-micrometer io.quarkus.micrometer.runtime.binder.vertx.EventTiming","h":[["4.0.0.Beta1","+"]]}
@@ -38588,6 +38660,7 @@
 {"id":"quarkus-oidc io.quarkus.oidc.runtime.OidcUtils getSha256Digest(Ljava/lang/String;Ljava/nio/charset/Charset;)[B","h":[["4.0.0.Beta1","+s"]]}
 {"id":"quarkus-oidc io.quarkus.oidc.runtime.OidcUtils getSha256Digest([B)[B","h":[["4.0.0.Beta1","+s"]]}
 {"id":"quarkus-oidc io.quarkus.oidc.runtime.OidcUtils getTenantIdFromCookie(Ljava/lang/String;Ljava/lang/String;Z)Ljava/lang/String;","h":[["4.0.0.Beta1","+s"]]}
+{"id":"quarkus-oidc io.quarkus.oidc.runtime.OidcUtils getTenantIdFromCookie(Ljava/lang/String;Ljava/lang/String;ZLio/quarkus/oidc/runtime/TenantConfigBean;)Ljava/lang/String;","h":[["4.0.0","+s"]]}
 {"id":"quarkus-oidc io.quarkus.oidc.runtime.OidcUtils getTokenCredential(Lio/quarkus/security/identity/SecurityIdentity;Ljava/lang/Class;)Lio/quarkus/security/credential/TokenCredential;","h":[["4.0.0.Beta1","+s"]]}
 {"id":"quarkus-oidc io.quarkus.oidc.runtime.OidcUtils getTokenDecryptionAlgorithm(Lio/quarkus/oidc/runtime/OidcTenantConfig$Token;Ljava/security/Key;)Lio/smallrye/jwt/algorithm/KeyEncryptionAlgorithm;","h":[["4.0.0.Beta1","+s"]]}
 {"id":"quarkus-oidc io.quarkus.oidc.runtime.OidcUtils getUriAuthority(Ljava/net/URI;)Ljava/lang/String;","h":[["4.0.0.Beta1","+s"]]}
@@ -40145,11 +40218,15 @@
 {"id":"quarkus-opentelemetry io.quarkus.opentelemetry.runtime.AutoConfiguredOpenTelemetrySdkBuilderCustomizer$MetricProviderCustomizer <init>(Lio/quarkus/opentelemetry/runtime/config/build/OTelBuildConfig;Lio/quarkus/opentelemetry/runtime/config/runtime/OTelRuntimeConfig;Ljakarta/enterprise/inject/Instance;Ljakarta/enterprise/inject/Instance;)V","h":[["4.0.0.Beta1","+"]]}
 {"id":"quarkus-opentelemetry io.quarkus.opentelemetry.runtime.AutoConfiguredOpenTelemetrySdkBuilderCustomizer$MetricProviderCustomizer customize(Lio/opentelemetry/sdk/autoconfigure/AutoConfiguredOpenTelemetrySdkBuilder;)V","h":[["4.0.0.Beta1","+"]]}
 {"id":"quarkus-opentelemetry io.quarkus.opentelemetry.runtime.AutoConfiguredOpenTelemetrySdkBuilderCustomizer$ResourceCustomizer","h":[["4.0.0.Beta1","+f implements io.quarkus.opentelemetry.runtime.AutoConfiguredOpenTelemetrySdkBuilderCustomizer"]]}
-{"id":"quarkus-opentelemetry io.quarkus.opentelemetry.runtime.AutoConfiguredOpenTelemetrySdkBuilderCustomizer$ResourceCustomizer <init>(Lio/quarkus/runtime/ApplicationConfig;Lio/quarkus/opentelemetry/runtime/config/runtime/OTelRuntimeConfig;Ljakarta/enterprise/inject/Instance;Ljava/util/List;)V","h":[["4.0.0.Beta1","+"]]}
+{"id":"quarkus-opentelemetry io.quarkus.opentelemetry.runtime.AutoConfiguredOpenTelemetrySdkBuilderCustomizer$ResourceCustomizer <init>(Lio/quarkus/opentelemetry/runtime/config/runtime/OTelRuntimeConfig;Ljakarta/enterprise/inject/Instance;Ljava/util/List;)V","h":[["4.0.1","+"]]}
+{"id":"quarkus-opentelemetry io.quarkus.opentelemetry.runtime.AutoConfiguredOpenTelemetrySdkBuilderCustomizer$ResourceCustomizer <init>(Lio/quarkus/runtime/ApplicationConfig;Lio/quarkus/opentelemetry/runtime/config/runtime/OTelRuntimeConfig;Ljakarta/enterprise/inject/Instance;Ljava/util/List;)V","h":[["4.0.0.Beta1","+"],["4.0.1",null]]}
 {"id":"quarkus-opentelemetry io.quarkus.opentelemetry.runtime.AutoConfiguredOpenTelemetrySdkBuilderCustomizer$ResourceCustomizer customize(Lio/opentelemetry/sdk/autoconfigure/AutoConfiguredOpenTelemetrySdkBuilder;)V","h":[["4.0.0.Beta1","+"]]}
 {"id":"quarkus-opentelemetry io.quarkus.opentelemetry.runtime.AutoConfiguredOpenTelemetrySdkBuilderCustomizer$SamplerCustomizer","h":[["4.0.0.Beta1","+f implements io.quarkus.opentelemetry.runtime.AutoConfiguredOpenTelemetrySdkBuilderCustomizer"]]}
 {"id":"quarkus-opentelemetry io.quarkus.opentelemetry.runtime.AutoConfiguredOpenTelemetrySdkBuilderCustomizer$SamplerCustomizer <init>(Lio/quarkus/opentelemetry/runtime/config/build/OTelBuildConfig;Lio/quarkus/opentelemetry/runtime/config/runtime/OTelRuntimeConfig;Ljava/util/List;)V","h":[["4.0.0.Beta1","+"]]}
 {"id":"quarkus-opentelemetry io.quarkus.opentelemetry.runtime.AutoConfiguredOpenTelemetrySdkBuilderCustomizer$SamplerCustomizer customize(Lio/opentelemetry/sdk/autoconfigure/AutoConfiguredOpenTelemetrySdkBuilder;)V","h":[["4.0.0.Beta1","+"]]}
+{"id":"quarkus-opentelemetry io.quarkus.opentelemetry.runtime.AutoConfiguredOpenTelemetrySdkBuilderCustomizer$ServiceNameCustomizer","h":[["4.0.1","+f implements io.quarkus.opentelemetry.runtime.AutoConfiguredOpenTelemetrySdkBuilderCustomizer"]]}
+{"id":"quarkus-opentelemetry io.quarkus.opentelemetry.runtime.AutoConfiguredOpenTelemetrySdkBuilderCustomizer$ServiceNameCustomizer <init>(Lio/quarkus/runtime/ApplicationConfig;Lio/quarkus/opentelemetry/runtime/config/runtime/OTelRuntimeConfig;)V","h":[["4.0.1","+"]]}
+{"id":"quarkus-opentelemetry io.quarkus.opentelemetry.runtime.AutoConfiguredOpenTelemetrySdkBuilderCustomizer$ServiceNameCustomizer customize(Lio/opentelemetry/sdk/autoconfigure/AutoConfiguredOpenTelemetrySdkBuilder;)V","h":[["4.0.1","+"]]}
 {"id":"quarkus-opentelemetry io.quarkus.opentelemetry.runtime.AutoConfiguredOpenTelemetrySdkBuilderCustomizer$SimpleLogRecordProcessorBiFunction","h":[["4.0.0.Beta1","+ implements java.util.function.BiFunction"]]}
 {"id":"quarkus-opentelemetry io.quarkus.opentelemetry.runtime.AutoConfiguredOpenTelemetrySdkBuilderCustomizer$SimpleLogRecordProcessorBiFunction <init>(Lio/opentelemetry/sdk/logs/LogRecordProcessor;)V","h":[["4.0.0.Beta1","+"]]}
 {"id":"quarkus-opentelemetry io.quarkus.opentelemetry.runtime.AutoConfiguredOpenTelemetrySdkBuilderCustomizer$SimpleLogRecordProcessorBiFunction apply(Lio/opentelemetry/sdk/logs/LogRecordProcessor;Lio/opentelemetry/sdk/autoconfigure/spi/ConfigProperties;)Lio/opentelemetry/sdk/logs/LogRecordProcessor;","h":[["4.0.0.Beta1","+"]]}
@@ -40181,7 +40258,8 @@
 {"id":"quarkus-opentelemetry io.quarkus.opentelemetry.runtime.OpenTelemetryRecorder","h":[["4.0.0.Beta1","+"]]}
 {"id":"quarkus-opentelemetry io.quarkus.opentelemetry.runtime.OpenTelemetryRecorder <init>(Lio/quarkus/runtime/RuntimeValue;)V","h":[["4.0.0.Beta1","+"]]}
 {"id":"quarkus-opentelemetry io.quarkus.opentelemetry.runtime.OpenTelemetryRecorder OPEN_TELEMETRY_DRIVER:Ljava/lang/String;","h":[["4.0.0.Beta1","+sf"]]}
-{"id":"quarkus-opentelemetry io.quarkus.opentelemetry.runtime.OpenTelemetryRecorder delayedAttributes(Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;)Ljava/util/function/Supplier;","h":[["4.0.0.Beta1","+"]]}
+{"id":"quarkus-opentelemetry io.quarkus.opentelemetry.runtime.OpenTelemetryRecorder delayedAttributes(Ljava/lang/String;Ljava/lang/String;)Ljava/util/function/Supplier;","h":[["4.0.1","+"]]}
+{"id":"quarkus-opentelemetry io.quarkus.opentelemetry.runtime.OpenTelemetryRecorder delayedAttributes(Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;)Ljava/util/function/Supplier;","h":[["4.0.0.Beta1","+"],["4.0.1",null]]}
 {"id":"quarkus-opentelemetry io.quarkus.opentelemetry.runtime.OpenTelemetryRecorder eagerlyCreateContextStorage()V","h":[["4.0.0.Beta1","+"]]}
 {"id":"quarkus-opentelemetry io.quarkus.opentelemetry.runtime.OpenTelemetryRecorder isOtelSdkEnabled()Lio/quarkus/runtime/RuntimeValue;","h":[["4.0.0.Beta1","+"]]}
 {"id":"quarkus-opentelemetry io.quarkus.opentelemetry.runtime.OpenTelemetryRecorder kubernetesResource()Ljava/util/function/Supplier;","h":[["4.0.0.Beta1","+"]]}
@@ -40206,6 +40284,12 @@
 {"id":"quarkus-opentelemetry io.quarkus.opentelemetry.runtime.QuarkusContextStorage getVertxContext()Lio/vertx/core/Context;","h":[["4.0.0.Beta1","+s"]]}
 {"id":"quarkus-opentelemetry io.quarkus.opentelemetry.runtime.QuarkusContextStorage valueOf(Ljava/lang/String;)Lio/quarkus/opentelemetry/runtime/QuarkusContextStorage;","h":[["4.0.0.Beta1","+s"]]}
 {"id":"quarkus-opentelemetry io.quarkus.opentelemetry.runtime.QuarkusContextStorage values()[Lio/quarkus/opentelemetry/runtime/QuarkusContextStorage;","h":[["4.0.0.Beta1","+s"]]}
+{"id":"quarkus-opentelemetry io.quarkus.opentelemetry.runtime.ResourceConfigReconciler","h":[["4.0.1","+f"]]}
+{"id":"quarkus-opentelemetry io.quarkus.opentelemetry.runtime.ResourceConfigReconciler ENTITY_OWNED_ATTRIBUTES:Ljava/util/Set;","h":[["4.0.1","+sf"]]}
+{"id":"quarkus-opentelemetry io.quarkus.opentelemetry.runtime.ResourceConfigReconciler SERVICE_INSTANCE_ID:Ljava/lang/String;","h":[["4.0.1","+sf"]]}
+{"id":"quarkus-opentelemetry io.quarkus.opentelemetry.runtime.ResourceConfigReconciler SERVICE_NAME:Ljava/lang/String;","h":[["4.0.1","+sf"]]}
+{"id":"quarkus-opentelemetry io.quarkus.opentelemetry.runtime.ResourceConfigReconciler reconcile(Ljava/util/Map;Ljava/util/List;)V","h":[["4.0.1","+s"]]}
+{"id":"quarkus-opentelemetry io.quarkus.opentelemetry.runtime.ResourceConfigReconciler resolveServiceName(Ljava/lang/String;Ljava/util/List;Ljava/lang/String;)Ljava/lang/String;","h":[["4.0.1","+s"]]}
 {"id":"quarkus-opentelemetry io.quarkus.opentelemetry.runtime.config.MpTelemetryRelocateConfigSourceInterceptor","h":[["4.0.0.Beta1","+ implements io.smallrye.config.ConfigSourceInterceptorFactory"]]}
 {"id":"quarkus-opentelemetry io.quarkus.opentelemetry.runtime.config.MpTelemetryRelocateConfigSourceInterceptor <init>()V","h":[["4.0.0.Beta1","+"]]}
 {"id":"quarkus-opentelemetry io.quarkus.opentelemetry.runtime.config.MpTelemetryRelocateConfigSourceInterceptor getInterceptor(Lio/smallrye/config/ConfigSourceInterceptorContext;)Lio/smallrye/config/ConfigSourceInterceptor;","h":[["4.0.0.Beta1","+"]]}
@@ -40553,7 +40637,8 @@
 {"id":"quarkus-opentelemetry io.quarkus.opentelemetry.runtime.tracing.TracerRecorder dropStaticResourceTargets:Ljava/util/Set;","h":[["4.0.0.Beta1","+sf"]]}
 {"id":"quarkus-opentelemetry io.quarkus.opentelemetry.runtime.tracing.TracerRecorder setupSampler(Ljava/util/List;Ljava/util/List;)V","h":[["4.0.0.Beta1","+"]]}
 {"id":"quarkus-opentelemetry io.quarkus.opentelemetry.runtime.tracing.TracerUtil","h":[["4.0.0.Beta1","+"]]}
-{"id":"quarkus-opentelemetry io.quarkus.opentelemetry.runtime.tracing.TracerUtil mapResourceAttributes(Ljava/util/List;Ljava/lang/String;Ljava/lang/String;)Lio/opentelemetry/sdk/resources/Resource;","h":[["4.0.0.Beta1","+s"]]}
+{"id":"quarkus-opentelemetry io.quarkus.opentelemetry.runtime.tracing.TracerUtil mapResourceAttributes(Ljava/util/List;Ljava/lang/String;)Lio/opentelemetry/sdk/resources/Resource;","h":[["4.0.1","+s"]]}
+{"id":"quarkus-opentelemetry io.quarkus.opentelemetry.runtime.tracing.TracerUtil mapResourceAttributes(Ljava/util/List;Ljava/lang/String;Ljava/lang/String;)Lio/opentelemetry/sdk/resources/Resource;","h":[["4.0.0.Beta1","+s"],["4.0.1",null]]}
 {"id":"quarkus-opentelemetry io.quarkus.opentelemetry.runtime.tracing.cdi.AddingSpanAttributesInterceptor","h":[["4.0.0.Beta1","+"]]}
 {"id":"quarkus-opentelemetry io.quarkus.opentelemetry.runtime.tracing.cdi.AddingSpanAttributesInterceptor <init>()V","h":[["4.0.0.Beta1","+"]]}
 {"id":"quarkus-opentelemetry io.quarkus.opentelemetry.runtime.tracing.cdi.AddingSpanAttributesInterceptor span(Lio/quarkus/arc/ArcInvocationContext;)Ljava/lang/Object;","h":[["4.0.0.Beta1","+"]]}
@@ -40604,6 +40689,9 @@
 {"id":"quarkus-opentelemetry io.quarkus.opentelemetry.runtime.tracing.instrumentation.restclient.OpenTelemetryClientFilter REST_CLIENT_OTEL_SPAN_CLIENT_SCOPE:Ljava/lang/String;","h":[["4.0.0.Beta1","+sf"]]}
 {"id":"quarkus-opentelemetry io.quarkus.opentelemetry.runtime.tracing.instrumentation.restclient.OpenTelemetryClientFilter filter(Ljakarta/ws/rs/client/ClientRequestContext;)V","h":[["4.0.0.Beta1","+"]]}
 {"id":"quarkus-opentelemetry io.quarkus.opentelemetry.runtime.tracing.instrumentation.restclient.OpenTelemetryClientFilter filter(Ljakarta/ws/rs/client/ClientRequestContext;Ljakarta/ws/rs/client/ClientResponseContext;)V","h":[["4.0.0.Beta1","+"]]}
+{"id":"quarkus-opentelemetry io.quarkus.opentelemetry.runtime.tracing.instrumentation.restclient.OpenTelemetryReactiveClientContextFilter","h":[["4.0.1","+ implements jakarta.ws.rs.client.ClientRequestFilter"]]}
+{"id":"quarkus-opentelemetry io.quarkus.opentelemetry.runtime.tracing.instrumentation.restclient.OpenTelemetryReactiveClientContextFilter <init>()V","h":[["4.0.1","+"]]}
+{"id":"quarkus-opentelemetry io.quarkus.opentelemetry.runtime.tracing.instrumentation.restclient.OpenTelemetryReactiveClientContextFilter filter(Ljakarta/ws/rs/client/ClientRequestContext;)V","h":[["4.0.1","+"]]}
 {"id":"quarkus-opentelemetry io.quarkus.opentelemetry.runtime.tracing.instrumentation.resteasy.AttachExceptionHandler","h":[["4.0.0.Beta1","+ implements org.jboss.resteasy.reactive.server.spi.ServerRestHandler"]]}
 {"id":"quarkus-opentelemetry io.quarkus.opentelemetry.runtime.tracing.instrumentation.resteasy.AttachExceptionHandler <init>()V","h":[["4.0.0.Beta1","+"]]}
 {"id":"quarkus-opentelemetry io.quarkus.opentelemetry.runtime.tracing.instrumentation.resteasy.AttachExceptionHandler handle(Lorg/jboss/resteasy/reactive/server/core/ResteasyReactiveRequestContext;)V","h":[["4.0.0.Beta1","+"]]}
@@ -51894,6 +51982,7 @@
 {"id":"quarkus-redis-client io.quarkus.redis.runtime.client.config.RedisClientConfig reconnectInterval()Ljava/time/Duration;","h":[["4.0.0.Beta1","+"]]}
 {"id":"quarkus-redis-client io.quarkus.redis.runtime.client.config.RedisClientConfig replicas()Ljava/util/Optional;","h":[["4.0.0.Beta1","+"]]}
 {"id":"quarkus-redis-client io.quarkus.redis.runtime.client.config.RedisClientConfig role()Ljava/util/Optional;","h":[["4.0.0.Beta1","+"]]}
+{"id":"quarkus-redis-client io.quarkus.redis.runtime.client.config.RedisClientConfig subscribeTimeout()Ljava/time/Duration;","h":[["4.0.1","+"]]}
 {"id":"quarkus-redis-client io.quarkus.redis.runtime.client.config.RedisClientConfig tcp()Lio/quarkus/redis/runtime/client/config/NetConfig;","h":[["4.0.0.Beta1","+"]]}
 {"id":"quarkus-redis-client io.quarkus.redis.runtime.client.config.RedisClientConfig timeout()Ljava/time/Duration;","h":[["4.0.0.Beta1","+"]]}
 {"id":"quarkus-redis-client io.quarkus.redis.runtime.client.config.RedisClientConfig tls()Lio/quarkus/redis/runtime/client/config/TlsConfig;","h":[["4.0.0.Beta1","+"]]}
@@ -53224,7 +53313,9 @@
 {"id":"quarkus-redis-client io.quarkus.redis.runtime.datasource.ReactivePubSubCommandsImpl subscribeToPatterns([Ljava/lang/String;)Lio/smallrye/mutiny/Multi;","h":[["4.0.0.Beta1","+v"]]}
 {"id":"quarkus-redis-client io.quarkus.redis.runtime.datasource.ReactiveRedisDataSourceImpl","h":[["4.0.0.Beta1","+ implements io.quarkus.redis.datasource.ReactiveRedisDataSource,io.quarkus.redis.runtime.datasource.RedisCommandExecutor"]]}
 {"id":"quarkus-redis-client io.quarkus.redis.runtime.datasource.ReactiveRedisDataSourceImpl <init>(Lio/vertx/mutiny/core/Vertx;Lio/vertx/mutiny/redis/client/Redis;Lio/vertx/mutiny/redis/client/RedisAPI;)V","h":[["4.0.0.Beta1","+"]]}
+{"id":"quarkus-redis-client io.quarkus.redis.runtime.datasource.ReactiveRedisDataSourceImpl <init>(Lio/vertx/mutiny/core/Vertx;Lio/vertx/mutiny/redis/client/Redis;Lio/vertx/mutiny/redis/client/RedisAPI;Ljava/time/Duration;)V","h":[["4.0.1","+"]]}
 {"id":"quarkus-redis-client io.quarkus.redis.runtime.datasource.ReactiveRedisDataSourceImpl <init>(Lio/vertx/mutiny/core/Vertx;Lio/vertx/mutiny/redis/client/Redis;Lio/vertx/mutiny/redis/client/RedisConnection;)V","h":[["4.0.0.Beta1","+"]]}
+{"id":"quarkus-redis-client io.quarkus.redis.runtime.datasource.ReactiveRedisDataSourceImpl <init>(Lio/vertx/mutiny/core/Vertx;Lio/vertx/mutiny/redis/client/Redis;Lio/vertx/mutiny/redis/client/RedisConnection;Ljava/time/Duration;)V","h":[["4.0.1","+"]]}
 {"id":"quarkus-redis-client io.quarkus.redis.runtime.datasource.ReactiveRedisDataSourceImpl autosuggest(Ljava/lang/Class;)Lio/quarkus/redis/datasource/autosuggest/ReactiveAutoSuggestCommands;","h":[["4.0.0.Beta1","+"]]}
 {"id":"quarkus-redis-client io.quarkus.redis.runtime.datasource.ReactiveRedisDataSourceImpl autosuggest(Ltools/jackson/core/type/TypeReference;)Lio/quarkus/redis/datasource/autosuggest/ReactiveAutoSuggestCommands;","h":[["4.0.0.Beta1","+"]]}
 {"id":"quarkus-redis-client io.quarkus.redis.runtime.datasource.ReactiveRedisDataSourceImpl bitmap(Ljava/lang/Class;)Lio/quarkus/redis/datasource/bitmap/ReactiveBitMapCommands;","h":[["4.0.0.Beta1","+"]]}
@@ -55269,6 +55360,7 @@
 {"id":"quarkus-rest-data-panache-deployment io.quarkus.rest.data.panache.deployment.ResourceMetadata","h":[["4.0.0.Beta1","+"]]}
 {"id":"quarkus-rest-data-panache-deployment io.quarkus.rest.data.panache.deployment.ResourceMetadata <init>(Ljava/lang/String;Ljava/lang/String;Lorg/jboss/jandex/ClassInfo;Ljava/lang/String;Ljava/lang/String;Ljava/util/Map;)V","h":[["4.0.0.Beta1","+"]]}
 {"id":"quarkus-rest-data-panache-deployment io.quarkus.rest.data.panache.deployment.ResourceMetadata <init>(Ljava/lang/String;Ljava/lang/String;Lorg/jboss/jandex/ClassInfo;Ljava/lang/String;Ljava/lang/String;Ljava/util/Map;Ljava/util/Map;)V","h":[["4.0.0.Beta2","+"]]}
+{"id":"quarkus-rest-data-panache-deployment io.quarkus.rest.data.panache.deployment.ResourceMetadata <init>(Ljava/lang/String;Ljava/lang/String;Lorg/jboss/jandex/ClassInfo;Ljava/lang/String;Ljava/lang/String;Ljava/util/Map;Ljava/util/Map;Ljava/util/Set;)V","h":[["4.0.1","+"]]}
 {"id":"quarkus-rest-data-panache-deployment io.quarkus.rest.data.panache.deployment.ResourceMetadata <init>(Ljava/lang/String;Lorg/jboss/jandex/ClassInfo;Ljava/lang/String;Ljava/lang/String;Ljava/util/Map;)V","h":[["4.0.0.Beta1","+"]]}
 {"id":"quarkus-rest-data-panache-deployment io.quarkus.rest.data.panache.deployment.ResourceMetadata <init>(Ljava/lang/String;Lorg/jboss/jandex/ClassInfo;Ljava/lang/String;Ljava/lang/String;Ljava/util/Map;Ljava/util/Map;)V","h":[["4.0.0.Beta2","+"]]}
 {"id":"quarkus-rest-data-panache-deployment io.quarkus.rest.data.panache.deployment.ResourceMetadata getEntityType()Ljava/lang/String;","h":[["4.0.0.Beta1","+"]]}
@@ -55278,6 +55370,7 @@
 {"id":"quarkus-rest-data-panache-deployment io.quarkus.rest.data.panache.deployment.ResourceMetadata getResourceInterface()Lorg/jboss/jandex/ClassInfo;","h":[["4.0.0.Beta1","+"]]}
 {"id":"quarkus-rest-data-panache-deployment io.quarkus.rest.data.panache.deployment.ResourceMetadata getResourceName()Ljava/lang/String;","h":[["4.0.0.Beta1","+"]]}
 {"id":"quarkus-rest-data-panache-deployment io.quarkus.rest.data.panache.deployment.ResourceMetadata getSecureFields()Ljava/util/Map;","h":[["4.0.0.Beta2","+"]]}
+{"id":"quarkus-rest-data-panache-deployment io.quarkus.rest.data.panache.deployment.ResourceMetadata getSortableFields()Ljava/util/Set;","h":[["4.0.1","+"]]}
 {"id":"quarkus-rest-data-panache-deployment io.quarkus.rest.data.panache.deployment.ResourceMethodListenerBuildItem","h":[["4.0.0.Beta1","+f extends io.quarkus.builder.item.MultiBuildItem"]]}
 {"id":"quarkus-rest-data-panache-deployment io.quarkus.rest.data.panache.deployment.ResourceMethodListenerBuildItem <init>(Lorg/jboss/jandex/ClassInfo;Lorg/jboss/jandex/Type;)V","h":[["4.0.0.Beta1","+"]]}
 {"id":"quarkus-rest-data-panache-deployment io.quarkus.rest.data.panache.deployment.ResourceMethodListenerBuildItem getClassInfo()Lorg/jboss/jandex/ClassInfo;","h":[["4.0.0.Beta1","+"]]}
@@ -55562,7 +55655,8 @@
 {"id":"quarkus-rest-deployment io.quarkus.resteasy.reactive.server.deployment.ResteasyReactiveProcessor serverSerializers(Lio/quarkus/resteasy/reactive/server/runtime/ResteasyReactiveRecorder;Lio/quarkus/arc/deployment/BeanContainerBuildItem;Lio/quarkus/resteasy/reactive/common/deployment/ApplicationResultBuildItem;Ljava/util/List;Ljava/util/List;Ljava/util/List;Ljava/util/List;Ljava/util/List;Lio/quarkus/deployment/annotations/BuildProducer;Lio/quarkus/deployment/annotations/BuildProducer;)V","h":[["4.0.0.Beta1","+"],["4.0.0.Beta3",null]]}
 {"id":"quarkus-rest-deployment io.quarkus.resteasy.reactive.server.deployment.ResteasyReactiveProcessor setupDeployment(Lio/quarkus/arc/deployment/BeanContainerBuildItem;Lio/quarkus/arc/deployment/ValidationPhaseBuildItem;Lio/quarkus/deployment/Capabilities;Lio/quarkus/resteasy/reactive/common/runtime/ResteasyReactiveConfig;Ljava/util/Optional;Lio/quarkus/resteasy/reactive/server/runtime/ResteasyReactiveRecorder;Lio/quarkus/deployment/recording/RecorderContext;Lio/quarkus/deployment/builditem/ShutdownContextBuildItem;Lio/quarkus/vertx/http/runtime/VertxHttpBuildTimeConfig;Lio/quarkus/resteasy/reactive/server/deployment/SetupEndpointsResultBuildItem;Lio/quarkus/resteasy/reactive/server/deployment/ServerSerialisersBuildItem;Ljava/util/List;Ljava/util/List;Ljava/util/List;Ljava/util/Optional;Lio/quarkus/deployment/annotations/BuildProducer;Lio/quarkus/deployment/annotations/BuildProducer;Lio/quarkus/deployment/annotations/BuildProducer;Lio/quarkus/deployment/annotations/BuildProducer;Lio/quarkus/deployment/annotations/BuildProducer;Lio/quarkus/resteasy/reactive/common/deployment/ApplicationResultBuildItem;Lio/quarkus/resteasy/reactive/common/deployment/ResourceInterceptorsBuildItem;Lio/quarkus/resteasy/reactive/server/deployment/ExceptionMappersBuildItem;Lio/quarkus/resteasy/reactive/server/deployment/ParamConverterProvidersBuildItem;Lio/quarkus/resteasy/reactive/server/deployment/ContextResolversBuildItem;Lio/quarkus/resteasy/reactive/server/deployment/ResteasyReactiveServerConfig;Lio/quarkus/deployment/builditem/LaunchModeBuildItem;Ljava/util/List;Ljava/util/List;)V","h":[["4.0.0.Beta3","+"]]}
 {"id":"quarkus-rest-deployment io.quarkus.resteasy.reactive.server.deployment.ResteasyReactiveProcessor setupDeployment(Lio/quarkus/arc/deployment/BeanContainerBuildItem;Lio/quarkus/deployment/Capabilities;Lio/quarkus/resteasy/reactive/common/runtime/ResteasyReactiveConfig;Ljava/util/Optional;Lio/quarkus/resteasy/reactive/server/runtime/ResteasyReactiveRecorder;Lio/quarkus/deployment/recording/RecorderContext;Lio/quarkus/deployment/builditem/ShutdownContextBuildItem;Lio/quarkus/vertx/http/runtime/VertxHttpBuildTimeConfig;Lio/quarkus/resteasy/reactive/server/deployment/SetupEndpointsResultBuildItem;Lio/quarkus/resteasy/reactive/server/deployment/ServerSerialisersBuildItem;Ljava/util/List;Ljava/util/List;Ljava/util/List;Ljava/util/Optional;Lio/quarkus/deployment/annotations/BuildProducer;Lio/quarkus/deployment/annotations/BuildProducer;Lio/quarkus/deployment/annotations/BuildProducer;Lio/quarkus/deployment/annotations/BuildProducer;Lio/quarkus/deployment/annotations/BuildProducer;Lio/quarkus/resteasy/reactive/common/deployment/ApplicationResultBuildItem;Lio/quarkus/resteasy/reactive/common/deployment/ResourceInterceptorsBuildItem;Lio/quarkus/resteasy/reactive/server/deployment/ExceptionMappersBuildItem;Lio/quarkus/resteasy/reactive/server/deployment/ParamConverterProvidersBuildItem;Lio/quarkus/resteasy/reactive/server/deployment/ContextResolversBuildItem;Lio/quarkus/resteasy/reactive/server/deployment/ResteasyReactiveServerConfig;Lio/quarkus/deployment/builditem/LaunchModeBuildItem;Ljava/util/List;Ljava/util/List;)V","h":[["4.0.0.Beta1","+"],["4.0.0.Beta3",null]]}
-{"id":"quarkus-rest-deployment io.quarkus.resteasy.reactive.server.deployment.ResteasyReactiveProcessor setupEndpoints(Lio/quarkus/deployment/builditem/ApplicationIndexBuildItem;Lio/quarkus/arc/deployment/BeanArchiveIndexBuildItem;Lio/quarkus/arc/deployment/BeanContainerBuildItem;Lio/quarkus/arc/deployment/ValidationPhaseBuildItem;Lio/quarkus/resteasy/reactive/common/runtime/ResteasyReactiveConfig;Ljava/util/Optional;Lio/quarkus/deployment/annotations/BuildProducer;Lio/quarkus/deployment/annotations/BuildProducer;Lio/quarkus/deployment/annotations/BuildProducer;Lio/quarkus/deployment/annotations/BuildProducer;Lio/quarkus/deployment/annotations/BuildProducer;Lio/quarkus/resteasy/reactive/server/runtime/ResteasyReactiveRecorder;Ljava/util/List;Ljava/util/Optional;Lio/quarkus/deployment/annotations/BuildProducer;Lio/quarkus/deployment/annotations/BuildProducer;Lio/quarkus/deployment/annotations/BuildProducer;Lio/quarkus/resteasy/reactive/common/deployment/ApplicationResultBuildItem;Lio/quarkus/resteasy/reactive/server/deployment/ParamConverterProvidersBuildItem;Lio/quarkus/resteasy/reactive/common/deployment/AggregatedParameterContainersBuildItem;Ljava/util/List;Ljava/util/List;Ljava/util/List;Ljava/util/List;Lio/quarkus/deployment/pkg/builditem/CompiledJavaVersionBuildItem;Lio/quarkus/resteasy/reactive/common/deployment/ResourceInterceptorsBuildItem;Lio/quarkus/deployment/Capabilities;Ljava/util/Optional;Ljava/util/List;Ljava/util/List;Ljava/util/Optional;)V","h":[["4.0.0.Beta3","+"]]}
+{"id":"quarkus-rest-deployment io.quarkus.resteasy.reactive.server.deployment.ResteasyReactiveProcessor setupEndpoints(Lio/quarkus/deployment/builditem/ApplicationIndexBuildItem;Lio/quarkus/arc/deployment/BeanArchiveIndexBuildItem;Lio/quarkus/arc/deployment/BeanContainerBuildItem;Lio/quarkus/arc/deployment/ValidationPhaseBuildItem;Lio/quarkus/resteasy/reactive/common/runtime/ResteasyReactiveConfig;Lio/quarkus/resteasy/reactive/server/deployment/ResteasyReactiveServerConfig;Ljava/util/Optional;Lio/quarkus/deployment/annotations/BuildProducer;Lio/quarkus/deployment/annotations/BuildProducer;Lio/quarkus/deployment/annotations/BuildProducer;Lio/quarkus/deployment/annotations/BuildProducer;Lio/quarkus/deployment/annotations/BuildProducer;Lio/quarkus/resteasy/reactive/server/runtime/ResteasyReactiveRecorder;Ljava/util/List;Ljava/util/Optional;Lio/quarkus/deployment/annotations/BuildProducer;Lio/quarkus/deployment/annotations/BuildProducer;Lio/quarkus/deployment/annotations/BuildProducer;Lio/quarkus/resteasy/reactive/common/deployment/ApplicationResultBuildItem;Lio/quarkus/resteasy/reactive/server/deployment/ParamConverterProvidersBuildItem;Lio/quarkus/resteasy/reactive/common/deployment/AggregatedParameterContainersBuildItem;Ljava/util/List;Ljava/util/List;Ljava/util/List;Ljava/util/List;Lio/quarkus/deployment/pkg/builditem/CompiledJavaVersionBuildItem;Lio/quarkus/resteasy/reactive/common/deployment/ResourceInterceptorsBuildItem;Lio/quarkus/deployment/Capabilities;Ljava/util/Optional;Ljava/util/List;Ljava/util/List;Ljava/util/Optional;)V","h":[["4.0.0","+"]]}
+{"id":"quarkus-rest-deployment io.quarkus.resteasy.reactive.server.deployment.ResteasyReactiveProcessor setupEndpoints(Lio/quarkus/deployment/builditem/ApplicationIndexBuildItem;Lio/quarkus/arc/deployment/BeanArchiveIndexBuildItem;Lio/quarkus/arc/deployment/BeanContainerBuildItem;Lio/quarkus/arc/deployment/ValidationPhaseBuildItem;Lio/quarkus/resteasy/reactive/common/runtime/ResteasyReactiveConfig;Ljava/util/Optional;Lio/quarkus/deployment/annotations/BuildProducer;Lio/quarkus/deployment/annotations/BuildProducer;Lio/quarkus/deployment/annotations/BuildProducer;Lio/quarkus/deployment/annotations/BuildProducer;Lio/quarkus/deployment/annotations/BuildProducer;Lio/quarkus/resteasy/reactive/server/runtime/ResteasyReactiveRecorder;Ljava/util/List;Ljava/util/Optional;Lio/quarkus/deployment/annotations/BuildProducer;Lio/quarkus/deployment/annotations/BuildProducer;Lio/quarkus/deployment/annotations/BuildProducer;Lio/quarkus/resteasy/reactive/common/deployment/ApplicationResultBuildItem;Lio/quarkus/resteasy/reactive/server/deployment/ParamConverterProvidersBuildItem;Lio/quarkus/resteasy/reactive/common/deployment/AggregatedParameterContainersBuildItem;Ljava/util/List;Ljava/util/List;Ljava/util/List;Ljava/util/List;Lio/quarkus/deployment/pkg/builditem/CompiledJavaVersionBuildItem;Lio/quarkus/resteasy/reactive/common/deployment/ResourceInterceptorsBuildItem;Lio/quarkus/deployment/Capabilities;Ljava/util/Optional;Ljava/util/List;Ljava/util/List;Ljava/util/Optional;)V","h":[["4.0.0.Beta3","+"],["4.0.0",null]]}
 {"id":"quarkus-rest-deployment io.quarkus.resteasy.reactive.server.deployment.ResteasyReactiveProcessor setupEndpoints(Lio/quarkus/deployment/builditem/ApplicationIndexBuildItem;Lio/quarkus/arc/deployment/BeanArchiveIndexBuildItem;Lio/quarkus/arc/deployment/BeanContainerBuildItem;Lio/quarkus/resteasy/reactive/common/runtime/ResteasyReactiveConfig;Ljava/util/Optional;Lio/quarkus/deployment/annotations/BuildProducer;Lio/quarkus/deployment/annotations/BuildProducer;Lio/quarkus/deployment/annotations/BuildProducer;Lio/quarkus/deployment/annotations/BuildProducer;Lio/quarkus/deployment/annotations/BuildProducer;Lio/quarkus/resteasy/reactive/server/runtime/ResteasyReactiveRecorder;Ljava/util/List;Ljava/util/Optional;Lio/quarkus/deployment/annotations/BuildProducer;Lio/quarkus/deployment/annotations/BuildProducer;Lio/quarkus/deployment/annotations/BuildProducer;Lio/quarkus/resteasy/reactive/common/deployment/ApplicationResultBuildItem;Lio/quarkus/resteasy/reactive/server/deployment/ParamConverterProvidersBuildItem;Lio/quarkus/resteasy/reactive/common/deployment/AggregatedParameterContainersBuildItem;Ljava/util/List;Ljava/util/List;Ljava/util/List;Ljava/util/List;Lio/quarkus/deployment/pkg/builditem/CompiledJavaVersionBuildItem;Lio/quarkus/resteasy/reactive/common/deployment/ResourceInterceptorsBuildItem;Lio/quarkus/deployment/Capabilities;Ljava/util/Optional;Ljava/util/List;Ljava/util/List;Ljava/util/Optional;)V","h":[["4.0.0.Beta2","+"],["4.0.0.Beta3",null]]}
 {"id":"quarkus-rest-deployment io.quarkus.resteasy.reactive.server.deployment.ResteasyReactiveProcessor setupEndpoints(Lio/quarkus/deployment/builditem/ApplicationIndexBuildItem;Lio/quarkus/arc/deployment/BeanArchiveIndexBuildItem;Lio/quarkus/arc/deployment/BeanContainerBuildItem;Lio/quarkus/resteasy/reactive/common/runtime/ResteasyReactiveConfig;Ljava/util/Optional;Lio/quarkus/deployment/annotations/BuildProducer;Lio/quarkus/deployment/annotations/BuildProducer;Lio/quarkus/deployment/annotations/BuildProducer;Lio/quarkus/resteasy/reactive/server/runtime/ResteasyReactiveRecorder;Ljava/util/List;Ljava/util/Optional;Lio/quarkus/deployment/annotations/BuildProducer;Lio/quarkus/deployment/annotations/BuildProducer;Lio/quarkus/deployment/annotations/BuildProducer;Lio/quarkus/resteasy/reactive/common/deployment/ApplicationResultBuildItem;Lio/quarkus/resteasy/reactive/server/deployment/ParamConverterProvidersBuildItem;Lio/quarkus/resteasy/reactive/common/deployment/AggregatedParameterContainersBuildItem;Ljava/util/List;Ljava/util/List;Ljava/util/List;Ljava/util/List;Lio/quarkus/deployment/pkg/builditem/CompiledJavaVersionBuildItem;Lio/quarkus/resteasy/reactive/common/deployment/ResourceInterceptorsBuildItem;Lio/quarkus/deployment/Capabilities;Ljava/util/Optional;Ljava/util/List;Ljava/util/List;Ljava/util/Optional;)V","h":[["4.0.0.Beta1","+"],["4.0.0.Beta2",null]]}
 {"id":"quarkus-rest-deployment io.quarkus.resteasy.reactive.server.deployment.ResteasyReactiveProcessor transformEndpoints(Lio/quarkus/resteasy/reactive/common/deployment/ResourceScanningResultBuildItem;Lio/quarkus/resteasy/reactive/common/deployment/ResourceInterceptorsBuildItem;Lio/quarkus/deployment/annotations/BuildProducer;Lio/quarkus/arc/deployment/BeanArchiveIndexBuildItem;Lio/quarkus/resteasy/reactive/common/deployment/AggregatedParameterContainersBuildItem;)V","h":[["4.0.0.Beta1","+"]]}
@@ -55593,6 +55687,7 @@
 {"id":"quarkus-rest-deployment io.quarkus.resteasy.reactive.server.deployment.ResteasyReactiveScanningProcessor scanForParamConverters(Lio/quarkus/deployment/annotations/BuildProducer;Lio/quarkus/deployment/annotations/BuildProducer;Ljava/util/List;)Lio/quarkus/resteasy/reactive/server/deployment/ParamConverterProvidersBuildItem;","h":[["4.0.0.Beta1","+"]]}
 {"id":"quarkus-rest-deployment io.quarkus.resteasy.reactive.server.deployment.ResteasyReactiveScanningProcessor scanForParamConverters(Lio/quarkus/deployment/builditem/CombinedIndexBuildItem;Lio/quarkus/resteasy/reactive/common/deployment/ApplicationResultBuildItem;Lio/quarkus/deployment/annotations/BuildProducer;)V","h":[["4.0.0.Beta1","+"]]}
 {"id":"quarkus-rest-deployment io.quarkus.resteasy.reactive.server.deployment.ResteasyReactiveServerConfig","h":[["4.0.0.Beta1","+i"]]}
+{"id":"quarkus-rest-deployment io.quarkus.resteasy.reactive.server.deployment.ResteasyReactiveServerConfig blockingSignaturesExecutionMode()Lio/quarkus/virtual/threads/DefaultExecutionMode;","h":[["4.0.0","+"]]}
 {"id":"quarkus-rest-deployment io.quarkus.resteasy.reactive.server.deployment.ResteasyReactiveServerConfig path()Ljava/util/Optional;","h":[["4.0.0.Beta1","+"]]}
 {"id":"quarkus-rest-deployment io.quarkus.resteasy.reactive.server.deployment.ResteasyReactiveVertxWebSocketIntegrationProcessor","h":[["4.0.0.Beta1","+"]]}
 {"id":"quarkus-rest-deployment io.quarkus.resteasy.reactive.server.deployment.ResteasyReactiveVertxWebSocketIntegrationProcessor <init>()V","h":[["4.0.0.Beta1","+"]]}
@@ -59341,6 +59436,7 @@
 {"id":"quarkus-smallrye-stork io.quarkus.stork.StorkConfigUtil requireRegistrarTypeNotBlank(Ljava/lang/String;)V","h":[["4.0.0.Beta1","+s"]]}
 {"id":"quarkus-smallrye-stork io.quarkus.stork.StorkConfigUtil toStorkServiceConfig(Lio/quarkus/stork/StorkConfiguration;)Ljava/util/List;","h":[["4.0.0.Beta1","+s"]]}
 {"id":"quarkus-smallrye-stork io.quarkus.stork.StorkConfiguration","h":[["4.0.0.Beta1","+i"]]}
+{"id":"quarkus-smallrye-stork io.quarkus.stork.StorkConfiguration registrationTimeout()Ljava/time/Duration;","h":[["4.0.0","+"]]}
 {"id":"quarkus-smallrye-stork io.quarkus.stork.StorkConfiguration serviceConfiguration()Ljava/util/Map;","h":[["4.0.0.Beta1","+"]]}
 {"id":"quarkus-smallrye-stork io.quarkus.stork.StorkLoadBalancerConfiguration","h":[["4.0.0.Beta1","+i"]]}
 {"id":"quarkus-smallrye-stork io.quarkus.stork.StorkLoadBalancerConfiguration parameters()Ljava/util/Map;","h":[["4.0.0.Beta1","+"]]}
@@ -59364,6 +59460,7 @@
 {"id":"quarkus-spiffe-client io.quarkus.spiffe.client.runtime.internal.SpiffeClientConfig","h":[["4.0.0.Beta1","+i"]]}
 {"id":"quarkus-spiffe-client io.quarkus.spiffe.client.runtime.internal.SpiffeClientConfig audiences()Ljava/util/Optional;","h":[["4.0.0.Beta1","+"]]}
 {"id":"quarkus-spiffe-client io.quarkus.spiffe.client.runtime.internal.SpiffeClientConfig endpointSocket()Ljava/util/Optional;","h":[["4.0.0.Beta1","+"]]}
+{"id":"quarkus-spiffe-client io.quarkus.spiffe.client.runtime.internal.SpiffeClientConfig requestTimeout()Ljava/time/Duration;","h":[["4.0.1","+"]]}
 {"id":"quarkus-spiffe-client io.quarkus.spiffe.client.runtime.internal.SpiffeEndpointSocketConverter","h":[["4.0.0.Beta1","+f implements org.eclipse.microprofile.config.spi.Converter,java.io.Serializable"]]}
 {"id":"quarkus-spiffe-client io.quarkus.spiffe.client.runtime.internal.SpiffeEndpointSocketConverter <init>()V","h":[["4.0.0.Beta1","+"]]}
 {"id":"quarkus-spiffe-client io.quarkus.spiffe.client.runtime.internal.SpiffeEndpointSocketConverter convert(Ljava/lang/String;)Ljava/net/URI;","h":[["4.0.0.Beta1","+"]]}
@@ -62732,6 +62829,9 @@
 {"id":"quarkus-spring-security-deployment io.quarkus.spring.security.deployment.roles.StaticHasRoleValueProducer","h":[["4.0.0.Beta1","+ implements io.quarkus.spring.security.deployment.roles.HasRoleValueProducer"]]}
 {"id":"quarkus-spring-security-deployment io.quarkus.spring.security.deployment.roles.StaticHasRoleValueProducer <init>(Ljava/lang/String;)V","h":[["4.0.0.Beta1","+"]]}
 {"id":"quarkus-spring-security-deployment io.quarkus.spring.security.deployment.roles.StaticHasRoleValueProducer apply(Lio/quarkus/gizmo2/creator/BlockCreator;)Lio/quarkus/gizmo2/Expr;","h":[["4.0.0.Beta1","+"]]}
+{"id":"quarkus-spring-test io.quarkus.test.spring.SpringBootTestBuildChainCustomizerProducer","h":[["4.0.1","+ implements io.quarkus.test.junit.buildchain.TestBuildChainCustomizerProducer"]]}
+{"id":"quarkus-spring-test io.quarkus.test.spring.SpringBootTestBuildChainCustomizerProducer <init>()V","h":[["4.0.1","+"]]}
+{"id":"quarkus-spring-test io.quarkus.test.spring.SpringBootTestBuildChainCustomizerProducer produce(Lorg/jboss/jandex/Index;)Ljava/util/function/Consumer;","h":[["4.0.1","+"]]}
 {"id":"quarkus-spring-tx org.springframework.transaction.annotation.Isolation","h":[["4.0.0.Beta1","+e"]]}
 {"id":"quarkus-spring-tx org.springframework.transaction.annotation.Isolation DEFAULT:Lorg/springframework/transaction/annotation/Isolation;","h":[["4.0.0.Beta1","+e"]]}
 {"id":"quarkus-spring-tx org.springframework.transaction.annotation.Isolation READ_COMMITTED:Lorg/springframework/transaction/annotation/Isolation;","h":[["4.0.0.Beta1","+e"]]}
@@ -64278,6 +64378,9 @@
 {"id":"quarkus-test-kafka-companion io.quarkus.test.kafka.ProxiedKafkaCompanionResource createContainer(Ljava/lang/String;)Lio/strimzi/test/container/StrimziKafkaContainer;","h":[["4.0.0.Beta1","#"]]}
 {"id":"quarkus-test-kafka-companion io.quarkus.test.kafka.ProxiedKafkaCompanionResource inject(Lio/quarkus/test/common/QuarkusTestResourceLifecycleManager$TestInjector;)V","h":[["4.0.0.Beta1","+"]]}
 {"id":"quarkus-test-kafka-companion io.quarkus.test.kafka.ProxiedKafkaCompanionResource start()Ljava/util/Map;","h":[["4.0.0.Beta1","+"]]}
+{"id":"quarkus-test-keycloak-server io.quarkus.test.keycloak.client.KeycloakJson","h":[["4.0.0","+f"]]}
+{"id":"quarkus-test-keycloak-server io.quarkus.test.keycloak.client.KeycloakJson readRealm(Ljava/io/InputStream;)Lorg/keycloak/representations/idm/RealmRepresentation;","h":[["4.0.0","+s"]]}
+{"id":"quarkus-test-keycloak-server io.quarkus.test.keycloak.client.KeycloakJson writeRealm(Lorg/keycloak/representations/idm/RealmRepresentation;)Ljava/lang/String;","h":[["4.0.0","+s"]]}
 {"id":"quarkus-test-keycloak-server io.quarkus.test.keycloak.client.KeycloakTestClient","h":[["4.0.0.Beta1","+ implements io.quarkus.test.common.DevServicesContext$ContextAware"]]}
 {"id":"quarkus-test-keycloak-server io.quarkus.test.keycloak.client.KeycloakTestClient <init>()V","h":[["4.0.0.Beta1","+"]]}
 {"id":"quarkus-test-keycloak-server io.quarkus.test.keycloak.client.KeycloakTestClient <init>(Lio/quarkus/test/keycloak/client/KeycloakTestClient$Tls;)V","h":[["4.0.0.Beta1","+"]]}
@@ -64538,8 +64641,10 @@
 {"id":"quarkus-test-security-oidc io.quarkus.test.security.oidc.OidcSecurity introspection()[Lio/quarkus/test/security/oidc/TokenIntrospection;","h":[["4.0.0.Beta1","+"]]}
 {"id":"quarkus-test-security-oidc io.quarkus.test.security.oidc.OidcSecurity introspectionRequired()Z","h":[["4.0.0.Beta1","+"]]}
 {"id":"quarkus-test-security-oidc io.quarkus.test.security.oidc.OidcSecurity userinfo()[Lio/quarkus/test/security/oidc/UserInfo;","h":[["4.0.0.Beta1","+"]]}
-{"id":"quarkus-test-security-oidc io.quarkus.test.security.oidc.OidcTestSecurityIdentityAugmentor","h":[["4.0.0.Beta1","+ implements io.quarkus.test.security.TestSecurityIdentityAugmentor"]]}
+{"id":"quarkus-test-security-oidc io.quarkus.test.security.oidc.OidcTestSecurityIdentityAugmentor","h":[["4.0.0.Beta1","+ implements io.quarkus.test.security.TestSecurityIdentityAugmentor"],["4.0.1","+ implements io.quarkus.test.security.TestSecurityIdentityAugmentor,io.quarkus.security.identity.SecurityIdentityAugmentor"]]}
 {"id":"quarkus-test-security-oidc io.quarkus.test.security.oidc.OidcTestSecurityIdentityAugmentor <init>(Ljava/util/Optional;)V","h":[["4.0.0.Beta1","+"]]}
+{"id":"quarkus-test-security-oidc io.quarkus.test.security.oidc.OidcTestSecurityIdentityAugmentor augment(Lio/quarkus/security/identity/SecurityIdentity;Lio/quarkus/security/identity/AuthenticationRequestContext;)Lio/smallrye/mutiny/Uni;","h":[["4.0.1","+"]]}
+{"id":"quarkus-test-security-oidc io.quarkus.test.security.oidc.OidcTestSecurityIdentityAugmentor augment(Lio/quarkus/security/identity/SecurityIdentity;Lio/quarkus/security/identity/AuthenticationRequestContext;Ljava/util/Map;)Lio/smallrye/mutiny/Uni;","h":[["4.0.1","+"]]}
 {"id":"quarkus-test-security-oidc io.quarkus.test.security.oidc.OidcTestSecurityIdentityAugmentor augment(Lio/quarkus/security/identity/SecurityIdentity;[Ljava/lang/annotation/Annotation;)Lio/quarkus/security/identity/SecurityIdentity;","h":[["4.0.0.Beta1","+"]]}
 {"id":"quarkus-test-security-oidc io.quarkus.test.security.oidc.OidcTestSecurityIdentityAugmentorProducer","h":[["4.0.0.Beta1","+"]]}
 {"id":"quarkus-test-security-oidc io.quarkus.test.security.oidc.OidcTestSecurityIdentityAugmentorProducer <init>()V","h":[["4.0.0.Beta1","+"]]}
@@ -64587,9 +64692,9 @@
 {"id":"quarkus-test-security-webauthn io.quarkus.test.security.webauthn.WebAuthnTestUserProvider reallyUpdate(Ljava/lang/String;J)V","h":[["4.0.0.Beta1","+"]]}
 {"id":"quarkus-test-security-webauthn io.quarkus.test.security.webauthn.WebAuthnTestUserProvider store(Lio/quarkus/security/webauthn/WebAuthnCredentialRecord;)Lio/smallrye/mutiny/Uni;","h":[["4.0.0.Beta1","+"]]}
 {"id":"quarkus-test-security-webauthn io.quarkus.test.security.webauthn.WebAuthnTestUserProvider update(Ljava/lang/String;J)Lio/smallrye/mutiny/Uni;","h":[["4.0.0.Beta1","+"]]}
-{"id":"quarkus-test-spring io.quarkus.test.spring.SpringBootTestBuildChainCustomizerProducer","h":[["4.0.0.Beta1","+ implements io.quarkus.test.junit.buildchain.TestBuildChainCustomizerProducer"]]}
-{"id":"quarkus-test-spring io.quarkus.test.spring.SpringBootTestBuildChainCustomizerProducer <init>()V","h":[["4.0.0.Beta1","+"]]}
-{"id":"quarkus-test-spring io.quarkus.test.spring.SpringBootTestBuildChainCustomizerProducer produce(Lorg/jboss/jandex/Index;)Ljava/util/function/Consumer;","h":[["4.0.0.Beta1","+"]]}
+{"id":"quarkus-test-spring io.quarkus.test.spring.SpringBootTestBuildChainCustomizerProducer","h":[["4.0.0.Beta1","+ implements io.quarkus.test.junit.buildchain.TestBuildChainCustomizerProducer"],["4.0.1",null]]}
+{"id":"quarkus-test-spring io.quarkus.test.spring.SpringBootTestBuildChainCustomizerProducer <init>()V","h":[["4.0.0.Beta1","+"],["4.0.1",null]]}
+{"id":"quarkus-test-spring io.quarkus.test.spring.SpringBootTestBuildChainCustomizerProducer produce(Lorg/jboss/jandex/Index;)Ljava/util/function/Consumer;","h":[["4.0.0.Beta1","+"],["4.0.1",null]]}
 {"id":"quarkus-test-vertx io.quarkus.test.vertx.DefaultUniAsserter","h":[["4.0.0.Beta1","+f implements io.quarkus.test.vertx.UnwrappableUniAsserter"]]}
 {"id":"quarkus-test-vertx io.quarkus.test.vertx.DefaultUniAsserter <init>()V","h":[["4.0.0.Beta1","+"]]}
 {"id":"quarkus-test-vertx io.quarkus.test.vertx.DefaultUniAsserter asUni()Lio/smallrye/mutiny/Uni;","h":[["4.0.0.Beta1","+"]]}
@@ -65362,6 +65467,7 @@
 {"id":"quarkus-vertx io.quarkus.vertx.core.runtime.VertxCoreRecorder resetMapper(Lio/quarkus/runtime/ShutdownContext;)V","h":[["4.0.0.Beta1","+"]]}
 {"id":"quarkus-vertx io.quarkus.vertx.core.runtime.VertxCoreRecorder setDetectedNativeTransports(Ljava/util/Set;)V","h":[["4.0.0.Beta1","+"],["4.0.0.Beta2","+s"]]}
 {"id":"quarkus-vertx io.quarkus.vertx.core.runtime.VertxCoreRecorder setWebDeploymentId(Ljava/lang/String;)V","h":[["4.0.0.Beta1","+s"]]}
+{"id":"quarkus-vertx io.quarkus.vertx.core.runtime.VertxCoreRecorder tryCleanTccl()V","h":[["4.0.1","+s"]]}
 {"id":"quarkus-vertx io.quarkus.vertx.core.runtime.VertxCoreRecorder wrapMainExecutorForMutiny(Ljava/util/concurrent/ScheduledExecutorService;)V","h":[["4.0.0.Beta1","+"]]}
 {"id":"quarkus-vertx io.quarkus.vertx.core.runtime.VertxCoreRecorder$VertxCustomizer","h":[["4.0.0.Beta1","+s"]]}
 {"id":"quarkus-vertx io.quarkus.vertx.core.runtime.VertxHotReplacementSetup","h":[["4.0.0.Beta1","+ implements io.quarkus.dev.spi.HotReplacementSetup"]]}
@@ -68135,6 +68241,12 @@
 {"id":"quarkus-vertx-latebound-mdc-provider io.quarkus.vertx.mdc.provider.LateBoundMDCProvider remove(Ljava/lang/String;)Ljava/lang/String;","h":[["4.0.0.Beta1","+"]]}
 {"id":"quarkus-vertx-latebound-mdc-provider io.quarkus.vertx.mdc.provider.LateBoundMDCProvider removeObject(Ljava/lang/String;)Ljava/lang/Object;","h":[["4.0.0.Beta1","+"]]}
 {"id":"quarkus-vertx-latebound-mdc-provider io.quarkus.vertx.mdc.provider.LateBoundMDCProvider setMDCProviderDelegate(Lorg/jboss/logmanager/MDCProvider;)V","h":[["4.0.0.Beta1","+s"]]}
+{"id":"quarkus-virtual-threads io.quarkus.virtual.threads.DefaultExecutionMode","h":[["4.0.0","+e"]]}
+{"id":"quarkus-virtual-threads io.quarkus.virtual.threads.DefaultExecutionMode VIRTUAL_THREAD:Lio/quarkus/virtual/threads/DefaultExecutionMode;","h":[["4.0.0","+e"]]}
+{"id":"quarkus-virtual-threads io.quarkus.virtual.threads.DefaultExecutionMode WORKER:Lio/quarkus/virtual/threads/DefaultExecutionMode;","h":[["4.0.0","+e"]]}
+{"id":"quarkus-virtual-threads io.quarkus.virtual.threads.DefaultExecutionMode isVirtualThread()Z","h":[["4.0.0","+"]]}
+{"id":"quarkus-virtual-threads io.quarkus.virtual.threads.DefaultExecutionMode valueOf(Ljava/lang/String;)Lio/quarkus/virtual/threads/DefaultExecutionMode;","h":[["4.0.0","+s"]]}
+{"id":"quarkus-virtual-threads io.quarkus.virtual.threads.DefaultExecutionMode values()[Lio/quarkus/virtual/threads/DefaultExecutionMode;","h":[["4.0.0","+s"]]}
 {"id":"quarkus-virtual-threads io.quarkus.virtual.threads.VirtualThreads","h":[["4.0.0.Beta1","+n"]]}
 {"id":"quarkus-virtual-threads io.quarkus.virtual.threads.VirtualThreads$Literal","h":[["4.0.0.Beta1","+f extends jakarta.enterprise.util.AnnotationLiteral implements io.quarkus.virtual.threads.VirtualThreads"]]}
 {"id":"quarkus-virtual-threads io.quarkus.virtual.threads.VirtualThreads$Literal <init>()V","h":[["4.0.0.Beta1","+"]]}

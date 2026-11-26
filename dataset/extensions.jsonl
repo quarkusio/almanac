@@ -331,6 +331,7 @@
 {"id":"quarkus-spring-web-resteasy-reactive","h":[["2.5.0.CR1","81a315dd043c2be7"],["3.9.0.CR1","fbdca819928dbe89"],["3.16.0.CR1",null]]}
 {"id":"quarkus-swagger-ui","h":[["0.27.0","0e8f4af67df17891"],["0.28.0","35ed6d811e4359fe"]]}
 {"id":"quarkus-test-artemis","h":[["2.6.0.CR1","d3557aa5ccf91056"],["3.0.0.CR1",null]]}
+{"id":"quarkus-test-spring","h":[["4.0.1","0fb0ebae623fd541"]]}
 {"id":"quarkus-test-vault","h":[["2.6.0.CR1","a1368a55e4abf325"],["3.0.0.CR1",null]]}
 {"id":"quarkus-tika","h":[["0.27.0","7aa9df455bdb5717"],["0.28.0","645aa39fb43f0f78"],["1.1.0.CR1","27159df16abab3cc"],["2.3.0.CR1","3cfde6fabfabc2c6"],["2.6.0.CR1","ca7595c3947d4491"],["3.0.0.CR1",null]]}
 {"id":"quarkus-tls-registry","h":[["3.12.0.CR1","754ae2a21b3fb8b3"]]}
